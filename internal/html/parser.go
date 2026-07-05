@@ -73,34 +73,44 @@ func (p *mathPlugin) Init(c *converter.Converter) error {
 			return converter.RenderTryNext
 		}
 
-		// Find the annotation tag containing the latex
-		var findTex func(*html.Node) string
-		findTex = func(node *html.Node) string {
-			if node.Type == html.ElementNode && node.Data == "annotation" {
+		// Find the fallback image tag
+		var findImg func(*html.Node) *html.Node
+		findImg = func(node *html.Node) *html.Node {
+			if node.Type == html.ElementNode && node.Data == "img" {
 				for _, a := range node.Attr {
-					if a.Key == "encoding" && a.Val == "application/x-tex" {
-						if node.FirstChild != nil {
-							return node.FirstChild.Data
-						}
+					if a.Key == "class" && strings.Contains(a.Val, "mwe-math-fallback-image-inline") {
+						return node
 					}
 				}
 			}
 			for child := node.FirstChild; child != nil; child = child.NextSibling {
-				if tex := findTex(child); tex != "" {
-					return tex
+				if img := findImg(child); img != nil {
+					return img
 				}
 			}
-			return ""
+			return nil
 		}
 
-		tex := findTex(n)
-		if tex != "" {
-			tex = strings.TrimPrefix(tex, `{\displaystyle `)
-			tex = strings.TrimSuffix(tex, `}`)
-			tex = strings.TrimSpace(tex)
-			w.WriteString("`")
-			w.WriteString(tex)
-			w.WriteString("`")
+		img := findImg(n)
+		if img != nil {
+			var alt, src string
+			for _, a := range img.Attr {
+				if a.Key == "alt" {
+					alt = a.Val
+				} else if a.Key == "src" {
+					src = a.Val
+				}
+			}
+
+			alt = strings.TrimPrefix(alt, `{\displaystyle `)
+			alt = strings.TrimSuffix(alt, `}`)
+			alt = strings.TrimSpace(alt)
+
+			w.WriteString("![")
+			w.WriteString(alt)
+			w.WriteString("](")
+			w.WriteString(src)
+			w.WriteString(")")
 			return converter.RenderSuccess
 		}
 
