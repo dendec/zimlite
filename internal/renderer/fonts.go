@@ -88,7 +88,6 @@ func loadFonts(baseSize int, fontPath string) ([fontCount]fontSlot, error) {
 		FontH4:   baseSize + 2,
 		FontH5:   baseSize + 1,
 		FontH6:   baseSize,
-		FontMono: baseSize,
 	}
 
 	for i := FontKind(0); i < fontCount; i++ {

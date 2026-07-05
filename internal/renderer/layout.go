@@ -161,7 +161,7 @@ func wrapCodeLine(text string, font *ttf.Font, maxW int32) []string {
 
 func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	startCodeY := s.y
-	fontMono := s.r.fonts[FontMono].font
+	font := s.r.fonts[FontBody].font
 	codeText := strings.TrimSuffix(c.Code, "\n")
 
 	oldMarginX := s.r.marginX
@@ -178,12 +178,12 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	}
 
 	addLine := func(text string) {
-		tw, th := measureText(text, fontMono, false, false, false)
+		tw, th := measureText(text, font, false, false, false)
 		if th == 0 {
 			th = defaultCodeLineHeight
 		}
 		s.r.layout.lines = append(s.r.layout.lines, lineEntry{
-			text: text, fontIdx: FontMono, color: s.r.theme.TextColor,
+			text: text, fontIdx: FontBody, color: s.r.theme.TextColor,
 			x: s.r.marginX + leftPad, y: s.y, w: tw, h: th,
 			isCode: true,
 		})
@@ -196,7 +196,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 			continue
 		}
 
-		for _, line := range wrapCodeLine(cl, fontMono, maxCodeW) {
+		for _, line := range wrapCodeLine(cl, font, maxCodeW) {
 			addLine(line)
 		}
 	}

@@ -442,11 +442,7 @@ func (r *Renderer) renderTextTexture(line lineEntry) *sdl.Texture {
 		return tex
 	}
 	var font *ttf.Font
-	if line.isCode {
-		font = r.fonts[FontMono].font
-	} else {
-		font = r.fonts[line.fontIdx].font
-	}
+	font = r.fonts[line.fontIdx].font
 	if font == nil {
 		return nil
 	}

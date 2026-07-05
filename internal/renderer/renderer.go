@@ -23,7 +23,6 @@ const (
 	FontH4
 	FontH5
 	FontH6
-	FontMono
 	fontCount
 )
 
@@ -400,7 +399,7 @@ func (r *Renderer) SetTextLines(items []TreeItem) {
 			runes := []rune(item.Text)
 			prefixText := string(runes[:item.LabelStart])
 			labelText := string(runes[item.LabelStart:item.LabelEnd])
-			prefixW, _ = measureText(prefixText, r.fonts[FontMono].font, false, false, false)
+			prefixW, _ = measureText(prefixText, font, false, false, false)
 			labelW, _ = measureText(labelText, font, false, false, false)
 			labelX = r.marginX + prefixW
 			prefixRuneN = item.LabelStart
@@ -659,12 +658,7 @@ type sdlFont struct {
 }
 
 func (f *sdlFont) Measure(text string, isBold, isItalic, isCode bool) (int32, int32) {
-	var font *ttf.Font
-	if isCode {
-		font = f.r.fonts[FontMono].font
-	} else {
-		font = f.r.fonts[f.baseIdx].font
-	}
+	font := f.r.fonts[f.baseIdx].font
 	if font == nil {
 		return 0, 0
 	}
