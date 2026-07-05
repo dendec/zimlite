@@ -83,7 +83,7 @@ func (r *Renderer) renderTables() {
 }
 
 func (r *Renderer) renderLines() {
-	for _, line := range r.layout.lines {
+	for i, line := range r.layout.lines {
 		screenY := line.y - r.scrollY
 		if screenY < -line.h || screenY > r.height-statusBarHeight {
 			continue
@@ -95,18 +95,66 @@ func (r *Renderer) renderLines() {
 			}
 			continue
 		}
-		tex := r.renderLineTexture(line)
-		if tex != nil {
-			_, _, tw, th, _ := tex.Query()
-			r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: line.x, Y: screenY, W: tw, H: th})
+		if line.labelW > 0 {
+			// Tree line: render prefix, label, suffix as separate colored parts.
+			r.renderTreeLineParts(line, screenY)
+		} else {
+			tex := r.renderLineTexture(line)
+			if tex != nil {
+				_, _, tw, th, _ := tex.Query()
+				r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: line.x, Y: screenY, W: tw, H: th})
+			}
 		}
-		// Draw underline for cursor in tree mode.
-		if line.isCursor {
-			underlineY := screenY + line.h - 1
-			r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
-			r.sdlRenderer.FillRect(&sdl.Rect{X: line.x, Y: underlineY, W: line.w, H: 1})
+		// Draw underline for cursor or hover in tree mode.
+		if line.isCursor || r.hoveredTreeLine >= 0 && r.isTreeLineHovered(i) {
+			if line.labelW > 0 {
+				underlineY := screenY + line.h - 1
+				r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
+				r.sdlRenderer.FillRect(&sdl.Rect{X: line.labelX, Y: underlineY, W: line.labelW, H: 1})
+			}
 		}
 	}
+}
+
+// renderTreeLineParts draws a tree line with prefix in TextColor, label in LinkColor, suffix in TextColor.
+func (r *Renderer) renderTreeLineParts(line lineEntry, screenY int32) {
+	font := r.fonts[line.fontIdx].font
+	if font == nil {
+		return
+	}
+	runes := []rune(line.text)
+	prefixEnd := line.prefixRuneN
+	labelEnd := prefixEnd + line.labelRuneN
+
+	prefixText := string(runes[:prefixEnd])
+	labelText := string(runes[prefixEnd:labelEnd])
+	suffixText := string(runes[labelEnd:])
+
+	if prefixText != "" {
+		r.renderColoredText(prefixText, font, r.theme.TextColor, line.x, screenY)
+	}
+	if labelText != "" {
+		r.renderColoredText(labelText, font, r.theme.LinkColor, line.labelX, screenY)
+	}
+	if suffixText != "" {
+		suffixX := line.labelX + line.labelW
+		r.renderColoredText(suffixText, font, r.theme.TextColor, suffixX, screenY)
+	}
+}
+
+func (r *Renderer) renderColoredText(text string, font *ttf.Font, color sdl.Color, x, y int32) {
+	surf, err := font.RenderUTF8Blended(text, color)
+	if err != nil {
+		return
+	}
+	tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
+	surf.Free()
+	if err != nil {
+		return
+	}
+	_, _, tw, th, _ := tex.Query()
+	r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: x, Y: y, W: tw, H: th})
+	tex.Destroy()
 }
 
 func (r *Renderer) renderLinkUnderline() {

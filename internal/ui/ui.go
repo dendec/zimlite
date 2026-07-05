@@ -196,14 +196,18 @@ func (app *App) renderTree() {
 	items := make([]renderer.TreeItem, 0, len(lines))
 	for _, l := range lines {
 		text := l.TreePrefix + l.Label
+		labelStart := len([]rune(l.TreePrefix))
+		labelEnd := labelStart + len([]rune(l.Label))
 		if l.Suffix != "" {
 			text += " (" + l.Suffix + ")"
 		}
 		items = append(items, renderer.TreeItem{
-			Text:     text,
-			Path:     l.Path,
-			IsLeaf:   l.IsLeaf,
-			IsCursor: l.IsCursor,
+			Text:       text,
+			Path:       l.Path,
+			IsLeaf:     l.IsLeaf,
+			IsCursor:   l.IsCursor,
+			LabelStart: labelStart,
+			LabelEnd:   labelEnd,
 		})
 	}
 	app.scroller.SetTextLines(items)

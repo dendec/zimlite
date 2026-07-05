@@ -54,10 +54,12 @@ type ResourceLoader func(url string) ([]byte, error)
 
 // TreeItem describes one item in the tree view for structured rendering.
 type TreeItem struct {
-	Text     string
-	Path     string
-	IsLeaf   bool
-	IsCursor bool
+	Text       string
+	Path       string
+	IsLeaf     bool
+	IsCursor   bool
+	LabelStart int // rune offset where label begins in Text
+	LabelEnd   int // rune offset where label ends in Text (exclusive)
 }
 
 type imageEntry struct {
@@ -109,22 +111,28 @@ type Renderer struct {
 	statusOverride      string
 	hasActiveAnimations bool
 	hoveredLink         int
+	hoveredTreeLine     int // index of hovered tree line (-1 = none)
 }
 
 type lineEntry struct {
-	text     string
-	fontIdx  FontKind
-	color    sdl.Color
-	x        int32
-	y        int32
-	w        int32
-	h        int32
-	isBold   bool
-	isItalic bool
-	isCode   bool
-	isCursor bool
-	isEmoji  bool
-	emojiHex string
+	text        string
+	fontIdx     FontKind
+	color       sdl.Color
+	x           int32
+	y           int32
+	w           int32
+	h           int32
+	isBold      bool
+	isItalic    bool
+	isCode      bool
+	isCursor    bool
+	isEmoji     bool
+	emojiHex    string
+	labelX      int32 // pixel X where label starts (for tree underline)
+	labelW      int32 // pixel width of label (for tree underline)
+	prefixW     int32 // pixel width of tree prefix (connector symbols)
+	prefixRuneN int   // rune count of prefix
+	labelRuneN  int   // rune count of label (from prefix end)
 }
 
 type linkEntry struct {
@@ -338,15 +346,31 @@ func (r *Renderer) SetTextLines(items []TreeItem) {
 	r.doc = nil
 	r.selectedLink = -1
 	r.hoveredLink = -1
+	r.hoveredTreeLine = -1
 
 	font := r.fonts[FontBody].font
 	y := r.marginY
 	for _, item := range items {
 		tw, th := measureText(item.Text, font, false, false, false)
+		lineColor := r.theme.TextColor
+		var labelX, labelW, prefixW int32
+		var prefixRuneN, labelRuneN int
+		if item.LabelEnd > item.LabelStart {
+			runes := []rune(item.Text)
+			prefixText := string(runes[:item.LabelStart])
+			labelText := string(runes[item.LabelStart:item.LabelEnd])
+			prefixW, _ = measureText(prefixText, font, false, false, false)
+			labelW, _ = measureText(labelText, font, false, false, false)
+			labelX = r.marginX + prefixW
+			prefixRuneN = item.LabelStart
+			labelRuneN = item.LabelEnd - item.LabelStart
+		}
 		r.layout.lines = append(r.layout.lines, lineEntry{
-			text: item.Text, fontIdx: FontBody, color: r.theme.TextColor,
+			text: item.Text, fontIdx: FontBody, color: lineColor,
 			x: r.marginX, y: y, w: tw, h: th,
 			isCursor: item.IsCursor,
+			labelX:   labelX, labelW: labelW, prefixW: prefixW,
+			prefixRuneN: prefixRuneN, labelRuneN: labelRuneN,
 		})
 		y += th
 	}
@@ -669,6 +693,7 @@ func (r *Renderer) HasAnimations() bool {
 func (r *Renderer) HandleMouseMove(mx, my int32) {
 	docY := my + r.scrollY
 	r.hoveredLink = -1
+	r.hoveredTreeLine = -1
 	for i, link := range r.layout.links {
 		for _, rect := range link.rects {
 			if mx >= rect.X && mx <= rect.X+rect.W &&
@@ -678,4 +703,16 @@ func (r *Renderer) HandleMouseMove(mx, my int32) {
 			}
 		}
 	}
+	if r.treeItems != nil {
+		for i, line := range r.layout.lines {
+			if docY >= line.y && docY <= line.y+line.h {
+				r.hoveredTreeLine = i
+				return
+			}
+		}
+	}
+}
+
+func (r *Renderer) isTreeLineHovered(idx int) bool {
+	return idx >= 0 && idx < len(r.layout.lines) && r.hoveredTreeLine == idx
 }
