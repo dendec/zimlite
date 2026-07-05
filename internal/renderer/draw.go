@@ -12,7 +12,7 @@ func (r *Renderer) Render() {
 	r.renderImages()
 	r.renderBlockquotes()
 	r.renderCodeBackgrounds()
-	r.renderTables()
+	r.renderTables(false)
 	r.renderLinkHighlight()
 	r.renderLines()
 	r.renderScrollbar()
@@ -64,7 +64,10 @@ func (r *Renderer) renderBlockquotes() {
 	}
 }
 
-func (r *Renderer) renderTables() {
+func (r *Renderer) renderTables(visible bool) {
+	if !visible {
+		return
+	}
 	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
 	for _, table := range r.layout.tables {
 		for _, cellRect := range table.cellRects {

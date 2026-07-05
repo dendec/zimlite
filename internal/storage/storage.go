@@ -73,7 +73,8 @@ func Download(url, filename string, onProgress ProgressFn) error {
 	}
 	defer resp.Body.Close()
 
-	out, err := os.Create(filename)
+	tempFilename := filename + ".part"
+	out, err := os.Create(tempFilename)
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
@@ -110,6 +111,11 @@ func Download(url, filename string, onProgress ProgressFn) error {
 			onProgress(fmt.Sprintf("Downloading %s: %.1f%%", filepath.Base(filename), percent))
 		default:
 		}
+	}
+
+	out.Close()
+	if err := os.Rename(tempFilename, filename); err != nil {
+		return fmt.Errorf("rename: %w", err)
 	}
 
 	onProgress("Download finished successfully!")

@@ -1,0 +1,30 @@
+# Kiwix SDL Document Menu
+
+Select a document or ZIM archive to open:
+
+{{if .InternetAvailable}}
+## Online Library
+* [Browse and Download ZIM Archives](virtual:library)
+{{end}}
+
+{{if .ZIMs}}
+## ZIM Archives
+
+| Name | Size | Action |
+|------|------|--------|
+{{range .ZIMs}}| [{{.DisplayName}}]( {{.Name}} ) | {{.Size}} | [Delete](virtual:delete?file={{urlquery .Name}}) |
+{{end}}
+{{end}}
+
+{{if .Docs}}
+## Documents
+
+| Name | Size | Action |
+|------|------|--------|
+{{range .Docs}}| [{{.DisplayName}}]( {{.Name}} ) | {{.Size}} | [Delete](virtual:delete?file={{urlquery .Name}}) |
+{{end}}
+{{end}}
+
+{{if not .HasContent}}
+*No documents or ZIM archives found in current directory.*
+{{end}}

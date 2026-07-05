@@ -151,6 +151,7 @@ type BlockVisitor interface {
 	VisitBlockquote(b *Blockquote)
 	VisitLink(l *Link)
 	VisitImage(i *Image)
+	VisitTable(t *Table)
 }
 
 // VisitBlocks dispatches each block to the visitor.
@@ -173,6 +174,8 @@ func VisitBlocks(blocks []Block, v BlockVisitor) {
 			v.VisitLink(b)
 		case *Image:
 			v.VisitImage(b)
+		case *Table:
+			v.VisitTable(b)
 		}
 	}
 }

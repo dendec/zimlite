@@ -218,8 +218,35 @@ func (s *layoutState) VisitTable(t *document.Table) {
 	if colCount == 0 {
 		return
 	}
-	colW := s.maxW / int32(colCount)
+
+	colWidths := make([]int32, colCount)
 	padding := int32(8)
+
+	// Pass 1: measure natural column widths
+	for _, row := range t.Rows {
+		for cIdx, cell := range row.Cells {
+			if int(cIdx) >= colCount {
+				continue
+			}
+			w := s.r.measureInlinesWidth(cell.Inlines, FontBody) + 2*padding
+			if w > colWidths[cIdx] {
+				colWidths[cIdx] = w
+			}
+		}
+	}
+
+	var totalW int32
+	for _, w := range colWidths {
+		totalW += w
+	}
+
+	// Shrink proportionally if it exceeds max width
+	if totalW > s.maxW {
+		scale := float64(s.maxW) / float64(totalW)
+		for i := range colWidths {
+			colWidths[i] = int32(float64(colWidths[i]) * scale)
+		}
+	}
 
 	var tableGrid tableGridEntry
 
@@ -227,24 +254,26 @@ func (s *layoutState) VisitTable(t *document.Table) {
 		maxH := int32(0)
 		yStart := s.y
 
-		// First pass: layout text and find row height
-		// We temporarily redirect lines to avoid drawing them if we need to adjust?
-		// Wait, we can't easily undo layoutInlines. But row height is determined by the tallest cell.
-		// We just let layoutInlines run. It might draw some cells "higher" than others if they have fewer lines, but that's fine for MVP.
-
+		// Layout text and find row height
 		for cIdx, cell := range row.Cells {
 			if int(cIdx) >= colCount {
 				continue // ignore extra cells
 			}
-			cellX := s.r.marginX + int32(cIdx)*colW
+
+			var cellXOffset int32
+			for i := 0; i < cIdx; i++ {
+				cellXOffset += colWidths[i]
+			}
+
+			cellW := colWidths[cIdx]
+			cellX := s.r.marginX + cellXOffset
 			cellY := s.y + padding
-			cellMaxW := colW - 2*padding
+			cellMaxW := cellW - 2*padding
 			if cellMaxW < 10 {
 				cellMaxW = 10
 			}
 
-			// If it's a header row, we might want to use bold, but we can't easily force bold on everything unless we modify layoutInlines or Inlines.
-			// Let's just render normally for now, MVP.
+			// Render cell text
 			bottomY := s.r.layoutInlines(cell.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, cellMaxW, cellY, cellX-s.r.marginX, "")
 
 			h := bottomY - cellY
@@ -260,13 +289,15 @@ func (s *layoutState) VisitTable(t *document.Table) {
 		rowH := maxH + 2*padding
 
 		// Record cell rects for grid drawing
+		var cellXOffset int32
 		for cIdx := 0; cIdx < colCount; cIdx++ {
 			tableGrid.cellRects = append(tableGrid.cellRects, sdlRect{
-				X: s.r.marginX + int32(cIdx)*colW,
+				X: s.r.marginX + cellXOffset,
 				Y: yStart,
-				W: colW,
+				W: colWidths[cIdx],
 				H: rowH,
 			})
+			cellXOffset += colWidths[cIdx]
 		}
 
 		s.y += rowH
@@ -274,6 +305,33 @@ func (s *layoutState) VisitTable(t *document.Table) {
 
 	s.r.layout.tables = append(s.r.layout.tables, tableGrid)
 	s.y += s.r.blockSpacing
+}
+
+func (r *Renderer) measureInlinesWidth(inlines []document.Inline, fidx FontKind) int32 {
+	measureImg := func(url string) (int32, int32) {
+		if w, h, ok := r.imgManager.GetDimensions(url); ok && w > 0 && h > 0 {
+			return int32(w), int32(h)
+		}
+		return 0, 0
+	}
+	v := document.NewInlineWordVisitor(&sdlFont{r: r, baseIdx: fidx}, measureImg)
+	document.VisitInlines(inlines, v)
+
+	var maxW, currW int32
+	for _, w := range v.Words {
+		if w.IsHardBreak {
+			if currW > maxW {
+				maxW = currW
+			}
+			currW = 0
+		} else {
+			currW += w.PixW
+		}
+	}
+	if currW > maxW {
+		maxW = currW
+	}
+	return maxW
 }
 
 func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,

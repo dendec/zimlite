@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path"
@@ -167,6 +168,23 @@ func (l *DocumentLoader) NavigateLink(url string) {
 		_ = exec.Command("xdg-open", url).Start()
 		return
 	}
+	if strings.HasPrefix(url, "virtual:delete?file=") {
+		u, err := neturl.Parse(url)
+		if err == nil {
+			filename := u.Query().Get("file")
+			if filename != "" {
+				slog.Info("Deleting file", "filename", filename)
+				if err := os.Remove(filename); err != nil {
+					slog.Error("Failed to delete file", "filename", filename, "error", err)
+				}
+				if app.navigator.Current() == "virtual:menu" {
+					_ = l.OpenFile("virtual:menu")
+					sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+				}
+			}
+		}
+		return
+	}
 	if strings.HasPrefix(url, "#") {
 		anchor := url[1:]
 		if y, ok := app.viewer.FindAnchorY(anchor); ok {
@@ -240,11 +258,10 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 		slog.Info("Download completed successfully", "filename", filename)
 		time.Sleep(3 * time.Second)
 		app.viewer.SetStatusOverride("")
-		if app.navigator.Current() == "virtual:menu" {
-			if doc, err := menu.FileSelector(true); err == nil {
-				app.viewer.SetDocument(doc)
-				app.viewer.Relayout()
-			}
+		current := app.navigator.Current()
+		if current == "virtual:menu" || strings.HasPrefix(current, "virtual:library/download") {
+			_ = l.OpenFile("virtual:menu")
+			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 		}
 	}()
 }
