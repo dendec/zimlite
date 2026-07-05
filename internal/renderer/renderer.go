@@ -2,8 +2,10 @@
 package renderer
 
 import (
+	"container/list"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
@@ -60,58 +62,78 @@ const (
 // IMPORTANT: TextureCache is NOT safe for concurrent use. All methods must be
 // called from the SDL main thread (the render goroutine). Background goroutines
 // (animation ticker, downloads) must only interact with SDL via PushEvent.
+type cacheEntry[K comparable] struct {
+	key K
+	tex *sdl.Texture
+}
+
 type TextureCache[K comparable] struct {
-	textures map[K]*sdl.Texture
-	order    []K
-	maxSize  int
+	items     map[K]*list.Element
+	evictList *list.List
+	maxSize   int
 }
 
 func NewTextureCache[K comparable](maxSize int) *TextureCache[K] {
 	return &TextureCache[K]{
-		textures: make(map[K]*sdl.Texture),
-		maxSize:  maxSize,
+		items:     make(map[K]*list.Element),
+		evictList: list.New(),
+		maxSize:   maxSize,
 	}
 }
 
 func (c *TextureCache[K]) Get(key K) *sdl.Texture {
-	return c.textures[key]
+	if ent, ok := c.items[key]; ok {
+		c.evictList.MoveToFront(ent)
+		return ent.Value.(*cacheEntry[K]).tex
+	}
+	return nil
 }
 
 func (c *TextureCache[K]) Set(key K, tex *sdl.Texture) {
-	c.textures[key] = tex
-	c.order = append(c.order, key)
-	if len(c.textures) > c.maxSize {
+	if ent, ok := c.items[key]; ok {
+		c.evictList.MoveToFront(ent)
+		ent.Value.(*cacheEntry[K]).tex = tex
+		return
+	}
+	ent := &cacheEntry[K]{key: key, tex: tex}
+	entry := c.evictList.PushFront(ent)
+	c.items[key] = entry
+	if c.evictList.Len() > c.maxSize {
 		c.Evict()
 	}
 }
 
 func (c *TextureCache[K]) Evict() {
-	remove := len(c.order) / 4
+	remove := c.evictList.Len() / 4
 	if remove < 1 {
-		return
+		remove = 1
 	}
-	for _, k := range c.order[:remove] {
-		if tex, ok := c.textures[k]; ok && tex != nil {
-			tex.Destroy()
+	for i := 0; i < remove; i++ {
+		ent := c.evictList.Back()
+		if ent != nil {
+			c.evictList.Remove(ent)
+			kv := ent.Value.(*cacheEntry[K])
+			delete(c.items, kv.key)
+			if kv.tex != nil {
+				kv.tex.Destroy()
+			}
 		}
-		delete(c.textures, k)
 	}
-	c.order = c.order[remove:]
 }
 
 func (c *TextureCache[K]) Clear() {
-	destroyTextures(c.textures)
-	c.order = nil
+	c.DestroyAll()
 }
 
 func (c *TextureCache[K]) DestroyAll() {
-	for _, tex := range c.textures {
-		if tex != nil {
-			tex.Destroy()
+	for _, ent := range c.items {
+		kv := ent.Value.(*cacheEntry[K])
+		if kv.tex != nil {
+			kv.tex.Destroy()
 		}
 	}
-	c.textures = make(map[K]*sdl.Texture)
-	c.order = nil
+	c.items = make(map[K]*list.Element)
+	c.evictList.Init()
 }
 
 type ResourceLoader func(url string) ([]byte, error)
@@ -292,16 +314,6 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	r.fonts = fonts
 
 	return r, nil
-}
-
-// destroyTextures destroys all textures in the map and clears it.
-func destroyTextures[K comparable](m map[K]*sdl.Texture) {
-	for k, tex := range m {
-		if tex != nil {
-			tex.Destroy()
-		}
-		delete(m, k)
-	}
 }
 
 func (r *Renderer) ClearCache() {
@@ -554,27 +566,19 @@ func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
 		anchor = decoded
 	}
 
-	isHeadingFont := func(f FontKind) bool {
-		return f == FontH1 || f == FontH2 || f == FontH3 ||
-			f == FontH4 || f == FontH5 || f == FontH6
+	normAnchor := strings.ToLower(anchor)
+	if y, ok := r.layout.anchorPositions[normAnchor]; ok {
+		return y, true
 	}
-	headingText := strings.ReplaceAll(strings.ToLower(anchor), "_", " ")
-	for i := 0; i < len(r.layout.lines); {
-		line := r.layout.lines[i]
-		if !isHeadingFont(line.fontIdx) {
-			i++
-			continue
-		}
-		startY := line.y
-		var parts []string
-		for i < len(r.layout.lines) && isHeadingFont(r.layout.lines[i].fontIdx) {
-			parts = append(parts, r.layout.lines[i].text)
-			i++
-		}
-		joined := strings.Join(parts, " ")
-		if strings.ToLower(strings.TrimSpace(joined)) == headingText {
-			return startY, true
-		}
+
+	withSpace := strings.ReplaceAll(normAnchor, "_", " ")
+	if y, ok := r.layout.anchorPositions[withSpace]; ok {
+		return y, true
+	}
+
+	withHyphen := strings.ReplaceAll(normAnchor, "_", "-")
+	if y, ok := r.layout.anchorPositions[withHyphen]; ok {
+		return y, true
 	}
 
 	// 2. Try to find a matching back-link for footnotes
@@ -589,20 +593,17 @@ func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
 	}
 
 	if targetRef != "" {
-		norm := func(s string) string {
-			return strings.ReplaceAll(strings.ToLower(s), "_", "-")
-		}
-		expected := norm("#" + targetRef)
-		expectedPrefix := expected
-		if strings.HasPrefix(anchor, "cite_note-") {
-			expectedPrefix += "-"
+		norm := strings.ReplaceAll(strings.ToLower("#"+targetRef), "_", "-")
+		if y, ok := r.layout.anchorPositions[norm]; ok {
+			return y, true
 		}
 
-		for _, l := range r.layout.links {
-			nURL := norm(l.url)
-			if nURL == expected || strings.HasPrefix(nURL, expectedPrefix) {
-				if len(l.rects) > 0 {
-					return l.rects[0].Y, true
+		expectedPrefix := norm
+		if strings.HasPrefix(anchor, "cite_note-") {
+			expectedPrefix += "-"
+			for key, y := range r.layout.anchorPositions {
+				if strings.HasPrefix(key, expectedPrefix) {
+					return y, true
 				}
 			}
 		}
@@ -626,7 +627,18 @@ func (r *Renderer) clampScroll() {
 
 func (r *Renderer) HandleClick(mx, my int32) string {
 	docY := my + r.scrollY
-	for i, link := range r.layout.links {
+	startIdx := sort.Search(len(r.layout.links), func(i int) bool {
+		rects := r.layout.links[i].rects
+		if len(rects) == 0 {
+			return false
+		}
+		return rects[len(rects)-1].Y+rects[len(rects)-1].H >= docY
+	})
+	for i := startIdx; i < len(r.layout.links); i++ {
+		link := r.layout.links[i]
+		if len(link.rects) > 0 && link.rects[0].Y > docY {
+			break
+		}
 		for _, rect := range link.rects {
 			if mx >= rect.X && mx <= rect.X+rect.W &&
 				docY >= rect.Y && docY <= rect.Y+rect.H {
@@ -643,7 +655,15 @@ func (r *Renderer) HandleTreeClick(mx, my int32) int {
 		return -1
 	}
 	docY := my + r.scrollY
-	for i, line := range r.layout.lines {
+	startIdx := sort.Search(len(r.layout.lines), func(i int) bool {
+		line := r.layout.lines[i]
+		return line.y+line.h >= docY
+	})
+	for i := startIdx; i < len(r.layout.lines); i++ {
+		line := r.layout.lines[i]
+		if line.y > docY {
+			break
+		}
 		if docY >= line.y && docY <= line.y+line.h {
 			return i
 		}
@@ -737,7 +757,18 @@ func (r *Renderer) HandleMouseMove(mx, my int32) {
 	prevLink := r.hoveredLink
 	r.hoveredLink = -1
 	r.hoveredTreeLine = -1
-	for i, link := range r.layout.links {
+	startIdx := sort.Search(len(r.layout.links), func(i int) bool {
+		rects := r.layout.links[i].rects
+		if len(rects) == 0 {
+			return false
+		}
+		return rects[len(rects)-1].Y+rects[len(rects)-1].H >= docY
+	})
+	for i := startIdx; i < len(r.layout.links); i++ {
+		link := r.layout.links[i]
+		if len(link.rects) > 0 && link.rects[0].Y > docY {
+			break
+		}
 		for _, rect := range link.rects {
 			if mx >= rect.X && mx <= rect.X+rect.W &&
 				docY >= rect.Y && docY <= rect.Y+rect.H {
@@ -757,7 +788,15 @@ func (r *Renderer) HandleMouseMove(mx, my int32) {
 		}
 	}
 	if r.treeItems != nil {
-		for i, line := range r.layout.lines {
+		lStartIdx := sort.Search(len(r.layout.lines), func(i int) bool {
+			line := r.layout.lines[i]
+			return line.y+line.h >= docY
+		})
+		for i := lStartIdx; i < len(r.layout.lines); i++ {
+			line := r.layout.lines[i]
+			if line.y > docY {
+				break
+			}
 			if docY >= line.y && docY <= line.y+line.h {
 				r.hoveredTreeLine = i
 				return

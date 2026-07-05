@@ -80,6 +80,10 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 	if h.ID != "" {
 		s.r.layout.anchorPositions[h.ID] = startY
 	}
+	norm1 := strings.ReplaceAll(strings.ToLower(h.Content), " ", "_")
+	norm2 := strings.ReplaceAll(strings.ToLower(h.Content), " ", "-")
+	s.r.layout.anchorPositions[norm1] = startY
+	s.r.layout.anchorPositions[norm2] = startY
 
 	if h.Level == 1 || h.Level == 2 {
 		s.y += headingBottomMargin
@@ -130,16 +134,17 @@ func wrapCodeLine(text string, font *ttf.Font, maxW int32) []string {
 		return []string{text}
 	}
 
+	runes := []rune(text)
 	var lines []string
-	textLeft := text
-	for len(textLeft) > 0 {
+
+	for len(runes) > 0 {
+		textLeft := string(runes)
 		tw, _ = measureText(textLeft, font, false, false, false)
 		if tw <= maxW {
 			lines = append(lines, textLeft)
 			break
 		}
 
-		runes := []rune(textLeft)
 		fitCount := truncateRunesToWidth(runes, font, maxW)
 
 		breakAt := fitCount
@@ -154,7 +159,7 @@ func wrapCodeLine(text string, font *ttf.Font, maxW int32) []string {
 		}
 
 		lines = append(lines, string(runes[:fitCount]))
-		textLeft = string(runes[fitCount:])
+		runes = runes[fitCount:]
 	}
 	return lines
 }
@@ -532,10 +537,16 @@ func (s *layoutState) flushInlineLine(
 			idx, ok := activeLinks[w.LinkID]
 			if !ok {
 				idx = len(s.r.layout.links)
+				url := v.LinkURLs[w.LinkID]
 				s.r.layout.links = append(s.r.layout.links, linkEntry{
-					url: v.LinkURLs[w.LinkID],
+					url: url,
 				})
 				activeLinks[w.LinkID] = idx
+
+				if strings.HasPrefix(url, "#cite_ref-") || strings.HasPrefix(url, "#cite_note-") {
+					norm := strings.ReplaceAll(strings.ToLower(url), "_", "-")
+					s.r.layout.anchorPositions[norm] = wordY
+				}
 			}
 			rect := sdlRect{X: currX, Y: wordY, W: w.PixW, H: w.PixH}
 			s.r.layout.links[idx].rects = append(s.r.layout.links[idx].rects, rect)

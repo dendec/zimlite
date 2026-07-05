@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/svg"
@@ -25,10 +26,18 @@ func (r *Renderer) Render() {
 }
 
 func (r *Renderer) renderImages() {
-	for _, img := range r.layout.imageEntries {
+	if len(r.layout.imageEntries) == 0 {
+		return
+	}
+	startIdx := sort.Search(len(r.layout.imageEntries), func(i int) bool {
+		img := r.layout.imageEntries[i]
+		return img.y+img.h >= r.scrollY
+	})
+	for i := startIdx; i < len(r.layout.imageEntries); i++ {
+		img := r.layout.imageEntries[i]
 		screenY := img.y - r.scrollY
-		if screenY <= -img.h || screenY >= r.height-statusBarHeight {
-			continue
+		if screenY >= r.height-statusBarHeight {
+			break
 		}
 		tex, isAnim := r.imgManager.GetTexture(img.url)
 		if isAnim {
@@ -41,16 +50,33 @@ func (r *Renderer) renderImages() {
 }
 
 func (r *Renderer) renderCodeBackgrounds() {
-	for _, cr := range r.layout.codeRanges {
-		screenY := cr.y - r.scrollY
-		if screenY > -cr.h && screenY < r.height-statusBarHeight {
+	if len(r.layout.codeRanges) > 0 {
+		startIdx := sort.Search(len(r.layout.codeRanges), func(i int) bool {
+			cr := r.layout.codeRanges[i]
+			return cr.y+cr.h > r.scrollY
+		})
+		for i := startIdx; i < len(r.layout.codeRanges); i++ {
+			cr := r.layout.codeRanges[i]
+			screenY := cr.y - r.scrollY
+			if screenY >= r.height-statusBarHeight {
+				break
+			}
 			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: cr.x, Y: screenY, W: cr.w, H: cr.h})
 		}
 	}
-	for _, cs := range r.layout.codeSpans {
-		screenY := cs.y - r.scrollY
-		if screenY > -cs.h && screenY < r.height-statusBarHeight {
+
+	if len(r.layout.codeSpans) > 0 {
+		startIdx := sort.Search(len(r.layout.codeSpans), func(i int) bool {
+			cs := r.layout.codeSpans[i]
+			return cs.y+cs.h > r.scrollY
+		})
+		for i := startIdx; i < len(r.layout.codeSpans); i++ {
+			cs := r.layout.codeSpans[i]
+			screenY := cs.y - r.scrollY
+			if screenY >= r.height-statusBarHeight {
+				break
+			}
 			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: cs.x, Y: screenY, W: cs.w, H: cs.h})
 		}
@@ -58,16 +84,25 @@ func (r *Renderer) renderCodeBackgrounds() {
 }
 
 func (r *Renderer) renderBlockquotes() {
-	for _, bq := range r.layout.blockquotes {
+	if len(r.layout.blockquotes) == 0 {
+		return
+	}
+	startIdx := sort.Search(len(r.layout.blockquotes), func(i int) bool {
+		bq := r.layout.blockquotes[i]
+		return bq.Y+bq.H > r.scrollY
+	})
+	for i := startIdx; i < len(r.layout.blockquotes); i++ {
+		bq := r.layout.blockquotes[i]
 		screenY := bq.Y - r.scrollY
-		if screenY > -bq.H && screenY < r.height-statusBarHeight {
-			// Draw background
-			r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBgColor.R, r.theme.BlockquoteBgColor.G, r.theme.BlockquoteBgColor.B, r.theme.BlockquoteBgColor.A)
-			r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: bq.W, H: bq.H})
-			// Draw thick left border
-			r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBorderColor.R, r.theme.BlockquoteBorderColor.G, r.theme.BlockquoteBorderColor.B, r.theme.BlockquoteBorderColor.A)
-			r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: 4, H: bq.H})
+		if screenY >= r.height-statusBarHeight {
+			break
 		}
+		// Draw background
+		r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBgColor.R, r.theme.BlockquoteBgColor.G, r.theme.BlockquoteBgColor.B, r.theme.BlockquoteBgColor.A)
+		r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: bq.W, H: bq.H})
+		// Draw thick left border
+		r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBorderColor.R, r.theme.BlockquoteBorderColor.G, r.theme.BlockquoteBorderColor.B, r.theme.BlockquoteBorderColor.A)
+		r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: 4, H: bq.H})
 	}
 }
 func (r *Renderer) renderTables() {
@@ -84,10 +119,18 @@ func (r *Renderer) renderTables() {
 }
 
 func (r *Renderer) renderLines() {
-	for i, line := range r.layout.lines {
+	if len(r.layout.lines) == 0 {
+		return
+	}
+	startIdx := sort.Search(len(r.layout.lines), func(i int) bool {
+		line := r.layout.lines[i]
+		return line.y+line.h >= r.scrollY
+	})
+	for i := startIdx; i < len(r.layout.lines); i++ {
+		line := r.layout.lines[i]
 		screenY := line.y - r.scrollY
-		if screenY < -line.h || screenY > r.height-statusBarHeight {
-			continue
+		if screenY > r.height-statusBarHeight {
+			break
 		}
 		if line.text == "" {
 			if line.h <= 2 {

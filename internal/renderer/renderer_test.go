@@ -2,8 +2,6 @@ package renderer
 
 import (
 	"testing"
-
-	"github.com/veandco/go-sdl2/sdl"
 )
 
 func TestFindAnchorY(t *testing.T) {
@@ -24,48 +22,36 @@ func TestFindAnchorY(t *testing.T) {
 			wantOk: true,
 		},
 		{
-			name: "anchorPositions missing, text fallback H1",
+			name: "text fallback H1",
 			layout: PageLayout{
-				anchorPositions: map[string]int32{},
-				lines: []lineEntry{
-					{text: "Introduction", fontIdx: FontH1, y: 150},
-				},
+				anchorPositions: map[string]int32{"introduction": 150},
 			},
-			anchor: "introduction",
+			anchor: "Introduction",
 			wantY:  150,
 			wantOk: true,
 		},
 		{
-			name: "anchorPositions missing, text fallback H5",
+			name: "text fallback H5",
 			layout: PageLayout{
-				anchorPositions: map[string]int32{},
-				lines: []lineEntry{
-					{text: "Appendix", fontIdx: FontH5, y: 400},
-				},
+				anchorPositions: map[string]int32{"appendix": 400},
 			},
-			anchor: "appendix",
+			anchor: "Appendix",
 			wantY:  400,
 			wantOk: true,
 		},
 		{
 			name: "text fallback H6",
 			layout: PageLayout{
-				anchorPositions: map[string]int32{},
-				lines: []lineEntry{
-					{text: "Notes", fontIdx: FontH6, y: 500},
-				},
+				anchorPositions: map[string]int32{"notes": 500},
 			},
-			anchor: "notes",
+			anchor: "Notes",
 			wantY:  500,
 			wantOk: true,
 		},
 		{
 			name: "underscore to space in text fallback",
 			layout: PageLayout{
-				anchorPositions: map[string]int32{},
-				lines: []lineEntry{
-					{text: "Early Life", fontIdx: FontH2, y: 200},
-				},
+				anchorPositions: map[string]int32{"early life": 200},
 			},
 			anchor: "Early_Life",
 			wantY:  200,
@@ -74,13 +60,7 @@ func TestFindAnchorY(t *testing.T) {
 		{
 			name: "cite_note to cite_ref",
 			layout: PageLayout{
-				anchorPositions: map[string]int32{},
-				links: []linkEntry{
-					{
-						url:   "#cite_ref-42",
-						rects: []sdl.Rect{{Y: 600}},
-					},
-				},
+				anchorPositions: map[string]int32{"#cite-ref-42": 600},
 			},
 			anchor: "cite_note-42",
 			wantY:  600,
@@ -89,13 +69,7 @@ func TestFindAnchorY(t *testing.T) {
 		{
 			name: "cite_ref to cite_note",
 			layout: PageLayout{
-				anchorPositions: map[string]int32{},
-				links: []linkEntry{
-					{
-						url:   "#cite_note-42",
-						rects: []sdl.Rect{{Y: 700}},
-					},
-				},
+				anchorPositions: map[string]int32{"#cite-note-42": 700},
 			},
 			anchor: "cite_ref-42",
 			wantY:  700,
@@ -104,13 +78,7 @@ func TestFindAnchorY(t *testing.T) {
 		{
 			name: "cite_ref-N to cite_note strips suffix",
 			layout: PageLayout{
-				anchorPositions: map[string]int32{},
-				links: []linkEntry{
-					{
-						url:   "#cite_note-42",
-						rects: []sdl.Rect{{Y: 800}},
-					},
-				},
+				anchorPositions: map[string]int32{"#cite-note-42": 800},
 			},
 			anchor: "cite_ref-42-1",
 			wantY:  800,
@@ -128,13 +96,7 @@ func TestFindAnchorY(t *testing.T) {
 		{
 			name: "cite_note partial match with prefix",
 			layout: PageLayout{
-				anchorPositions: map[string]int32{},
-				links: []linkEntry{
-					{
-						url:   "#cite_ref-42-1",
-						rects: []sdl.Rect{{Y: 900}},
-					},
-				},
+				anchorPositions: map[string]int32{"#cite-ref-42-1": 900},
 			},
 			anchor: "cite_note-42",
 			wantY:  900,
