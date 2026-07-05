@@ -56,12 +56,11 @@ type Scroller interface {
 	HandleTreeClick(mx, my int32) int
 }
 
-// DocNavigator manages document history (back/forward).
+// DocNavigator manages document history and back navigation.
 type DocNavigator interface {
 	Open(id string)
 	UpdateCurrentState(state document.ViewState)
 	Back() (bool, document.ViewState)
-	Forward() (bool, document.ViewState)
 	Current() string
 	CurrentState() document.ViewState
 }
