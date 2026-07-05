@@ -28,6 +28,7 @@ type DocViewer interface {
 	SetStatusOverride(status string)
 	SetHasTree(has bool)
 	FindAnchorY(anchor string) (int32, bool)
+	HasAnimations() bool
 }
 
 // LinkBrowser is the interface for navigating hyperlinks in a document.

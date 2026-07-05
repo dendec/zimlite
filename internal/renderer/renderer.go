@@ -82,9 +82,10 @@ type Renderer struct {
 	textureCache map[textureKey]*sdl.Texture
 	imgManager   *ImageManager
 
-	baseFontSize   int
-	fontPath       string
-	statusOverride string
+	baseFontSize        int
+	fontPath            string
+	statusOverride      string
+	hasActiveAnimations bool
 }
 
 type lineEntry struct {
@@ -555,4 +556,8 @@ func (r *Renderer) Zoom(delta int) error {
 // SetStatusOverride sets a custom status bar message to override help legends.
 func (r *Renderer) SetStatusOverride(status string) {
 	r.statusOverride = status
+}
+
+func (r *Renderer) HasAnimations() bool {
+	return r.hasActiveAnimations
 }

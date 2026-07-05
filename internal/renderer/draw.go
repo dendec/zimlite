@@ -7,6 +7,7 @@ import (
 )
 
 func (r *Renderer) Render() {
+	r.hasActiveAnimations = false
 	r.sdlRenderer.SetDrawColor(r.theme.BgColor.R, r.theme.BgColor.G, r.theme.BgColor.B, r.theme.BgColor.A)
 	r.sdlRenderer.Clear()
 	r.renderImages()
@@ -26,7 +27,10 @@ func (r *Renderer) renderImages() {
 		if screenY <= -img.h || screenY >= r.height-statusBarHeight {
 			continue
 		}
-		tex := r.imgManager.GetTexture(img.url)
+		tex, isAnim := r.imgManager.GetTexture(img.url)
+		if isAnim {
+			r.hasActiveAnimations = true
+		}
 		if tex != nil {
 			r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: img.x, Y: screenY, W: img.w, H: img.h})
 		}

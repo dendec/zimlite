@@ -104,14 +104,62 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 
 	s.y += 8 // top padding
 
-	for _, cl := range strings.Split(codeText, "\n") {
-		tw, th := measureText(cl, fontMono, false, false)
+	maxCodeW := s.maxW - 24
+	if maxCodeW < 50 {
+		maxCodeW = 50
+	}
+
+	addLine := func(text string) {
+		tw, th := measureText(text, fontMono, false, false)
+		if th == 0 {
+			th = 18
+		}
 		s.r.layout.lines = append(s.r.layout.lines, lineEntry{
-			text: cl, fontIdx: FontMono, color: s.r.theme.TextColor,
-			x: s.r.marginX + 12, y: s.y, w: tw, h: th, // Text indent
+			text: text, fontIdx: FontMono, color: s.r.theme.TextColor,
+			x: s.r.marginX + 12, y: s.y, w: tw, h: th,
 			isCode: true,
 		})
 		s.y += th + 1
+	}
+
+	for _, cl := range strings.Split(codeText, "\n") {
+		if cl == "" {
+			addLine(" ")
+			continue
+		}
+
+		textLeft := cl
+		for len(textLeft) > 0 {
+			tw, _ := measureText(textLeft, fontMono, false, false)
+			if tw <= maxCodeW {
+				addLine(textLeft)
+				break
+			}
+
+			runes := []rune(textLeft)
+			fitCount := 1
+			for i := 2; i <= len(runes); i++ {
+				w, _ := measureText(string(runes[:i]), fontMono, false, false)
+				if w > maxCodeW {
+					break
+				}
+				fitCount = i
+			}
+
+			breakAt := fitCount
+			for i := fitCount - 1; i > 0; i-- {
+				if runes[i] == ' ' || runes[i] == '\t' || runes[i] == '-' || runes[i] == ',' {
+					breakAt = i + 1
+					break
+				}
+			}
+			if breakAt > 0 && breakAt < fitCount && breakAt > fitCount/2 {
+				fitCount = breakAt
+			}
+
+			addLine(string(runes[:fitCount]))
+			textLeft = string(runes[fitCount:])
+		}
 	}
 
 	s.y += 8 // bottom padding

@@ -3,6 +3,7 @@ package ui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
@@ -188,6 +189,22 @@ func (app *App) Run() {
 	defer app.shutdown()
 	app.loader.checkInternetAsync()
 	app.running = true
+
+	// Background ticker to wake up the event loop for animations at ~30 FPS
+	go func() {
+		ticker := time.NewTicker(33 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
+			if !app.running {
+				break
+			}
+			if app.viewer != nil && app.viewer.HasAnimations() {
+				// Push a dummy event to wake up sdl.WaitEvent()
+				sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+			}
+		}
+	}()
+
 	for app.running {
 		event := sdl.WaitEvent()
 		if event == nil {
