@@ -288,11 +288,6 @@ func (r *Renderer) drawLinkUnderline(idx int) {
 
 		underlineY := sy + rect.H
 
-		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
-		r.sdlRenderer.SetDrawColor(r.theme.SelBgColor.R, r.theme.SelBgColor.G, r.theme.SelBgColor.B, r.theme.SelBgColor.A)
-		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X, Y: sy, W: rect.W, H: rect.H})
-		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
-
 		r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
 		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X, Y: underlineY, W: rect.W, H: 1})
 	}
