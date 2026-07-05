@@ -346,7 +346,9 @@ func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
 	}
 
 	for _, s := range segments {
-		s.tex.Destroy()
+		if !s.isEmoji {
+			s.tex.Destroy()
+		}
 	}
 }
 
