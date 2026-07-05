@@ -189,22 +189,22 @@ func (r *Renderer) Render() {
 	if sdl.NumJoysticks() > 0 {
 		if r.doc != nil {
 			if r.hasTree {
-				statusText = "←→:links  ↑↓:scroll  A:open  X:back  Start:home  Select:tree"
+				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Start:home  Select:tree  Menu:exit"
 			} else {
-				statusText = "←→:links  ↑↓:scroll  A:open  X:back"
+				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Menu:exit"
 			}
 		} else {
-			statusText = "↑↓:nav  A/→:enter  X/←:back  Select:doc"
+			statusText = "↑↓:nav  L1/R1:page  A/→:enter  X/←:back  Select:doc  Menu:exit"
 		}
 	} else {
 		if r.doc != nil {
 			if r.hasTree {
-				statusText = "←→:links  ↑↓:scroll  ↩:open  ⌫:back  H:home  T:tree  D:theme"
+				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  H:home  T:tree  D:theme  Q:exit"
 			} else {
-				statusText = "←→:links  ↑↓:scroll  ↩:open  ⌫:back  D:theme"
+				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  D:theme  Q:exit"
 			}
 		} else {
-			statusText = "↑↓:nav  ↩→:enter  ←⌫:back  T:doc  D:theme"
+			statusText = "↑↓:nav  PgUp/PgDn:page  ↩→:enter  ←⌫:back  T:doc  D:theme  Q:exit"
 		}
 	}
 
