@@ -16,7 +16,7 @@ func (r *Renderer) Render() {
 	r.renderBlockquotes()
 	r.renderCodeBackgrounds()
 	r.renderTables()
-	r.renderLinkHighlight()
+	r.renderLinkUnderline()
 	r.renderLines()
 	r.renderScrollbar()
 	r.renderStatusBar()
@@ -99,15 +99,17 @@ func (r *Renderer) renderLines() {
 	}
 }
 
-func (r *Renderer) renderLinkHighlight() {
-	if r.selectedLink < 0 || r.selectedLink >= len(r.layout.links) {
-		return
+func (r *Renderer) renderLinkUnderline() {
+	if r.selectedLink >= 0 && r.selectedLink < len(r.layout.links) {
+		r.drawLinkUnderline(r.selectedLink)
 	}
-	link := r.layout.links[r.selectedLink]
+	if r.hoveredLink >= 0 && r.hoveredLink < len(r.layout.links) && r.hoveredLink != r.selectedLink {
+		r.drawLinkUnderline(r.hoveredLink)
+	}
+}
 
-	var mergedText []sdl.Rect
-	var imgRects []sdl.Rect
-
+func (r *Renderer) drawLinkUnderline(idx int) {
+	link := r.layout.links[idx]
 	for _, rect := range link.rects {
 		isImg := false
 		for _, img := range r.layout.imageEntries {
@@ -116,45 +118,18 @@ func (r *Renderer) renderLinkHighlight() {
 				break
 			}
 		}
+		if isImg {
+			continue
+		}
 
 		sy := rect.Y - r.scrollY
 		if sy < -rect.H || sy > r.height-statusBarHeight {
 			continue
 		}
-		newR := sdl.Rect{X: rect.X - 2, Y: sy - 1, W: rect.W + 4, H: rect.H + 2}
 
-		if isImg {
-			imgRects = append(imgRects, newR)
-		} else {
-			if len(mergedText) > 0 {
-				last := &mergedText[len(mergedText)-1]
-				if last.Y == newR.Y {
-					newRight := newR.X + newR.W
-					lastRight := last.X + last.W
-					if newRight > lastRight {
-						last.W = newRight - last.X
-					}
-					continue
-				}
-			}
-			mergedText = append(mergedText, newR)
-		}
-	}
-
-	if len(mergedText) > 0 {
-		r.sdlRenderer.SetDrawColor(r.theme.SelBgColor.R, r.theme.SelBgColor.G, r.theme.SelBgColor.B, r.theme.SelBgColor.A)
-		for _, rect := range mergedText {
-			r.sdlRenderer.FillRect(&rect)
-		}
-	}
-
-	if len(imgRects) > 0 {
-		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
-		r.sdlRenderer.SetDrawColor(r.theme.SelImgColor.R, r.theme.SelImgColor.G, r.theme.SelImgColor.B, r.theme.SelImgColor.A)
-		for _, rect := range imgRects {
-			r.sdlRenderer.FillRect(&rect)
-		}
-		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
+		underlineY := sy + rect.H - 1
+		r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
+		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X, Y: underlineY, W: rect.W, H: 1})
 	}
 }
 

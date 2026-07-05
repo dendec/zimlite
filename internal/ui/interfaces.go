@@ -29,6 +29,7 @@ type DocViewer interface {
 	SetHasTree(has bool)
 	FindAnchorY(anchor string) (int32, bool)
 	HasAnimations() bool
+	HandleMouseMove(mx, my int32)
 }
 
 // LinkBrowser is the interface for navigating hyperlinks in a document.

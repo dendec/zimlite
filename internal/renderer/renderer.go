@@ -97,6 +97,7 @@ type Renderer struct {
 	docTitle            string
 	statusOverride      string
 	hasActiveAnimations bool
+	hoveredLink         int
 }
 
 type lineEntry struct {
@@ -270,6 +271,7 @@ func (r *Renderer) SetDocument(doc *document.Document) {
 	r.doc = doc
 	r.scrollY = 0
 	r.selectedLink = -1
+	r.hoveredLink = -1
 	r.docTitle = extractTitle(doc)
 	r.relayout()
 }
@@ -308,6 +310,7 @@ func (r *Renderer) SetTextLines(lines []string) {
 	r.layout = PageLayout{}
 	r.doc = nil
 	r.selectedLink = -1
+	r.hoveredLink = -1
 
 	font := r.fonts[FontBody].font
 	y := r.marginY
@@ -615,4 +618,18 @@ func extractTitle(doc *document.Document) string {
 
 func (r *Renderer) HasAnimations() bool {
 	return r.hasActiveAnimations
+}
+
+func (r *Renderer) HandleMouseMove(mx, my int32) {
+	docY := my + r.scrollY
+	r.hoveredLink = -1
+	for i, link := range r.layout.links {
+		for _, rect := range link.rects {
+			if mx >= rect.X && mx <= rect.X+rect.W &&
+				docY >= rect.Y && docY <= rect.Y+rect.H {
+				r.hoveredLink = i
+				return
+			}
+		}
+	}
 }
