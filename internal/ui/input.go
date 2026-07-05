@@ -129,7 +129,9 @@ func (c *InputController) processTreeKey(sc sdl.Scancode) {
 	case sdl.SCANCODE_LEFT, sdl.SCANCODE_A, sdl.SCANCODE_KP_4:
 		app.navState.ActionLeft()
 	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
-		slog.Debug("Tree navigation enter", "label", app.navState.Cursor.Label(), "isLeaf", app.navState.CursorIsLeaf(), "path", app.navState.CursorPath())
+		if app.navState.Cursor != nil {
+			slog.Debug("Tree navigation enter", "label", app.navState.Cursor.Label(), "isLeaf", app.navState.CursorIsLeaf(), "path", app.navState.CursorPath())
+		}
 		c.handleTreeSelection()
 	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
 		app.goBack()

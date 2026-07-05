@@ -4,6 +4,7 @@ package trie
 
 import (
 	"sort"
+	"strconv"
 	"unicode/utf8"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
@@ -217,7 +218,7 @@ func (n *RadixNode) Suffix() string {
 	}
 	count := len(n.articles)
 	if count > 0 {
-		return itoa(count)
+		return strconv.Itoa(count)
 	}
 	return ""
 }
@@ -253,20 +254,4 @@ func labelForRune(r rune) rune {
 		return r - 'а' + 'А'
 	}
 	return r
-}
-
-func itoa(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	buf := make([]byte, 0, 16)
-	nn := n
-	for nn > 0 {
-		buf = append(buf, byte('0'+nn%10))
-		nn /= 10
-	}
-	for i, j := 0, len(buf)-1; i < j; i, j = i+1, j-1 {
-		buf[i], buf[j] = buf[j], buf[i]
-	}
-	return string(buf)
 }

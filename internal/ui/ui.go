@@ -139,7 +139,7 @@ func (app *App) enterTreeMode() {
 func (app *App) exitTreeMode() {
 	app.mode = modeDoc
 	// Restore last viewed document from history.
-	for app.navigator.Current() == "virtual:tree" {
+	for i := 0; i < 100 && app.navigator.Current() == "virtual:tree"; i++ {
 		app.navigator.Back()
 	}
 	prevPath := app.navigator.Current()
