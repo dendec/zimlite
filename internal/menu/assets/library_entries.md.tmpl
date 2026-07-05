@@ -8,9 +8,10 @@
 {{range .Entries}}
 ### {{.Title}}
 
-{{if .Summary}}*📝 Description*: {{.Summary}}
-{{end}}*💾 Size*: {{.Size}}
-[⬇ Download {{.Filename}}](virtual:library/download?url={{urlquery .DownloadURL}}&filename={{urlquery .Filename}})
+{{if .Summary}}{{.Summary}}
+{{end}}
+
+[⬇ Download {{.Filename}}](virtual:library/download?url={{urlquery .DownloadURL}}&filename={{urlquery .Filename}}) ({{.Size}})
 
 ---
 {{end}}

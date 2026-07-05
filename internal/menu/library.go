@@ -122,10 +122,21 @@ func LibraryCategoriesPage(lang, name string) (*document.Document, error) {
 		LanguageName: name,
 	}
 
+	hiddenCategories := map[string]bool{
+		"phet": true, // interactive JS simulations
+		"ted":  true, // video content
+		"mooc": true, // video courses and interactive tests
+	}
+
 	for _, entry := range categories.Entries {
+		categoryID := strings.ToLower(entry.Title)
+		if hiddenCategories[categoryID] {
+			continue
+		}
+
 		data.Categories = append(data.Categories, LibraryCategory{
 			Title:    entry.Title,
-			Category: strings.ToLower(entry.Title),
+			Category: categoryID,
 		})
 	}
 
