@@ -3,6 +3,7 @@ package ui
 
 import (
 	"fmt"
+	"log/slog"
 	neturl "net/url"
 	"strings"
 	"time"
@@ -197,7 +198,7 @@ func (app *App) ReloadCurrentDocument(doc *document.Document) {
 	app.scroller.SetScrollY(sy)
 	app.links.SetSelectedLinkIndex(sel)
 	app.viewer.Relayout()
-	sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 }
 
 // HandleSettingsAction parses settings URL and updates config and UI.
@@ -215,7 +216,9 @@ func (app *App) HandleSettingsAction(u *neturl.URL) {
 	}
 	if fs := u.Query().Get("fontsize"); fs != "" {
 		var delta int
-		fmt.Sscanf(fs, "%d", &delta)
+		if _, err := fmt.Sscanf(fs, "%d", &delta); err != nil {
+			slog.Warn("Invalid fontsize value", "value", fs)
+		}
 		cfg.FontSize += delta
 		if cfg.FontSize < 10 {
 			cfg.FontSize = 10
@@ -251,7 +254,7 @@ func (app *App) Run() {
 			}
 			if app.viewer != nil && app.viewer.HasAnimations() {
 				// Push a dummy event to wake up sdl.WaitEvent()
-				sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+				_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 			}
 		}
 	}()

@@ -364,7 +364,7 @@ func (s *layoutState) VisitTable(t *document.Table) {
 		}
 		rowH := maxH + 2*padding
 
-		// Record cell rects for grid drawing
+		// Record cell rects
 		var cellXOffset int32
 		for cIdx := 0; cIdx < colCount; cIdx++ {
 			tableGrid.cellRects = append(tableGrid.cellRects, sdlRect{

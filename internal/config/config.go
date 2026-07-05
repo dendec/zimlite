@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 )
 
 // Config represents the application settings.
@@ -14,7 +15,10 @@ type Config struct {
 	FontSize int    `json:"font_size"`
 }
 
-var currentConfig Config
+var (
+	mu            sync.RWMutex
+	currentConfig Config
+)
 
 // Default returns a configuration with sensible defaults.
 func Default() Config {
@@ -27,11 +31,15 @@ func Default() Config {
 
 // Get returns the current configuration.
 func Get() Config {
+	mu.RLock()
+	defer mu.RUnlock()
 	return currentConfig
 }
 
 // Set updates the current configuration in memory.
 func Set(c Config) {
+	mu.Lock()
+	defer mu.Unlock()
 	currentConfig = c
 }
 
@@ -46,6 +54,8 @@ func configFilePath() string {
 
 // Load reads the configuration from disk. If the file does not exist, it loads defaults.
 func Load() {
+	mu.Lock()
+	defer mu.Unlock()
 	currentConfig = Default()
 	path := configFilePath()
 
@@ -68,6 +78,10 @@ func Load() {
 
 // Save writes the current configuration to disk.
 func Save() error {
+	mu.RLock()
+	cfg := currentConfig
+	mu.RUnlock()
+
 	path := configFilePath()
 	dir := filepath.Dir(path)
 
@@ -76,7 +90,7 @@ func Save() error {
 		return err
 	}
 
-	data, err := json.MarshalIndent(currentConfig, "", "  ")
+	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		slog.Error("Failed to marshal config", "error", err)
 		return err

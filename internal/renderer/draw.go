@@ -12,7 +12,7 @@ func (r *Renderer) Render() {
 	r.renderImages()
 	r.renderBlockquotes()
 	r.renderCodeBackgrounds()
-	r.renderTables(false)
+	r.renderTables()
 	r.renderLinkHighlight()
 	r.renderLines()
 	r.renderScrollbar()
@@ -66,20 +66,7 @@ func (r *Renderer) renderBlockquotes() {
 		}
 	}
 }
-
-func (r *Renderer) renderTables(visible bool) {
-	if !visible {
-		return
-	}
-	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
-	for _, table := range r.layout.tables {
-		for _, cellRect := range table.cellRects {
-			screenY := cellRect.Y - r.scrollY
-			if screenY > -cellRect.H && screenY < r.height-statusBarHeight {
-				r.sdlRenderer.DrawRect(&sdl.Rect{X: cellRect.X, Y: screenY, W: cellRect.W, H: cellRect.H})
-			}
-		}
-	}
+func (r *Renderer) renderTables() {
 }
 
 func (r *Renderer) renderLines() {
@@ -205,9 +192,9 @@ func (r *Renderer) renderStatusBar() {
 	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
 	r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: r.height - statusBarHeight, W: r.width, H: 1})
 
-	var statusText string
-	if r.statusOverride != "" {
-		statusText = r.statusOverride
+	statusText := r.statusOverride
+	if statusText == "" {
+		statusText = r.defaultStatus
 	}
 
 	font := r.fonts[FontBody].font

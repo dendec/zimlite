@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
 	neturl "net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
@@ -28,24 +28,24 @@ type DocumentLoader struct {
 	app               *App
 	docCache          map[string]*document.Document
 	zimReader         ZimReader
-	internetAvailable bool
+	internetAvailable atomic.Bool
 	virtualPages      map[string]VirtualPageGenerator
 }
 
 func NewDocumentLoader(app *App) *DocumentLoader {
 	l := &DocumentLoader{
-		app:               app,
-		docCache:          make(map[string]*document.Document),
-		internetAvailable: true,
-		virtualPages:      make(map[string]VirtualPageGenerator),
+		app:          app,
+		docCache:     make(map[string]*document.Document),
+		virtualPages: make(map[string]VirtualPageGenerator),
 	}
+	l.internetAvailable.Store(true)
 	l.registerVirtualPages()
 	return l
 }
 
 func (l *DocumentLoader) registerVirtualPages() {
 	l.virtualPages["virtual:menu"] = func(path string, l *DocumentLoader) (*document.Document, error) {
-		return menu.FileSelector(l.internetAvailable)
+		return menu.FileSelector(l.internetAvailable.Load())
 	}
 	l.virtualPages["virtual:help"] = func(path string, l *DocumentLoader) (*document.Document, error) {
 		return menu.HelpPage(sdl.NumJoysticks() > 0)
@@ -69,13 +69,13 @@ func (l *DocumentLoader) shutdown() {
 func (l *DocumentLoader) checkInternetAsync() {
 	go func() {
 		hasInternet := menu.CheckInternet()
-		if hasInternet != l.internetAvailable {
-			l.internetAvailable = hasInternet
+		if hasInternet != l.internetAvailable.Load() {
+			l.internetAvailable.Store(hasInternet)
 			if l.app.navigator.Current() == "virtual:menu" {
 				if doc, err := menu.FileSelector(hasInternet); err == nil {
 					l.app.viewer.SetDocument(doc)
 					l.app.viewer.Relayout()
-					sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+					_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 				}
 			}
 		}
@@ -146,12 +146,12 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 	app.mode = modeDoc
 	app.viewer.SetResourceLoader(func(rawURL string) ([]byte, error) {
 		if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
-			client := http.Client{Timeout: 3 * time.Second}
+			client := storage.HTTPClient(10 * time.Second)
 			resp, err := client.Get(rawURL)
 			if err != nil {
 				return nil, err
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			return io.ReadAll(resp.Body)
 		}
 		if l.zimReader != nil {
@@ -210,7 +210,7 @@ func (l *DocumentLoader) NavigateLink(url string) {
 				}
 				if app.navigator.Current() == "virtual:menu" {
 					_ = l.OpenFile("virtual:menu")
-					sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+					_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 				}
 			}
 		}
@@ -289,12 +289,12 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 	go func() {
 		err := storage.Download(downloadURL, filename, func(status string) {
 			app.viewer.SetStatusOverride(status)
-			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 		})
 		if err != nil {
 			slog.Error("Download failed", "url", downloadURL, "filename", filename, "error", err)
 			app.viewer.SetStatusOverride("Download failed: " + err.Error())
-			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 			return
 		}
 		slog.Info("Download completed successfully", "filename", filename)
@@ -303,7 +303,7 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 		current := app.navigator.Current()
 		if current == "virtual:menu" || strings.HasPrefix(current, "virtual:library/download") {
 			_ = l.OpenFile("virtual:menu")
-			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 		}
 	}()
 }

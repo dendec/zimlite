@@ -125,7 +125,7 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 	case *ast.Blockquote:
 		subConv := &converter{source: c.source, document: &document.Document{}}
 		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
-			ast.Walk(child, subConv.walker)
+			_ = ast.Walk(child, subConv.walker)
 		}
 		c.document.Blocks = append(c.document.Blocks, &document.Blockquote{
 			Blocks: subConv.document.Blocks,

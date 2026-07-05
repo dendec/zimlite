@@ -4,7 +4,6 @@ import (
 	"encoding/xml"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"net/url"
 	"path"
 	"sort"
@@ -15,6 +14,7 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/menu"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
 )
 
 // AtomLink represents a link element in an Atom entry or feed.
@@ -29,7 +29,7 @@ type AtomLink struct {
 // AtomEntry represents a single entry in an Atom/OPDS catalog feed.
 type AtomEntry struct {
 	Title    string     `xml:"title"`
-	Language string     `xml:"http://purl.org/dc/terms/ language"`
+	Language string     `xml:"http://purl.org/dc/terms/language"`
 	Count    int        `xml:"http://purl.org/syndication/thread/1.0 count"`
 	Summary  string     `xml:"summary"`
 	Category string     `xml:"category"`
@@ -62,26 +62,13 @@ func renderErrorDoc(section string, err error) (*document.Document, error) {
 	return markdown.Parse(strings.NewReader(sb.String()))
 }
 
-func formatSize(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), []string{"KB", "MB", "GB", "TB"}[exp])
-}
-
 func fetchFeed(urlStr string) (*AtomFeed, error) {
-	client := http.Client{Timeout: 5 * time.Second}
+	client := storage.HTTPClient(5 * time.Second)
 	resp, err := client.Get(urlStr)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	var feed AtomFeed
 	dec := xml.NewDecoder(resp.Body)
 	if err := dec.Decode(&feed); err != nil {
@@ -169,7 +156,7 @@ func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document,
 				if downloadURL == "" {
 					continue
 				}
-				sizeStr := formatSize(sizeBytes)
+				sizeStr := storage.FormatSize(sizeBytes)
 				directURL := strings.Replace(downloadURL, ".zim.meta4", ".zim", 1)
 				uDirect, _ := url.Parse(directURL)
 				filename := entry.Title + ".zim"
@@ -204,7 +191,7 @@ func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document,
 		filename := u.Query().Get("filename")
 		if downloadURL != "" && filename != "" {
 			l.startDownload(downloadURL, filename)
-			return menu.FileSelector(l.internetAvailable)
+			return menu.FileSelector(l.internetAvailable.Load())
 		}
 	}
 

@@ -23,7 +23,7 @@ func OpenFile(path string) (*document.Document, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
@@ -60,25 +60,44 @@ func OpenZIM(path string) (*zim.Reader, *document.Document, error) {
 	return zr, doc, nil
 }
 
+// FormatSize returns a human-readable size string (KB, MB, GB, TB).
+func FormatSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), []string{"KB", "MB", "GB", "TB"}[exp])
+}
+
+// HTTPClient creates an http.Client with the given timeout.
+func HTTPClient(timeout time.Duration) *http.Client {
+	return &http.Client{Timeout: timeout}
+}
+
 // ProgressFn is called with status updates during download (e.g. "Downloading file: 45.2%").
 type ProgressFn func(status string)
 
 // Download fetches a file from url, saves to filename, and reports progress via onProgress.
 // Blocks until complete or error. Runs in a goroutine when called with go.
 func Download(url, filename string, onProgress ProgressFn) error {
-	client := http.Client{}
+	client := HTTPClient(30 * time.Second)
 	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("download: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	tempFilename := filename + ".part"
 	out, err := os.Create(tempFilename)
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	totalSize := resp.ContentLength
 	var downloaded int64
@@ -113,7 +132,7 @@ func Download(url, filename string, onProgress ProgressFn) error {
 		}
 	}
 
-	out.Close()
+	_ = out.Close()
 	if err := os.Rename(tempFilename, filename); err != nil {
 		return fmt.Errorf("rename: %w", err)
 	}

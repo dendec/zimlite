@@ -26,6 +26,7 @@ type DocViewer interface {
 	ToggleTheme()
 	Zoom(delta int) error
 	SetStatusOverride(status string)
+	SetDefaultStatus(status string)
 	SetHasTree(has bool)
 	FindAnchorY(anchor string) (int32, bool)
 	HasAnimations() bool

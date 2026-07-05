@@ -101,6 +101,7 @@ const char* zim_item_get_content(zim_item_t item, int* size_out) {
     zim::Blob blob = i->getData();
     size_t sz = blob.size();
     if (size_out) *size_out = static_cast<int>(sz);
+    if (sz == 0) return nullptr;
     char* data = (char*)malloc(sz);
     if (data) {
         memcpy(data, blob.data(), sz);

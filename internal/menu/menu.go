@@ -16,6 +16,7 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
 )
 
 //go:embed assets/menu.md.tmpl
@@ -128,7 +129,7 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, err error) {
 
 		var sizeStr string
 		if info, err := entry.Info(); err == nil {
-			sizeStr = formatSize(info.Size())
+			sizeStr = storage.FormatSize(info.Size())
 		} else {
 			sizeStr = "Unknown"
 		}
@@ -146,19 +147,6 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, err error) {
 		}
 	}
 	return zims, mds, nil
-}
-
-func formatSize(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), []string{"KB", "MB", "GB", "TB"}[exp])
 }
 
 func truncateName(name string, maxLen int) string {
@@ -179,11 +167,11 @@ func contains(slice []string, item string) bool {
 
 // CheckInternet pings the Kiwix library catalog and returns true if reachable.
 func CheckInternet() bool {
-	client := http.Client{Timeout: 4 * time.Second}
+	client := storage.HTTPClient(4 * time.Second)
 	resp, err := client.Get("https://browse.library.kiwix.org/catalog/v2/languages")
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode == http.StatusOK
 }

@@ -153,11 +153,11 @@ func (p *mathPlugin) Init(c *converter.Converter) error {
 			alt = strings.TrimSuffix(alt, `}`)
 			alt = strings.TrimSpace(alt)
 
-			w.WriteString("![")
-			w.WriteString(alt)
-			w.WriteString("](")
-			w.WriteString(src)
-			w.WriteString(")")
+			_, _ = w.WriteString("![")
+			_, _ = w.WriteString(alt)
+			_, _ = w.WriteString("](")
+			_, _ = w.WriteString(src)
+			_, _ = w.WriteString(")")
 			return converter.RenderSuccess
 		}
 

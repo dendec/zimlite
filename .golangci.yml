@@ -1,5 +1,21 @@
 version: "2"
 
 linters:
-  disable:
-    - errcheck
+  settings:
+    errcheck:
+      exclude-functions:
+        - "(*github.com/veandco/go-sdl2/sdl.Renderer).SetDrawColor"
+        - "(*github.com/veandco/go-sdl2/sdl.Renderer).SetDrawBlendMode"
+        - "(*github.com/veandco/go-sdl2/sdl.Renderer).FillRect"
+        - "(*github.com/veandco/go-sdl2/sdl.Renderer).DrawRect"
+        - "(*github.com/veandco/go-sdl2/sdl.Renderer).Clear"
+        - "(*github.com/veandco/go-sdl2/sdl.Renderer).Copy"
+        - "(*github.com/veandco/go-sdl2/sdl.Renderer).Present"
+        - "(*github.com/veandco/go-sdl2/sdl.Texture).Destroy"
+        - "(*github.com/veandco/go-sdl2/sdl.Texture).Update"
+        - "(*github.com/veandco/go-sdl2/sdl.Texture).SetBlendMode"
+        - "(*github.com/veandco/go-sdl2/sdl.Window).Destroy"
+        - "(*github.com/veandco/go-sdl2/sdl.Renderer).Destroy"
+        - "(*github.com/veandco/go-sdl2/ttf.Font).Close"
+        - "(*github.com/veandco/go-sdl2/sdl.RWFromMem)"
+        - "(*github.com/veandco/go-sdl2/ttf.Font).SetStyle"
