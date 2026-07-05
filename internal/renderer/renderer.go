@@ -47,7 +47,7 @@ type emojiCacheKey struct {
 }
 
 const (
-	statusBarHeight     = 24
+	statusBarPadding    = 2
 	defaultMarginX      = 20
 	defaultMarginY      = 16
 	defaultLineSpacing  = 6
@@ -56,6 +56,13 @@ const (
 	maxTextCacheSize    = 1500
 	maxEmojiCacheSize   = 512
 )
+
+func (r *Renderer) getStatusBarHeight() int32 {
+	if r.fonts[FontBody].font == nil {
+		return 24
+	}
+	return int32(r.fonts[FontBody].font.Height()) + statusBarPadding
+}
 
 // TextureCache manages GPU texture caching with LRU eviction.
 //
@@ -392,13 +399,16 @@ func (r *Renderer) Relayout() {
 // --- Text line mode (for tree view, etc.) ---
 
 // SetTextLines configures the renderer for simple text-line display mode.
-func (r *Renderer) SetTextLines(items []TreeItem) {
+func (r *Renderer) SetTextLines(title string, items []TreeItem) {
 	r.treeItems = items
 	r.layout = PageLayout{}
 	r.doc = nil
 	r.selectedLink = -1
 	r.hoveredLink = -1
 	r.hoveredTreeLine = -1
+	if title != "" {
+		r.docTitle = title
+	}
 
 	font := r.fonts[FontBody].font
 	y := r.marginY
@@ -426,8 +436,8 @@ func (r *Renderer) SetTextLines(items []TreeItem) {
 		})
 		y += th
 	}
-	if y < r.height-statusBarHeight {
-		y = r.height - statusBarHeight
+	if y < r.height-r.getStatusBarHeight() {
+		y = r.height - r.getStatusBarHeight()
 	}
 	r.layout.totalHeight = y
 	r.clampScroll()
@@ -437,7 +447,7 @@ func (r *Renderer) relayoutTextLines() {
 	if r.treeItems == nil {
 		return
 	}
-	r.SetTextLines(r.treeItems)
+	r.SetTextLines(r.docTitle, r.treeItems)
 }
 
 // ScrollToLine ensures the given line index is visible.
@@ -449,8 +459,8 @@ func (r *Renderer) ScrollToLine(lineIdx int) {
 	screenY := line.y - r.scrollY
 	if screenY < r.marginY {
 		r.scrollY = line.y - r.marginY
-	} else if screenY+line.h > r.height-r.marginY-statusBarHeight {
-		r.scrollY = line.y + line.h - r.height + r.marginY + statusBarHeight
+	} else if screenY+line.h > r.height-r.marginY-r.getStatusBarHeight() {
+		r.scrollY = line.y + line.h - r.height + r.marginY + r.getStatusBarHeight()
 	}
 	r.clampScroll()
 }
@@ -493,11 +503,11 @@ func (r *Renderer) moveLink(delta int) {
 			first := link.rects[0]
 			last := link.rects[len(link.rects)-1]
 			visibleTop := r.scrollY + r.marginY
-			visibleBottom := r.scrollY + r.height - r.marginY - statusBarHeight
+			visibleBottom := r.scrollY + r.height - r.marginY - r.getStatusBarHeight()
 			if first.Y < visibleTop {
 				r.scrollY = first.Y - r.marginY
 			} else if last.Y+last.H > visibleBottom {
-				r.scrollY = last.Y + last.H - r.height + r.marginY + statusBarHeight
+				r.scrollY = last.Y + last.H - r.height + r.marginY + r.getStatusBarHeight()
 			}
 			r.clampScroll()
 		}
@@ -525,18 +535,18 @@ func (r *Renderer) ScrollBy(delta int32) {
 }
 
 func (r *Renderer) ScrollPageUp() {
-	r.scrollY -= (r.height - statusBarHeight) * 3 / 4
+	r.scrollY -= (r.height - r.getStatusBarHeight()) * 3 / 4
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollPageDown() {
-	r.scrollY += (r.height - statusBarHeight) * 3 / 4
+	r.scrollY += (r.height - r.getStatusBarHeight()) * 3 / 4
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollToTop() { r.scrollY = 0 }
 func (r *Renderer) ScrollToBottom() {
-	r.scrollY = r.layout.totalHeight - (r.height - statusBarHeight)
+	r.scrollY = r.layout.totalHeight - (r.height - r.getStatusBarHeight())
 	r.clampScroll()
 }
 
@@ -613,7 +623,7 @@ func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
 }
 
 func (r *Renderer) clampScroll() {
-	maxScroll := r.layout.totalHeight - (r.height - statusBarHeight)
+	maxScroll := r.layout.totalHeight - (r.height - r.getStatusBarHeight())
 	if maxScroll < 0 {
 		maxScroll = 0
 	}

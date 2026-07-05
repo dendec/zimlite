@@ -15,6 +15,7 @@ type ZimReader interface {
 	MainPagePath() string
 	ResolveArticle(rawURL string, referrer string) ([]byte, string, error)
 	ResolveResource(rawURL string) ([]byte, string, error)
+	FilePath() string
 }
 
 // DocRenderer handles document rendering and display.
@@ -70,7 +71,7 @@ type Scroller interface {
 	ScrollToY(y int32)
 	CurrentScrollY() int32
 	SetScrollY(scrollY int32)
-	SetTextLines(items []renderer.TreeItem)
+	SetTextLines(title string, items []renderer.TreeItem)
 	ScrollToLine(lineIdx int)
 	HandleTreeClick(mx, my int32) int
 }

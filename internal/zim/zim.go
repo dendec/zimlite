@@ -26,6 +26,7 @@ type Reader struct {
 	handle       C.zim_archive_t
 	rootPrefix   string
 	mainPagePath string
+	filePath     string
 }
 
 // Open opens a ZIM file. Caller must Close().
@@ -61,7 +62,12 @@ func Open(filePath string) (*Reader, error) {
 
 	slog.Debug("Opening ZIM archive", "file", filePath, "rootPrefix", rootPrefix, "mainPath", mainPagePath)
 
-	return &Reader{handle: h, rootPrefix: rootPrefix, mainPagePath: mainPagePath}, nil
+	return &Reader{handle: h, rootPrefix: rootPrefix, mainPagePath: mainPagePath, filePath: filePath}, nil
+}
+
+// FilePath returns the file path of the ZIM archive.
+func (r *Reader) FilePath() string {
+	return r.filePath
 }
 
 // MainPagePath returns the real (redirected) main page path.

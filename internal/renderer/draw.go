@@ -36,7 +36,7 @@ func (r *Renderer) renderImages() {
 	for i := startIdx; i < len(r.layout.imageEntries); i++ {
 		img := r.layout.imageEntries[i]
 		screenY := img.y - r.scrollY
-		if screenY >= r.height-statusBarHeight {
+		if screenY >= r.height-r.getStatusBarHeight() {
 			break
 		}
 		tex, isAnim := r.imgManager.GetTexture(img.url)
@@ -58,7 +58,7 @@ func (r *Renderer) renderCodeBackgrounds() {
 		for i := startIdx; i < len(r.layout.codeRanges); i++ {
 			cr := r.layout.codeRanges[i]
 			screenY := cr.y - r.scrollY
-			if screenY >= r.height-statusBarHeight {
+			if screenY >= r.height-r.getStatusBarHeight() {
 				break
 			}
 			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
@@ -74,7 +74,7 @@ func (r *Renderer) renderCodeBackgrounds() {
 		for i := startIdx; i < len(r.layout.codeSpans); i++ {
 			cs := r.layout.codeSpans[i]
 			screenY := cs.y - r.scrollY
-			if screenY >= r.height-statusBarHeight {
+			if screenY >= r.height-r.getStatusBarHeight() {
 				break
 			}
 			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
@@ -94,7 +94,7 @@ func (r *Renderer) renderBlockquotes() {
 	for i := startIdx; i < len(r.layout.blockquotes); i++ {
 		bq := r.layout.blockquotes[i]
 		screenY := bq.Y - r.scrollY
-		if screenY >= r.height-statusBarHeight {
+		if screenY >= r.height-r.getStatusBarHeight() {
 			break
 		}
 		// Draw background
@@ -110,7 +110,7 @@ func (r *Renderer) renderTables() {
 		r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
 		for _, cell := range table.cellRects {
 			screenY := cell.Y - r.scrollY
-			if screenY <= -cell.H || screenY >= r.height-statusBarHeight {
+			if screenY <= -cell.H || screenY >= r.height-r.getStatusBarHeight() {
 				continue
 			}
 			r.sdlRenderer.DrawRect(&sdl.Rect{X: cell.X, Y: screenY, W: cell.W, H: cell.H})
@@ -129,7 +129,7 @@ func (r *Renderer) renderLines() {
 	for i := startIdx; i < len(r.layout.lines); i++ {
 		line := r.layout.lines[i]
 		screenY := line.y - r.scrollY
-		if screenY > r.height-statusBarHeight {
+		if screenY > r.height-r.getStatusBarHeight() {
 			break
 		}
 		if line.text == "" {
@@ -282,7 +282,7 @@ func (r *Renderer) drawLinkUnderline(idx int) {
 		}
 
 		sy := rect.Y - r.scrollY
-		if sy < -rect.H || sy > r.height-statusBarHeight {
+		if sy < -rect.H || sy > r.height-r.getStatusBarHeight() {
 			continue
 		}
 
@@ -295,9 +295,9 @@ func (r *Renderer) drawLinkUnderline(idx int) {
 
 func (r *Renderer) renderStatusBar() {
 	r.sdlRenderer.SetDrawColor(r.theme.StatusBarBgColor.R, r.theme.StatusBarBgColor.G, r.theme.StatusBarBgColor.B, r.theme.StatusBarBgColor.A)
-	r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: r.height - statusBarHeight, W: r.width, H: statusBarHeight})
+	r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: r.height - r.getStatusBarHeight(), W: r.width, H: r.getStatusBarHeight()})
 	r.sdlRenderer.SetDrawColor(r.theme.StatusBarBorderColor.R, r.theme.StatusBarBorderColor.G, r.theme.StatusBarBorderColor.B, r.theme.StatusBarBorderColor.A)
-	r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: r.height - statusBarHeight, W: r.width, H: 1})
+	r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: r.height - r.getStatusBarHeight(), W: r.width, H: 1})
 
 	font := r.fonts[FontBody].font
 	if font == nil {
@@ -313,9 +313,18 @@ func (r *Renderer) renderStatusBar() {
 	rightText := r.computeRightStatus()
 	if rightText == "" {
 		if r.treeItems != nil {
-			r.renderStatusText("Article tree", 12, r.width-24)
-		} else {
-			r.renderStatusText("F1: Help \u00b7 F2: Settings", 12, r.width-24)
+			text := "🌳 Article tree"
+			if r.docTitle != "" {
+				runes := []rune(r.docTitle)
+				if len(runes) > 0 {
+					if _, _, ok := document.EmojiSequence(runes, 0); ok {
+						text = r.docTitle
+					} else {
+						text = "🌳 " + r.docTitle
+					}
+				}
+			}
+			r.renderStatusText(text, 12, r.width-24)
 		}
 		return
 	}
@@ -330,6 +339,12 @@ func (r *Renderer) renderStatusBar() {
 
 	leftText := r.docTitle
 	if leftText != "" {
+		runes := []rune(leftText)
+		if len(runes) > 0 {
+			if _, _, ok := document.EmojiSequence(runes, 0); !ok {
+				leftText = "📄 " + leftText
+			}
+		}
 		leftW, _ := measureText(leftText, font, false, false, false)
 		if leftW > availLeft {
 			runes := []rune(leftText)
@@ -350,7 +365,7 @@ func (r *Renderer) computeRightStatus() string {
 		return ""
 	}
 
-	vpH := r.height - statusBarHeight
+	vpH := r.height - r.getStatusBarHeight()
 	totalH := r.layout.totalHeight
 	scrollPct := 0
 	if totalH > vpH {
@@ -369,9 +384,9 @@ func (r *Renderer) computeRightStatus() string {
 		if sel < 1 {
 			sel = 1
 		}
-		return fmt.Sprintf("%d%%  \u00b7  %d/%d", scrollPct, sel, linkCount)
+		return fmt.Sprintf("📜 %d%%  \u00b7  🔗 %d/%d", scrollPct, sel, linkCount)
 	}
-	return fmt.Sprintf("%d%%", scrollPct)
+	return fmt.Sprintf("📜 %d%%", scrollPct)
 }
 
 func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
@@ -397,7 +412,7 @@ func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
 		if dw <= 0 {
 			continue
 		}
-		dstY := r.height - statusBarHeight + (statusBarHeight-dh)/2
+		dstY := r.height - r.getStatusBarHeight() + (r.getStatusBarHeight()-dh)/2
 		r.sdlRenderer.Copy(s.tex, nil, &sdl.Rect{X: curX, Y: dstY, W: dw, H: dh})
 		curX += dw
 	}
@@ -410,7 +425,7 @@ func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
 }
 
 func (r *Renderer) renderScrollbar() {
-	vpHeight := r.height - statusBarHeight
+	vpHeight := r.height - r.getStatusBarHeight()
 	totalH := r.layout.totalHeight
 
 	if totalH <= vpHeight {

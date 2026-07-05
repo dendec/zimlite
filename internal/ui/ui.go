@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	neturl "net/url"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -240,7 +241,11 @@ func (app *App) renderTree() {
 			LabelEnd:   labelEnd,
 		})
 	}
-	app.scroller.SetTextLines(items)
+	title := ""
+	if app.loader.zimReader != nil {
+		title = filepath.Base(app.loader.zimReader.FilePath())
+	}
+	app.scroller.SetTextLines(title, items)
 	// Scroll to the cursor item if visible.
 	for i, item := range items {
 		if item.IsCursor {
