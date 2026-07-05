@@ -4,20 +4,11 @@ import (
 	_ "embed"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
-	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
 
 //go:embed assets/unifont.otf
 var unifont []byte
-
-func loadFontFromBytes(data []byte, size int) (*ttf.Font, error) {
-	rw, err := sdl.RWFromMem(data)
-	if err != nil {
-		return nil, err
-	}
-	return ttf.OpenFontRW(rw, 1, size)
-}
 
 func headingFontIdx(level int) FontKind {
 	fonts := [7]FontKind{FontBody, FontH1, FontH2, FontH3, FontH4, FontH5, FontH6}
@@ -78,9 +69,9 @@ func loadFonts(baseSize int, fontPath string) ([fontCount]fontSlot, error) {
 		var font *ttf.Font
 		var err error
 		if fontPath != "" {
-			font, err = ttf.OpenFont(fontPath, sizes[i])
+			font, err = openFontSafe(fontPath, sizes[i])
 		} else {
-			font, err = loadFontFromBytes(unifont, sizes[i])
+			font, err = openFontFromMem(unifont, sizes[i])
 		}
 		if err != nil {
 			for j := FontKind(0); j < i; j++ {

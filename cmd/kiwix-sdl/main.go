@@ -44,10 +44,12 @@ func main() {
 	r, err := renderer.New("Kiwix-SDL", 640, 480, fontPath, cfg.FontSize)
 	if err != nil {
 		slog.Error("Error creating renderer", "error", err)
+		// On Windows,Stderr might not be visible easily, so we show a message box if possible
+		// (though slog should have written to the 2> file)
 		os.Exit(1)
 	}
 	defer r.Destroy()
-	slog.Info("Renderer initialized successfully", "font", fontPath)
+	slog.Info("Renderer initialized successfully", "font", fontPath, "renderer", "sdl")
 
 	if cfg.Theme == "light" && !r.IsLight() {
 		r.ToggleTheme()
@@ -59,11 +61,21 @@ func main() {
 
 	if err := app.OpenFile(filePath); err != nil {
 		slog.Error("Error opening file", "file", filePath, "error", err)
-		os.Exit(1)
+		// Try to fallback to menu if requested file failed
+		if filePath != "virtual:menu" {
+			slog.Info("Falling back to menu")
+			if err := app.OpenFile("virtual:menu"); err != nil {
+				slog.Error("Critical error: menu fallback failed", "error", err)
+				os.Exit(1)
+			}
+		} else {
+			os.Exit(1)
+		}
 	}
 
 	slog.Info("Starting application event loop")
 	app.Run()
+	slog.Info("Application exited normally")
 }
 
 func findFont() string {
