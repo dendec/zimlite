@@ -48,7 +48,9 @@ func getEmojiSVG(hex string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	_ = rc.Close()
+	defer func() {
+		_ = rc.Close()
+	}()
 	return io.ReadAll(rc)
 }
 
