@@ -61,16 +61,22 @@ func (app *App) shutdown() {
 	app.loader.shutdown()
 }
 
+// saveCurrentState records the current scroll position and selected link into
+// the navigator's current history entry.
+func (app *App) saveCurrentState() {
+	app.navigator.UpdateCurrentState(document.ViewState{
+		ScrollY:      app.scroller.CurrentScrollY(),
+		SelectedLink: app.links.SelectedLinkIndex(),
+	})
+}
+
 func (app *App) goBack() {
 	if app.mode == modeTree {
 		app.exitTreeMode()
 		return
 	}
 
-	app.navigator.UpdateCurrentState(document.ViewState{
-		ScrollY:      app.scroller.CurrentScrollY(),
-		SelectedLink: app.links.SelectedLinkIndex(),
-	})
+	app.saveCurrentState()
 	if ok, state := app.navigator.Back(); ok {
 		prevPath := app.navigator.Current()
 		if prevPath == "virtual:menu" {
@@ -100,10 +106,7 @@ func (app *App) enterTreeMode() {
 	if app.loader.zimReader == nil {
 		return
 	}
-	app.navigator.UpdateCurrentState(document.ViewState{
-		ScrollY:      app.scroller.CurrentScrollY(),
-		SelectedLink: app.links.SelectedLinkIndex(),
-	})
+	app.saveCurrentState()
 	if app.navState == nil {
 		articles := app.loader.zimReader.ListArticles()
 		if len(articles) == 0 {
@@ -156,10 +159,7 @@ func (app *App) goHome() {
 		}
 		app.loader.docCache[navKey] = doc
 	}
-	app.navigator.UpdateCurrentState(document.ViewState{
-		ScrollY:      app.scroller.CurrentScrollY(),
-		SelectedLink: app.links.SelectedLinkIndex(),
-	})
+	app.saveCurrentState()
 	app.mode = modeDoc
 	app.viewer.SetDocument(doc)
 	app.navigator.Open(navKey)
@@ -221,34 +221,51 @@ func (app *App) ReloadCurrentDocument(doc *document.Document) {
 
 // HandleSettingsAction parses settings URL and updates config and UI.
 func (app *App) HandleSettingsAction(u *neturl.URL) {
-	cfg := config.Get()
+	themeParam := u.Query().Get("theme")
+	langParam := u.Query().Get("lang")
+	fsParam := u.Query().Get("fontsize")
+
+	var fsDelta int
+	hasFsDelta := false
+	if fsParam != "" {
+		if _, err := fmt.Sscanf(fsParam, "%d", &fsDelta); err != nil {
+			slog.Warn("Invalid fontsize value", "value", fsParam)
+		} else {
+			hasFsDelta = true
+		}
+	}
+
 	changed := false
-	if theme := u.Query().Get("theme"); theme != "" && theme != cfg.Theme {
-		cfg.Theme = theme
-		changed = true
+	themeChanged := false
+	config.Update(func(c *config.Config) {
+		if themeParam != "" && themeParam != c.Theme {
+			c.Theme = themeParam
+			changed = true
+			themeChanged = true
+		}
+		if langParam != "" && langParam != c.Language {
+			c.Language = langParam
+			changed = true
+		}
+		if hasFsDelta {
+			c.FontSize += fsDelta
+			if c.FontSize < 10 {
+				c.FontSize = 10
+			}
+			if c.FontSize > 32 {
+				c.FontSize = 32
+			}
+			changed = true
+		}
+	})
+
+	if themeChanged {
 		app.viewer.ToggleTheme() // Update UI immediately
 	}
-	if lang := u.Query().Get("lang"); lang != "" && lang != cfg.Language {
-		cfg.Language = lang
-		changed = true
-	}
-	if fs := u.Query().Get("fontsize"); fs != "" {
-		var delta int
-		if _, err := fmt.Sscanf(fs, "%d", &delta); err != nil {
-			slog.Warn("Invalid fontsize value", "value", fs)
-		}
-		cfg.FontSize += delta
-		if cfg.FontSize < 10 {
-			cfg.FontSize = 10
-		}
-		if cfg.FontSize > 32 {
-			cfg.FontSize = 32
-		}
-		changed = true
-		_ = app.viewer.Zoom(delta)
+	if hasFsDelta {
+		_ = app.viewer.Zoom(fsDelta)
 	}
 	if changed {
-		config.Set(cfg)
 		_ = config.Save()
 		// Reload the settings page inline without pushing to history
 		doc, _ := menu.SettingsPage()

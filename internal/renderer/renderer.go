@@ -46,6 +46,7 @@ type emojiCacheKey struct {
 const (
 	statusBarHeight        = 24
 	maxTextureCacheEntries = 1500
+	maxEmojiCacheEntries   = 512
 )
 
 type ResourceLoader func(url string) ([]byte, error)
@@ -90,6 +91,7 @@ type Renderer struct {
 	textureCache      map[textureKey]*sdl.Texture
 	textureCacheOrder []textureKey
 	emojiCache        map[emojiCacheKey]*sdl.Texture
+	emojiCacheOrder   []emojiCacheKey
 	imgManager        *ImageManager
 
 	baseFontSize        int
@@ -221,6 +223,20 @@ func (r *Renderer) evictTextureCache() {
 	r.textureCacheOrder = r.textureCacheOrder[remove:]
 }
 
+func (r *Renderer) evictEmojiCache() {
+	remove := len(r.emojiCacheOrder) / 4
+	if remove < 1 {
+		return
+	}
+	for _, k := range r.emojiCacheOrder[:remove] {
+		if tex, ok := r.emojiCache[k]; ok && tex != nil {
+			tex.Destroy()
+		}
+		delete(r.emojiCache, k)
+	}
+	r.emojiCacheOrder = r.emojiCacheOrder[remove:]
+}
+
 func (r *Renderer) ClearCache() {
 	if r.textureCache != nil {
 		for k, tex := range r.textureCache {
@@ -239,6 +255,7 @@ func (r *Renderer) ClearCache() {
 			delete(r.emojiCache, k)
 		}
 	}
+	r.emojiCacheOrder = nil
 	if r.imgManager != nil {
 		r.imgManager.ClearCache()
 	}
@@ -607,8 +624,9 @@ func (r *Renderer) SetStatusOverride(status string) {
 func extractTitle(doc *document.Document) string {
 	for _, b := range doc.Blocks {
 		if h, ok := b.(*document.Heading); ok && h.Level == 1 {
-			if len(h.Content) > 45 {
-				return h.Content[:42] + "..."
+			runes := []rune(h.Content)
+			if len(runes) > 45 {
+				return string(runes[:42]) + "..."
 			}
 			return h.Content
 		}

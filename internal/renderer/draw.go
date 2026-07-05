@@ -70,6 +70,16 @@ func (r *Renderer) renderBlockquotes() {
 	}
 }
 func (r *Renderer) renderTables() {
+	for _, table := range r.layout.tables {
+		r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
+		for _, cell := range table.cellRects {
+			screenY := cell.Y - r.scrollY
+			if screenY <= -cell.H || screenY >= r.height-statusBarHeight {
+				continue
+			}
+			r.sdlRenderer.DrawRect(&sdl.Rect{X: cell.X, Y: screenY, W: cell.W, H: cell.H})
+		}
+	}
 }
 
 func (r *Renderer) renderLines() {

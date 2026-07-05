@@ -43,6 +43,16 @@ func Set(c Config) {
 	currentConfig = c
 }
 
+// Update atomically applies mutate to the current configuration under a single
+// lock, avoiding lost updates from concurrent read-modify-write sequences.
+// It returns the resulting configuration.
+func Update(mutate func(c *Config)) Config {
+	mu.Lock()
+	defer mu.Unlock()
+	mutate(&currentConfig)
+	return currentConfig
+}
+
 // configFilePath returns the absolute path to the config.json file.
 func configFilePath() string {
 	exe, err := os.Executable()

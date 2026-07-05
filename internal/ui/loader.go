@@ -170,10 +170,7 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 		return os.ReadFile(fullPath)
 	})
 
-	app.navigator.UpdateCurrentState(document.ViewState{
-		ScrollY:      app.scroller.CurrentScrollY(),
-		SelectedLink: app.links.SelectedLinkIndex(),
-	})
+	app.saveCurrentState()
 	app.viewer.SetDocument(doc)
 	if isZIM && l.zimReader != nil {
 		mainPath := l.zimReader.MainPagePath()
@@ -263,10 +260,7 @@ func (l *DocumentLoader) NavigateLink(url string) {
 			navKey := "zim:" + resolved
 			l.docCache[navKey] = doc
 			app.mode = modeDoc
-			app.navigator.UpdateCurrentState(document.ViewState{
-				ScrollY:      app.scroller.CurrentScrollY(),
-				SelectedLink: app.links.SelectedLinkIndex(),
-			})
+			app.saveCurrentState()
 			app.viewer.SetDocument(doc)
 			app.navigator.Open(navKey)
 			app.viewer.Relayout()
