@@ -2,7 +2,7 @@
 
 **Lightweight offline ZIM/Markdown reader for game consoles and desktop.**
 
-Renders Wikipedia ZIM archives, Markdown, and HTML files via SDL2. Supports keyboard, mouse, and gamepad input. Designed for low-power ARM devices (TrimUI Smart Pro / PortMaster) but runs on any Linux/Windows desktop.
+Renders Wikipedia ZIM archives, Markdown, and HTML files via SDL2. Supports keyboard, mouse, and gamepad input. Designed for low-power ARM devices (PortMaster) but runs on any Linux/Windows desktop.
 
 <img width="420" alt="article" src="https://github.com/user-attachments/assets/06cb4988-8b77-443f-953e-ee65e7fd6d14" />
 
@@ -54,7 +54,7 @@ make build-windows-amd64  # requires Docker
 # Output in dist/windows/
 ```
 
-### ARM64 / PortMaster (TrimUI Smart Pro)
+### ARM64 / PortMaster
 
 ```bash
 make dist-arm64      # Docker cross-build
@@ -62,69 +62,9 @@ make deploy          # Push via ADB to device
 make dist-portmaster # Package for PortMaster
 ```
 
-## Controls
+## Development
 
-| Key | Action |
-|---|---|
-| Arrows / WASD | Scroll / Navigate links |
-| Enter / Click | Open link |
-| Backspace / Right-click | Go back |
-| `T` | Toggle article tree |
-| `M` | Main menu |
-| `C` | Toggle theme |
-| `+` / `-` | Zoom in/out |
-| `Q` | Quit |
-
-| Gamepad | Action |
-|---|---|
-| D-Pad / Left Stick | Scroll / Navigate |
-| A | Open link |
-| B | Back |
-| X | Toggle tree |
-| Y | Home |
-| L1 / R1 | Page up/down |
-| L2 / R2 | Zoom out/in |
-| Select | Toggle theme |
-| Guide | Quit |
-
-## Project Architecture
-
-```
-cmd/kiwix-sdl/main.go    — Entry point, wires dependencies
-internal/
-  config/                — JSON config (theme, font, lang)
-  document/              — Document model (Blocks/Inlines/Visitor)
-  markdown/              — goldmark AST → Document
-  html/                  — HTML → Markdown → Document + Math plugin
-  zim/                   — libzim C++ bridge (cgo)
-  renderer/              — SDL2 rendering (layout, draw, fonts, themes, images, emoji)
-  ui/                    — App loop, input, loader, library browser, gamepad
-  menu/                  — Virtual pages: file menu, help, settings
-  navigation/            — History stack for back navigation
-  storage/               — File I/O, ZIM opening, HTTP download
-  trie/                  — Radix tree for ZIM article tree
-  svg/                   — Embedded LunaSVG for SVG rasterization
-portmaster/              — PortMaster distribution config
-```
-
-## Build Targets
-
-| Target | Arch | Platform |
-|---|---|---|
-| `make build` | x86_64 | Linux native |
-| `make build-linux-amd64` | x86_64 | Linux cross |
-| `make build-linux-arm64` | aarch64 | Linux cross (TrimUI) |
-| `make build-linux-armv8` | armv7l | Linux cross |
-| `make build-windows-amd64` | x86_64 | Windows (Docker) |
-
-## Dependencies
-
-- **Go** 1.25+
-- **SDL2**, **SDL2_ttf** (system or cross-compiled)
-- **libzim** 9.7 (auto-downloaded or cross-built)
-- **liblzma**, **libzstd**, **libicu** (for libzim)
-
-Go modules: `go-sdl2`, `goldmark`, `html-to-markdown`, `golang.org/x/image` (webp), `golang.org/x/net`
+For architecture details, build targets, and dependencies, see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Configuration
 

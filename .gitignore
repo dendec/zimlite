@@ -21,3 +21,4 @@ vendor/
 *.zim.info
 *.zim.part
 config.json
+TODO.md
