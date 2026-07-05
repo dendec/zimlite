@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path/filepath"
+	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -123,8 +124,8 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 		if err != nil {
 			return renderErrorDoc("categories", err)
 		}
-		// Fetch all entries for the language to find which categories have content.
-		entries, err := fetchFeed("https://browse.library.kiwix.org/catalog/v2/entries?count=-1&lang=" + lang)
+		// Fetch a sample of entries to determine which categories have content.
+		entries, err := fetchFeed("https://browse.library.kiwix.org/catalog/v2/entries?count=50&lang=" + lang)
 		var activeCategories map[string]bool
 		if err == nil {
 			activeCategories = make(map[string]bool)
@@ -155,7 +156,10 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 	case "/library/entries":
 		lang := u.Query().Get("lang")
 		category := u.Query().Get("category")
-		feed, err := fetchFeed("https://browse.library.kiwix.org/catalog/v2/entries?count=-1&lang=" + lang + "&category=" + category)
+		page, _ := strconv.Atoi(u.Query().Get("page"))
+		if page < 0 { page = 0 }
+		start := page * 50
+		feed, err := fetchFeed(fmt.Sprintf("https://browse.library.kiwix.org/catalog/v2/entries?start=%d&count=50&lang=%s&category=%s", start, lang, category))
 		if err != nil {
 			return renderErrorDoc("archives", err)
 		}
@@ -163,13 +167,16 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 		fmt.Fprintf(&sb, "# Kiwix Online Library - ZIM Archives (%s / %s)\n\n", lang, category)
 		fmt.Fprintf(&sb, "[← Back to Categories](virtual:library/categories?lang=%s)\n\n", lang)
 		if len(feed.Entries) == 0 {
-			sb.WriteString("*No archives found in this language and category.*\n")
+			if page > 0 {
+				sb.WriteString("*No more archives on this page.*\n")
+			} else {
+				sb.WriteString("*No archives found in this language and category.*\n")
+			}
 		} else {
 			for _, entry := range feed.Entries {
 				var downloadURL string
 				var sizeBytes int64
 				var thumbnailURL string
-
 				for _, link := range entry.Links {
 					if link.Rel == "http://opds-spec.org/acquisition/open-access" && link.Type == "application/x-zim" {
 						downloadURL = link.Href
@@ -178,22 +185,12 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 						thumbnailURL = link.Href
 					}
 				}
-
-				if downloadURL == "" {
-					continue
-				}
-
+				if downloadURL == "" { continue }
 				sizeStr := formatSize(sizeBytes)
 				directURL := strings.Replace(downloadURL, ".zim.meta4", ".zim", 1)
-
-				uDirect, errParse := url.Parse(directURL)
-				var filename string
-				if errParse == nil {
-					filename = filepath.Base(uDirect.Path)
-				} else {
-					filename = entry.Title + ".zim"
-				}
-
+				uDirect, _ := url.Parse(directURL)
+				filename := entry.Title + ".zim"
+				if uDirect != nil { filename = path.Base(uDirect.Path) }
 				fmt.Fprintf(&sb, "### %s\n", entry.Title)
 				if thumbnailURL != "" {
 					fullThumbnail := thumbnailURL
@@ -202,16 +199,21 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 					}
 					fmt.Fprintf(&sb, "![%s](%s)\n\n", entry.Title, fullThumbnail)
 				}
-				if entry.Summary != "" {
-					fmt.Fprintf(&sb, "*Description*: %s\n\n", entry.Summary)
-				}
+				if entry.Summary != "" { fmt.Fprintf(&sb, "*Description*: %s\n\n", entry.Summary) }
 				fmt.Fprintf(&sb, "*Size*: %s\n\n", sizeStr)
-
 				escURL := url.QueryEscape(directURL)
 				escFile := url.QueryEscape(filename)
 				fmt.Fprintf(&sb, "[Download Archive](virtual:library/download?url=%s&filename=%s)\n\n", escURL, escFile)
 				sb.WriteString("---\n\n")
 			}
+			// Pagination nav.
+			if page > 0 {
+				fmt.Fprintf(&sb, "[← Previous Page](virtual:library/entries?lang=%s&category=%s&page=%d)  ", lang, category, page-1)
+			}
+			if len(feed.Entries) == 50 {
+				fmt.Fprintf(&sb, "[Next Page →](virtual:library/entries?lang=%s&category=%s&page=%d)", lang, category, page+1)
+			}
+			sb.WriteString("\n")
 		}
 		return markdown.Parse(strings.NewReader(sb.String()))
 
