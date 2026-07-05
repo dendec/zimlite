@@ -89,7 +89,7 @@ func fetchFeed(urlStr string) (*AtomFeed, error) {
 	return &feed, nil
 }
 
-func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
+func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document, error) {
 	u, err := url.Parse(strings.Replace(pathStr, "virtual:", "http://localhost/", 1))
 	if err != nil {
 		return nil, err
@@ -202,8 +202,8 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 		downloadURL := u.Query().Get("url")
 		filename := u.Query().Get("filename")
 		if downloadURL != "" && filename != "" {
-			app.startDownload(downloadURL, filename)
-			return menu.FileSelector(app.internetAvailable)
+			l.startDownload(downloadURL, filename)
+			return menu.FileSelector(l.internetAvailable)
 		}
 	}
 

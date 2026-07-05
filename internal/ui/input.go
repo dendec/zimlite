@@ -1,0 +1,268 @@
+package ui
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/veandco/go-sdl2/sdl"
+)
+
+const scrollStep = 40
+
+type InputController struct {
+	app *App
+}
+
+func NewInputController(app *App) *InputController {
+	return &InputController{app: app}
+}
+
+func (c *InputController) ProcessEvent(event sdl.Event) {
+	app := c.app
+	switch e := event.(type) {
+	case *sdl.QuitEvent:
+		app.running = false
+
+	case *sdl.KeyboardEvent:
+		if e.Type != sdl.KEYDOWN {
+			return
+		}
+		sc := e.Keysym.Scancode
+		debugEvent("KEY", int(sc), 0)
+
+		// Global keys (work in both modes).
+		switch sc {
+		case sdl.SCANCODE_Q:
+			app.running = false
+			return
+		case sdl.SCANCODE_H: // H = go home
+			app.goHome()
+			return
+		case sdl.SCANCODE_F: // F = open file menu
+			_ = app.loader.OpenFile("virtual:menu")
+			return
+		case sdl.SCANCODE_RETURN2, sdl.SCANCODE_T: // T = toggle tree mode
+			app.toggleMode()
+			return
+		case sdl.SCANCODE_D: // D = toggle dark/light theme
+			app.viewer.ToggleTheme()
+			return
+		case sdl.SCANCODE_EQUALS, sdl.SCANCODE_KP_PLUS: // + = zoom in
+			_ = app.viewer.Zoom(1)
+			return
+		case sdl.SCANCODE_MINUS, sdl.SCANCODE_KP_MINUS: // - = zoom out
+			_ = app.viewer.Zoom(-1)
+			return
+		case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
+			// Global back — also works as doc back.
+		}
+
+		// Mode-specific handling.
+		if app.mode == modeTree {
+			c.processTreeKey(sc)
+		} else {
+			c.processDocKey(sc)
+		}
+
+	case *sdl.JoyAxisEvent, *sdl.JoyButtonEvent, *sdl.JoyHatEvent:
+		if action, ok := app.gamepad.TranslateEvent(event, app.mode); ok {
+			if action != ActionNone {
+				var val int16
+				if ax, ok := event.(*sdl.JoyAxisEvent); ok {
+					val = ax.Value
+				}
+				c.executeGamepadAction(action, val)
+			}
+		}
+
+	case *sdl.WindowEvent:
+		if e.Event == sdl.WINDOWEVENT_RESIZED ||
+			e.Event == sdl.WINDOWEVENT_SIZE_CHANGED {
+			app.viewer.Relayout()
+		}
+
+	case *sdl.MouseWheelEvent:
+		app.scroller.ScrollBy(-scrollStep * e.Y)
+
+	case *sdl.MouseButtonEvent:
+		if e.Type == sdl.MOUSEBUTTONDOWN && e.Button == sdl.BUTTON_LEFT && app.mode == modeDoc {
+			url := app.links.HandleClick(e.X, e.Y)
+			if url != "" {
+				app.loader.NavigateLink(url)
+			}
+		}
+	}
+}
+
+func (c *InputController) processTreeKey(sc sdl.Scancode) {
+	app := c.app
+	switch sc {
+	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
+		app.navState.MoveUp()
+	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
+		app.navState.MoveDown()
+	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_KP_6:
+		app.navState.ActionRight()
+	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
+		fmt.Fprintf(os.Stderr, "ENTER: label=%q, isLeaf=%v, path=%q\n", app.navState.Cursor.Label(), app.navState.CursorIsLeaf(), app.navState.CursorPath())
+		if app.navState.CursorIsLeaf() {
+			// Open article.
+			path := app.navState.CursorPath()
+			if path != "" {
+				app.loader.NavigateLink(path)
+			}
+		} else {
+			app.navState.ActionRight()
+		}
+	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4:
+		app.navState.ActionLeft()
+	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
+		app.navState.ActionLeft()
+	case sdl.SCANCODE_PAGEUP:
+		app.scroller.ScrollPageUp()
+	case sdl.SCANCODE_PAGEDOWN:
+		app.scroller.ScrollPageDown()
+	}
+	if app.mode == modeTree {
+		app.renderTree()
+	}
+}
+
+func (c *InputController) processDocKey(sc sdl.Scancode) {
+	app := c.app
+	switch sc {
+	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
+		app.scroller.ScrollBy(-scrollStep)
+	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
+		app.scroller.ScrollBy(scrollStep)
+	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4:
+		app.links.SelectPrevLink()
+	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_KP_6:
+		app.links.SelectNextLink()
+	case sdl.SCANCODE_PAGEUP:
+		app.scroller.ScrollPageUp()
+	case sdl.SCANCODE_PAGEDOWN:
+		app.scroller.ScrollPageDown()
+	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
+		url := app.links.SelectedLinkURL()
+		if url != "" {
+			app.loader.NavigateLink(url)
+		}
+	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
+		if app.navigator.Back() {
+			prevPath := app.navigator.Current()
+			if prevPath == "virtual:menu" {
+				_ = app.loader.OpenFile("virtual:menu")
+				return
+			}
+			if doc, ok := app.loader.docCache[prevPath]; ok {
+				app.viewer.SetDocument(doc)
+				app.viewer.Relayout()
+			}
+		} else if app.loader.zimReader != nil {
+			app.enterTreeMode()
+		} else {
+			if app.navigator.Current() != "virtual:menu" {
+				_ = app.loader.OpenFile("virtual:menu")
+			}
+		}
+	}
+}
+
+func (c *InputController) processJoyA() {
+	app := c.app
+	if app.mode == modeTree {
+		if app.navState.CursorIsLeaf() {
+			path := app.navState.CursorPath()
+			if path != "" {
+				app.loader.NavigateLink(path)
+			}
+		} else {
+			app.navState.ActionRight()
+			app.renderTree()
+		}
+	} else {
+		url := app.links.SelectedLinkURL()
+		if url != "" {
+			app.loader.NavigateLink(url)
+		}
+	}
+}
+
+func (c *InputController) processJoyB() {
+	app := c.app
+	if app.mode == modeTree {
+		app.navState.ActionLeft()
+		app.renderTree()
+	} else if app.navigator.Back() {
+		prevPath := app.navigator.Current()
+		if prevPath == "virtual:menu" {
+			_ = app.loader.OpenFile("virtual:menu")
+			return
+		}
+		if doc, ok := app.loader.docCache[prevPath]; ok {
+			app.viewer.SetDocument(doc)
+			app.viewer.Relayout()
+		}
+	} else {
+		if app.navigator.Current() != "virtual:menu" {
+			_ = app.loader.OpenFile("virtual:menu")
+		}
+	}
+}
+
+func (c *InputController) executeGamepadAction(action Action, val int16) {
+	app := c.app
+	switch action {
+	case ActionOpenEnter:
+		c.processJoyA()
+	case ActionBack:
+		c.processJoyB()
+	case ActionScrollUp:
+		if app.mode == modeTree {
+			app.navState.MoveUp()
+			app.renderTree()
+		} else {
+			if val != 0 {
+				app.scroller.ScrollBy(-scrollStep * int32(-val/16000))
+			} else {
+				app.scroller.ScrollBy(-scrollStep)
+			}
+		}
+	case ActionScrollDown:
+		if app.mode == modeTree {
+			app.navState.MoveDown()
+			app.renderTree()
+		} else {
+			if val != 0 {
+				app.scroller.ScrollBy(scrollStep * int32(val/16000))
+			} else {
+				app.scroller.ScrollBy(scrollStep)
+			}
+		}
+	case ActionPageUp:
+		app.scroller.ScrollPageUp()
+	case ActionPageDown:
+		app.scroller.ScrollPageDown()
+	case ActionToggleTree:
+		app.toggleMode()
+	case ActionGoHome:
+		app.goHome()
+	case ActionQuit:
+		app.running = false
+	case ActionZoomIn:
+		_ = app.viewer.Zoom(1)
+	case ActionZoomOut:
+		_ = app.viewer.Zoom(-1)
+	case ActionSelectPrevLink:
+		app.links.SelectPrevLink()
+	case ActionSelectNextLink:
+		app.links.SelectNextLink()
+	}
+}
+
+func debugEvent(kind string, code int, val int) {
+	if os.Getenv("KIWIX_DEBUG_INPUT") != "" {
+		fmt.Fprintf(os.Stderr, "[INPUT] %s code=%d val=%d\n", kind, code, val)
+	}
+}

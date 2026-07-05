@@ -60,7 +60,7 @@ type Renderer struct {
 
 	layout PageLayout
 
-	textLines    []string // cached for theme toggle
+	textLines []string // cached for theme toggle
 
 	doc *document.Document
 
@@ -79,8 +79,8 @@ type Renderer struct {
 	light   bool
 	hasTree bool
 
-	textureCache  map[textureKey]*sdl.Texture
-	imgManager    *ImageManager
+	textureCache map[textureKey]*sdl.Texture
+	imgManager   *ImageManager
 
 	baseFontSize   int
 	fontPath       string
