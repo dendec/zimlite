@@ -125,7 +125,7 @@ func (c *InputController) processTreeKey(sc sdl.Scancode) {
 	case sdl.SCANCODE_LEFT, sdl.SCANCODE_A, sdl.SCANCODE_KP_4:
 		app.navState.ActionLeft()
 	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
-		app.navState.ActionLeft()
+		app.goBack()
 	case sdl.SCANCODE_PAGEUP:
 		app.scroller.ScrollPageUp()
 	case sdl.SCANCODE_PAGEDOWN, sdl.SCANCODE_SPACE:
@@ -174,13 +174,7 @@ func (c *InputController) processJoyA() {
 }
 
 func (c *InputController) processJoyB() {
-	app := c.app
-	if app.mode == modeTree {
-		app.navState.ActionLeft()
-		app.renderTree()
-	} else {
-		app.goBack()
-	}
+	c.app.goBack()
 }
 
 func (c *InputController) executeGamepadAction(action Action, val int16) {

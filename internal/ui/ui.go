@@ -60,6 +60,11 @@ func (app *App) shutdown() {
 }
 
 func (app *App) goBack() {
+	if app.mode == modeTree {
+		app.exitTreeMode()
+		return
+	}
+
 	app.navigator.UpdateCurrentState(document.ViewState{
 		ScrollY:      app.scroller.CurrentScrollY(),
 		SelectedLink: app.links.SelectedLinkIndex(),
