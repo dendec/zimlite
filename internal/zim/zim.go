@@ -3,8 +3,8 @@
 package zim
 
 /*
-#cgo CXXFLAGS: -std=c++17 -I. -I../../lib/libzim_linux-x86_64-9.7.0/include
-#cgo LDFLAGS: -L../../lib/libzim_linux-x86_64-9.7.0/lib/x86_64-linux-gnu -lzim -Wl,-rpath,'$$ORIGIN/../../lib/libzim_linux-x86_64-9.7.0/lib/x86_64-linux-gnu'
+#cgo CXXFLAGS: -std=c++17 -I. -I/usr/include
+#cgo LDFLAGS: -lzim
 #include <stdlib.h>
 #include "bridge.h"
 */
