@@ -18,6 +18,7 @@ type LoaderHost interface {
 	getConfig() config.Provider
 	HandleSettingsAction(u *url.URL)
 	navStateClear()
+	ReloadCurrentDocument(doc *document.Document)
 }
 
 // Ensure App implements LoaderHost at compile time.

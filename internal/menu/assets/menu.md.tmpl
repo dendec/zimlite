@@ -8,6 +8,15 @@
 [📥 Browse and Download ZIM Archives](virtual:library)
 {{end}}
 
+{{if .Downloads}}
+## ⬇️ Downloads
+
+| | | | |
+|------|------|--------|--------|
+{{range .Downloads}}| {{.DisplayName}} | {{.Size}} | {{if .Active}}[⏸ Stop](virtual:download/stop?file={{urlquery .Name}}){{else}}[▶ Start](virtual:download/start?file={{urlquery .Name}}){{end}} | [🗑️ Delete](virtual:download/delete?file={{urlquery .Name}}) |
+{{end}}
+{{end}}
+
 {{if .ZIMs}}
 ## 📦 ZIM Archives
 

@@ -95,8 +95,7 @@ func (l *DocumentLoader) applyPendingMenuReload() {
 		slog.Error("Failed to generate menu after internet check", "error", err)
 		return
 	}
-	l.host.getViewer().SetDocument(doc)
-	l.host.getViewer().Relayout()
+	l.host.ReloadCurrentDocument(doc)
 }
 
 // OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim, and virtual:menu.
@@ -211,6 +210,14 @@ func (l *DocumentLoader) NavigateLink(url string) {
 		l.scrollToAnchor(url[1:])
 	case l.zimReader != nil && !strings.HasPrefix(url, "virtual:"):
 		l.navigateZIMArticle(url)
+	case strings.HasPrefix(url, "virtual:download/start?file="):
+		l.handleDownloadStart(url)
+	case strings.HasPrefix(url, "virtual:download/stop?file="):
+		l.handleDownloadStop(url)
+	case strings.HasPrefix(url, "virtual:download/delete?file="):
+		l.handleDownloadDelete(url)
+	case strings.HasPrefix(url, "virtual:library/download?"):
+		l.handleLibraryDownload(url)
 	default:
 		l.openFileOrFallback(url)
 	}
@@ -237,8 +244,79 @@ func (l *DocumentLoader) handleDeleteFile(url string) {
 		slog.Error("Failed to delete file", "filename", filename, "error", err)
 	}
 	if l.host.getNavigator().Current() == "virtual:menu" {
+		l.pendingMenuReload.Store(true)
+		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	}
+}
+
+func (l *DocumentLoader) handleDownloadStart(url string) {
+	u, err := neturl.Parse(url)
+	if err != nil {
+		return
+	}
+	filename := u.Query().Get("file")
+	if filename == "" {
+		return
+	}
+	l.startDownload("", filename)
+
+	if l.host.getNavigator().Current() == "virtual:menu" {
+		l.pendingMenuReload.Store(true)
+		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	}
+}
+
+func (l *DocumentLoader) handleDownloadStop(url string) {
+	u, err := neturl.Parse(url)
+	if err != nil {
+		return
+	}
+	filename := u.Query().Get("file")
+	if filename == "" {
+		return
+	}
+	storage.Manager.Stop(filename)
+
+	if l.host.getNavigator().Current() == "virtual:menu" {
+		l.pendingMenuReload.Store(true)
+		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	}
+}
+
+func (l *DocumentLoader) handleDownloadDelete(url string) {
+	u, err := neturl.Parse(url)
+	if err != nil {
+		return
+	}
+	filename := u.Query().Get("file")
+	if filename == "" {
+		return
+	}
+	storage.Manager.Stop(filename)
+
+	_ = os.Remove(filename + ".part")
+	_ = os.Remove(filename + ".info")
+
+	if l.host.getNavigator().Current() == "virtual:menu" {
+		l.pendingMenuReload.Store(true)
+		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	}
+}
+
+func (l *DocumentLoader) handleLibraryDownload(urlStr string) {
+	u, err := neturl.Parse(urlStr)
+	if err != nil {
+		return
+	}
+	downloadURL := u.Query().Get("url")
+	filename := u.Query().Get("filename")
+	if downloadURL != "" && filename != "" {
+		l.startDownload(downloadURL, filename)
+		// Small delay to ensure the .part file is created on disk
+		time.Sleep(100 * time.Millisecond)
+		// We go to virtual:menu so the user can see the download
 		if err := l.OpenFile("virtual:menu"); err != nil {
-			slog.Error("Failed to reload menu after delete", "error", err)
+			slog.Error("Cannot open menu", "error", err)
 		}
 		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 	}
@@ -304,17 +382,62 @@ func (l *DocumentLoader) openFileOrFallback(url string) {
 func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 	viewer := l.host.getViewer()
 	slog.Info("Initiating download", "url", downloadURL, "filename", filename)
+
+	// Show immediate feedback
+	viewer.SetStatusOverride("⏳ Connecting... " + util.Truncate(filename, 40))
+	_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+
+	// Pre-register in the manager so the UI instantly shows "Stop" button
+	storage.Manager.Add(filename, func() {})
+
+	// Clear menu from cache so it reloads and shows the new .part file when navigated back
+	delete(l.docCache, "virtual:menu")
+
 	go func() {
-		err := storage.Download(downloadURL, filename, func(status string) {
-			viewer.SetStatusOverride(status)
+		defer storage.Manager.Remove(filename) // Cleanup in case Download fails early
+		var lastMenuRefresh time.Time
+		var err error
+
+		for attempt := 1; attempt <= 5; attempt++ {
+			err = storage.Download(downloadURL, filename, func(status string) {
+				viewer.SetStatusOverride(status)
+
+				// Refresh menu at most once per 2 seconds to avoid excessive layout calls
+				if time.Since(lastMenuRefresh) > 2*time.Second {
+					l.pendingMenuReload.Store(true)
+					lastMenuRefresh = time.Now()
+				}
+
+				_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+			})
+
+			if err == nil || !strings.Contains(err.Error(), "idle timeout") {
+				break
+			}
+
+			slog.Warn("Download timed out, retrying...", "filename", filename, "attempt", attempt)
+			viewer.SetStatusOverride(fmt.Sprintf("⏳ Connection lost. Retrying... (%d/5)", attempt))
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-		})
+			time.Sleep(2 * time.Second)
+		}
+
 		if err != nil {
 			slog.Error("Download failed", "url", downloadURL, "filename", filename, "error", err)
-			viewer.SetStatusOverride("❌ Download failed: " + err.Error())
+
+			errStr := err.Error()
+			if strings.HasPrefix(errStr, "download: Get \"") {
+				if idx := strings.Index(errStr, "\": "); idx != -1 {
+					errStr = errStr[idx+3:]
+				}
+			}
+
+			errMsg := util.Truncate(errStr, 60)
+			viewer.SetStatusOverride("❌ Download failed: " + errMsg)
+			l.pendingMenuReload.Store(true) // Ensure UI updates back to "Start" button
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 			return
 		}
+
 		slog.Info("Download completed successfully", "filename", filename)
 		// Store filename then signal main thread. All SDL state (SetDocument,
 		// Relayout, sleep, status clear) must happen on the main thread.

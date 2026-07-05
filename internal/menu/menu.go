@@ -18,6 +18,7 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/util"
 )
 
 //go:embed assets/menu.md.tmpl
@@ -47,11 +48,20 @@ type FileEntry struct {
 	Size        string
 }
 
+// DownloadEntry represents an active or paused download.
+type DownloadEntry struct {
+	Name        string
+	DisplayName string
+	Size        string
+	Active      bool
+}
+
 // MenuData holds the data for the menu template.
 type MenuData struct {
 	InternetAvailable bool
 	ZIMs              []FileEntry
 	Docs              []FileEntry
+	Downloads         []DownloadEntry
 	HasContent        bool
 }
 
@@ -60,9 +70,8 @@ var (
 	docExtensions = []string{".md", ".html", ".htm"}
 )
 
-// FileSelector generates the main file browsing document.
 func FileSelector(internetAvailable bool) (*document.Document, error) {
-	zims, mds, err := scanDirectory(".")
+	zims, mds, downloads, err := scanDirectory(".")
 	if err != nil {
 		return nil, fmt.Errorf("read dir: %w", err)
 	}
@@ -71,7 +80,8 @@ func FileSelector(internetAvailable bool) (*document.Document, error) {
 		InternetAvailable: internetAvailable,
 		ZIMs:              zims,
 		Docs:              mds,
-		HasContent:        len(zims) > 0 || len(mds) > 0,
+		Downloads:         downloads,
+		HasContent:        len(zims) > 0 || len(mds) > 0 || len(downloads) > 0,
 	}
 
 	var buf bytes.Buffer
@@ -110,10 +120,10 @@ func SettingsPage(cfg config.Config) (*document.Document, error) {
 	return markdown.Parse(&buf)
 }
 
-func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, err error) {
+func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, downloads []DownloadEntry, err error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	for _, entry := range files {
@@ -122,6 +132,29 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, err error) {
 		}
 		name := entry.Name()
 		ext := strings.ToLower(filepath.Ext(name))
+
+		if ext == ".part" {
+			baseName := strings.TrimSuffix(name, ".part")
+			var downloaded int64
+			if info, err := entry.Info(); err == nil {
+				downloaded = info.Size()
+			}
+
+			var sizeStr string
+			if dInfo, err := storage.LoadDownloadInfo(filepath.Join(dir, baseName+".info")); err == nil && dInfo.TotalSize > 0 {
+				sizeStr = fmt.Sprintf("%s / %s", storage.FormatSize(downloaded), storage.FormatSize(dInfo.TotalSize))
+			} else {
+				sizeStr = storage.FormatSize(downloaded) + " / ?"
+			}
+
+			downloads = append(downloads, DownloadEntry{
+				Name:        baseName,
+				DisplayName: util.Truncate(baseName, 45),
+				Size:        sizeStr,
+				Active:      storage.Manager.IsActive(baseName),
+			})
+			continue
+		}
 
 		if !slices.Contains(zimExtensions, ext) && !slices.Contains(docExtensions, ext) {
 			continue
@@ -136,7 +169,7 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, err error) {
 
 		fe := FileEntry{
 			Name:        name,
-			DisplayName: truncateName(name, 45),
+			DisplayName: util.Truncate(name, 45),
 			Size:        sizeStr,
 		}
 
@@ -146,14 +179,7 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, err error) {
 			mds = append(mds, fe)
 		}
 	}
-	return zims, mds, nil
-}
-
-func truncateName(name string, maxLen int) string {
-	if len(name) > maxLen {
-		return name[:maxLen-3] + "..."
-	}
-	return name
+	return zims, mds, downloads, nil
 }
 
 // CheckInternet pings the Kiwix library catalog and returns true if reachable.
