@@ -11,8 +11,8 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
-	"os"
 	"path"
 	"strings"
 	"unsafe"
@@ -58,11 +58,7 @@ func Open(filePath string) (*Reader, error) {
 		rootPrefix = path.Dir(mainPagePath)
 	}
 
-	debug := os.Getenv("KIWIX_DEBUG") != ""
-	if debug {
-		fmt.Fprintf(os.Stderr, "[Open] file=%q rootPrefix=%q mainPath=%q\n",
-			filePath, rootPrefix, mainPagePath)
-	}
+	slog.Debug("Opening ZIM archive", "file", filePath, "rootPrefix", rootPrefix, "mainPath", mainPagePath)
 
 	return &Reader{handle: h, rootPrefix: rootPrefix, mainPagePath: mainPagePath}, nil
 }
@@ -142,10 +138,7 @@ func (r *Reader) GetArticle(path string) ([]byte, string, error) {
 
 	entry := C.zim_get_entry_by_path(r.handle, cPath)
 	if entry == nil {
-		debug := os.Getenv("KIWIX_DEBUG") != ""
-		if debug {
-			fmt.Fprintf(os.Stderr, "[GetArticle] NOT FOUND: %q\n", path)
-		}
+		slog.Debug("GetArticle not found", "path", path)
 		return nil, "", fmt.Errorf("article %q: not found", path)
 	}
 	defer C.zim_entry_free(entry)
@@ -171,11 +164,7 @@ func (r *Reader) ResolveArticle(rawURL string, referrer string) ([]byte, string,
 		decoded = pathOnly
 	}
 
-	debug := os.Getenv("KIWIX_DEBUG") != ""
-	if debug {
-		fmt.Fprintf(os.Stderr, "[ResolveArticle] raw=%q referrer=%q rootPrefix=%q decoded=%q\n",
-			rawURL, referrer, r.rootPrefix, decoded)
-	}
+	slog.Debug("Resolving article", "raw", rawURL, "referrer", referrer, "rootPrefix", r.rootPrefix, "decoded", decoded)
 
 	// Deduplicate.
 	var candidates []string
@@ -294,9 +283,4 @@ func (r *Reader) entryToData(entry C.zim_entry_t) ([]byte, string, error) {
 	C.free(unsafe.Pointer(cContent))
 
 	return data, mime, nil
-}
-
-func isHTML(mime string) bool {
-	return mime == "text/html" || mime == "text/html; charset=utf-8" ||
-		mime == "text/html;charset=utf-8" || mime == "text/html; charset=UTF-8"
 }

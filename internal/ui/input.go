@@ -1,8 +1,7 @@
 package ui
 
 import (
-	"fmt"
-	"os"
+	"log/slog"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -126,7 +125,7 @@ func (c *InputController) processTreeKey(sc sdl.Scancode) {
 	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_D, sdl.SCANCODE_KP_6:
 		app.navState.ActionRight()
 	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
-		fmt.Fprintf(os.Stderr, "ENTER: label=%q, isLeaf=%v, path=%q\n", app.navState.Cursor.Label(), app.navState.CursorIsLeaf(), app.navState.CursorPath())
+		slog.Debug("Tree navigation enter", "label", app.navState.Cursor.Label(), "isLeaf", app.navState.CursorIsLeaf(), "path", app.navState.CursorPath())
 		if app.navState.CursorIsLeaf() {
 			// Open article.
 			path := app.navState.CursorPath()
@@ -286,7 +285,5 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 }
 
 func debugEvent(kind string, code int, val int) {
-	if os.Getenv("KIWIX_DEBUG_INPUT") != "" {
-		fmt.Fprintf(os.Stderr, "[INPUT] %s code=%d val=%d\n", kind, code, val)
-	}
+	slog.Debug("Input event", "kind", kind, "code", code, "val", val)
 }

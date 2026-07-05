@@ -3,7 +3,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 
@@ -13,6 +13,13 @@ import (
 )
 
 func main() {
+	logLevel := slog.LevelInfo
+	if os.Getenv("KIWIX_DEBUG") != "" || os.Getenv("KIWIX_DEBUG_INPUT") != "" {
+		logLevel = slog.LevelDebug
+	}
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
+	slog.SetDefault(logger)
+
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -23,25 +30,29 @@ func main() {
 		filePath = "virtual:menu"
 	}
 
+	slog.Info("Starting Kiwix-SDL", "filePath", filePath)
+
 	fontPath := findFont()
 	if fontPath == "" {
-		fmt.Println("Notice: No external TTF font found. Using embedded fonts.")
+		slog.Info("No external TTF font found. Using embedded fonts.")
 	}
 
 	r, err := renderer.New("Kiwix-SDL", 640, 480, fontPath, 18)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating renderer: %v\n", err)
+		slog.Error("Error creating renderer", "error", err)
 		os.Exit(1)
 	}
 	defer r.Destroy()
+	slog.Info("Renderer initialized successfully", "font", fontPath)
 
 	app := ui.New(r, r, r, navigation.NewSimpleNavigator())
 
 	if err := app.OpenFile(filePath); err != nil {
-		fmt.Fprintf(os.Stderr, "Error opening file: %v\n", err)
+		slog.Error("Error opening file", "file", filePath, "error", err)
 		os.Exit(1)
 	}
 
+	slog.Info("Starting application event loop")
 	app.Run()
 }
 

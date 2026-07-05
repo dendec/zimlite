@@ -2,8 +2,8 @@ package ui
 
 import (
 	"bytes"
-	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -156,13 +156,14 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 	app.viewer.SetHasTree(hasTree)
 
 	app.viewer.Relayout()
+	slog.Info("Successfully loaded document", "path", pathStr, "isZIM", isZIM)
 	return nil
 }
 
 func (l *DocumentLoader) NavigateLink(url string) {
 	app := l.app
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "//") {
-		fmt.Fprintf(os.Stderr, "Opening external URL: %s\n", url)
+		slog.Info("Opening external URL", "url", url)
 		_ = exec.Command("xdg-open", url).Start()
 		return
 	}
@@ -171,7 +172,7 @@ func (l *DocumentLoader) NavigateLink(url string) {
 		if y, ok := app.viewer.FindAnchorY(anchor); ok {
 			app.scroller.ScrollToY(y)
 		} else {
-			fmt.Fprintf(os.Stderr, "Anchor not found: %s\n", url)
+			slog.Warn("Anchor not found", "anchor", url)
 		}
 		return
 	}
@@ -185,12 +186,12 @@ func (l *DocumentLoader) NavigateLink(url string) {
 		data, mime, err := l.zimReader.ResolveArticle(url, referrer)
 		if err == nil {
 			if !strings.HasPrefix(mime, "text/html") {
-				fmt.Fprintf(os.Stderr, "Unsupported article mime: %s\n", mime)
+				slog.Warn("Unsupported article mime", "mime", mime)
 				return
 			}
 			doc, err := html.Parse(bytes.NewReader(data))
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Parse error: %v\n", err)
+				slog.Error("Parse error", "error", err)
 				return
 			}
 
@@ -209,28 +210,34 @@ func (l *DocumentLoader) NavigateLink(url string) {
 			app.viewer.SetDocument(doc)
 			app.navigator.Open(navKey)
 			app.viewer.Relayout()
+			slog.Info("Navigated to article", "url", navKey)
 			return
 		}
-		fmt.Fprintf(os.Stderr, "ResolveArticle(%q) failed: %v\n", url, err)
+		slog.Error("ResolveArticle failed", "url", url, "error", err)
 		return
 	}
 	if err := l.OpenFile(url); err != nil {
-		fmt.Fprintf(os.Stderr, "Cannot open: %s (%v)\n", url, err)
+		slog.Error("Cannot open file", "url", url, "error", err)
+	} else {
+		slog.Info("Opened file link", "url", url)
 	}
 }
 
 func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 	app := l.app
+	slog.Info("Initiating download", "url", downloadURL, "filename", filename)
 	go func() {
 		err := storage.Download(downloadURL, filename, func(status string) {
 			app.viewer.SetStatusOverride(status)
 			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 		})
 		if err != nil {
+			slog.Error("Download failed", "url", downloadURL, "filename", filename, "error", err)
 			app.viewer.SetStatusOverride("Download failed: " + err.Error())
 			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 			return
 		}
+		slog.Info("Download completed successfully", "filename", filename)
 		time.Sleep(3 * time.Second)
 		app.viewer.SetStatusOverride("")
 		if app.navigator.Current() == "virtual:menu" {

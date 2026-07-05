@@ -3,6 +3,7 @@ package ui
 import (
 	"encoding/xml"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
@@ -195,7 +196,7 @@ func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document,
 			}
 			sb.WriteString("\n")
 		}
-		fmt.Println(sb.String())
+		slog.Debug("Generated library menu", "content", sb.String())
 		return markdown.Parse(strings.NewReader(sb.String()))
 
 	case "/library/download":

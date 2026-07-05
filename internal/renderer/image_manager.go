@@ -2,12 +2,12 @@ package renderer
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	"image/draw"
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"log/slog"
 	"strings"
 	"unsafe"
 
@@ -47,7 +47,7 @@ func (m *ImageManager) GetDimensions(url string) (int32, int32, bool) {
 
 	data, err := m.loader(url)
 	if err != nil {
-		fmt.Printf("[DEBUG] Loader failed for %s: %v\n", url, err)
+		slog.Warn("Loader failed for image", "url", url, "error", err)
 		return 0, 0, false
 	}
 
@@ -56,7 +56,7 @@ func (m *ImageManager) GetDimensions(url string) (int32, int32, bool) {
 	if isSVG {
 		img := svg.Render(data)
 		if img == nil {
-			fmt.Printf("[DEBUG] LunaSVG Decode failed for %s\n", url)
+			slog.Error("LunaSVG Decode failed", "url", url)
 			return 0, 0, false
 		}
 
@@ -68,7 +68,7 @@ func (m *ImageManager) GetDimensions(url string) (int32, int32, bool) {
 
 	config, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		fmt.Printf("[DEBUG] DecodeConfig failed for %s: format=%s err=%v len=%d\n", url, format, err, len(data))
+		slog.Error("DecodeConfig failed", "url", url, "format", format, "error", err, "len", len(data))
 		return 0, 0, false
 	}
 
