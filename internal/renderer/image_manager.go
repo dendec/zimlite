@@ -11,8 +11,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/srwiley/oksvg"
-	"github.com/srwiley/rasterx"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/svg"
 	"github.com/veandco/go-sdl2/sdl"
 	_ "golang.org/x/image/webp"
 )
@@ -55,15 +54,14 @@ func (m *ImageManager) GetDimensions(url string) (int32, int32, bool) {
 	isSVG := strings.HasSuffix(strings.ToLower(url), ".svg") || bytes.HasPrefix(bytes.TrimSpace(data), []byte("<?xml")) || bytes.HasPrefix(bytes.TrimSpace(data), []byte("<svg"))
 
 	if isSVG {
-		icon, err := oksvg.ReadIconStream(bytes.NewReader(data))
-		if err != nil {
-			fmt.Printf("[DEBUG] SVG Decode failed for %s: %v\n", url, err)
+		img := svg.Render(data)
+		if img == nil {
+			fmt.Printf("[DEBUG] LunaSVG Decode failed for %s\n", url)
 			return 0, 0, false
 		}
-		w, h := int32(icon.ViewBox.W), int32(icon.ViewBox.H)
-		if w == 0 || h == 0 {
-			w, h = 300, 150 // default fallback
-		}
+
+		w := int32(img.Bounds().Dx())
+		h := int32(img.Bounds().Dy())
 		m.dimensions[url] = struct{ w, h int32 }{w, h}
 		return w, h, true
 	}
@@ -97,19 +95,7 @@ func (m *ImageManager) GetTexture(url string) *sdl.Texture {
 	isSVG := strings.HasSuffix(strings.ToLower(url), ".svg") || bytes.HasPrefix(bytes.TrimSpace(data), []byte("<?xml")) || bytes.HasPrefix(bytes.TrimSpace(data), []byte("<svg"))
 
 	if isSVG {
-		icon, err := oksvg.ReadIconStream(bytes.NewReader(data))
-		if err == nil {
-			w, h := int(icon.ViewBox.W), int(icon.ViewBox.H)
-			if w == 0 || h == 0 {
-				w, h = 300, 150
-			}
-			icon.SetTarget(0, 0, float64(w), float64(h))
-			rgba := image.NewRGBA(image.Rect(0, 0, w, h))
-			scanner := rasterx.NewScannerGV(w, h, rgba, rgba.Bounds())
-			dasher := rasterx.NewDasher(w, h, scanner)
-			icon.Draw(dasher, 1.0)
-			img = rgba
-		}
+		img = svg.Render(data)
 	} else {
 		var err error
 		img, _, err = image.Decode(bytes.NewReader(data))
