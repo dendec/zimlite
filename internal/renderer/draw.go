@@ -317,7 +317,7 @@ func (r *Renderer) renderEmojiTexture(line lineEntry) *sdl.Texture {
 	if tex != nil {
 		return tex
 	}
-	data, err := emojiFS.ReadFile("assets/emoji/" + line.emojiHex + ".svg")
+		data, err := getEmojiSVG(line.emojiHex)
 	if err != nil {
 		return nil
 	}
