@@ -66,17 +66,6 @@ func NewTree(articles []zim.ArticleEntry) *RadixNode {
 		root.children = append(root.children, node)
 	}
 
-	// Auto-drill single-child chains: if a node has only 1 child, expand it.
-	for _, child := range root.children {
-		for child != nil && !child.IsLeaf() && len(child.articles) > 0 {
-			child.Expand()
-			if len(child.children) != 1 {
-				break
-			}
-			child = child.children[0]
-		}
-	}
-
 	return root
 }
 

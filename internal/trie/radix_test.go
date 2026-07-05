@@ -103,7 +103,7 @@ func TestCyrillic(t *testing.T) {
 }
 
 func TestAutoDrill(t *testing.T) {
-	// Single-child chains auto-drill. XYZ Alpha/Beta/Gamma all share prefix.
+	// Single-child chains auto-drill on manual Expand(), not on tree load.
 	articles := []zim.ArticleEntry{
 		{Title: "XYZ Alpha", Path: "A/Alpha"},
 		{Title: "XYZ Beta", Path: "A/Beta"},
@@ -112,23 +112,16 @@ func TestAutoDrill(t *testing.T) {
 
 	root := NewTree(articles)
 	x := root.children[0]
-	if !x.Expanded() { t.Fatal("X auto-drilled") }
-	if len(x.children) != 1 { t.Fatalf("X→1 child, got %d", len(x.children)) }
-
-	xy := x.children[0]
-	if !xy.Expanded() { t.Fatal("XY auto-drilled") }
-	if len(xy.children) != 1 { t.Fatalf("XY→1 child, got %d", len(xy.children)) }
-
-	xyz := xy.children[0]
-	if !xyz.Expanded() { t.Fatal("XYZ auto-drilled") }
-	if len(xyz.children) != 1 { t.Fatalf("XYZ→1 child, got %d", len(xyz.children)) }
-
-	spaceGrp := xyz.children[0]
-	if !spaceGrp.Expanded() { t.Fatal("'XYZ ' auto-drilled") }
-	if len(spaceGrp.children) != 3 { t.Fatalf("space→3 leaves, got %d", len(spaceGrp.children)) }
-	for _, c := range spaceGrp.children {
-		if !c.IsLeaf() { t.Errorf("expected leaf, got %q", c.Label()) }
+	// Root load: NOT expanded.
+	if x.Expanded() {
+		t.Fatal("X should NOT be expanded on load")
 	}
+
+	// Manual expand: drills through single-child chain to leaves.
+	x.Expand()
+	if !x.Expanded() { t.Fatal("X should be expanded after manual Expand()") }
+	if len(x.children) != 1 { t.Fatalf("X→1 child (XY), got %d", len(x.children)) }
+	if !x.children[0].Expanded() { t.Fatal("XY auto-drilled") }
 }
 
 func TestMultiBranchStops(t *testing.T) {
@@ -148,27 +141,30 @@ func TestMultiBranchStops(t *testing.T) {
 }
 
 func TestMultiBranchAfterDrill(t *testing.T) {
-	// Drills single-child chains, stops at first branching.
+	// Manual Expand() drills single-child chain, stops at first branching.
 	articles := []zim.ArticleEntry{
 		{Title: "A X Alpha", Path: "A"},
 		{Title: "A X Beta", Path: "B"},
 		{Title: "A Y Gamma", Path: "C"},
 	}
 	root := NewTree(articles)
-	// Root child "A" → 1 child "A " (space group)
 	a := root.children[0]
-	if !a.Expanded() { t.Fatal("A auto-drilled") }
+	if a.Expanded() { t.Fatal("A should NOT be expanded on load") }
+
+	// Manually expand — drills through single-child "A " to branching.
+	a.Expand()
+	if !a.Expanded() { t.Fatal("A drilled") }
 	if len(a.children) != 1 { t.Fatalf("A→1 child, got %d", len(a.children)) }
 
-	// "A " → 2 children (branching: X and Y)
-	sp := a.children[0]
-	if !sp.Expanded() { t.Fatal("'A ' auto-drilled") }
-	if len(sp.children) != 2 { t.Fatalf("'A '→2 children, got %d", len(sp.children)) }
+	sp := a.children[0] // "A "
+	if !sp.Expanded() { t.Fatal("'A ' drilled") }
+	if len(sp.children) != 2 { t.Fatalf("'A '→2 children (X,Y), got %d", len(sp.children)) }
 
-	xGrp := sp.children[0] // "A X": 2 articles
-	if xGrp.IsLeaf() { t.Error("A X should NOT be leaf (2 articles)") }
-	if xGrp.Expanded() { t.Error("A X should NOT be expanded (2 children → stop)") }
+	// X group has 2 children → stop, Y leaf → drilled.
+	xGrp := sp.children[0]
+	if xGrp.IsLeaf() { t.Error("A X should NOT be leaf") }
+	if xGrp.Expanded() { t.Error("A X should NOT be expanded (2 children, stop)") }
 
-	yLeaf := sp.children[1] // "A Y Gamma": 1 article → leaf
+	yLeaf := sp.children[1]
 	if !yLeaf.IsLeaf() { t.Error("A Y Gamma should be leaf") }
 }
