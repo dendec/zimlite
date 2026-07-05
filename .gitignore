@@ -5,6 +5,9 @@
 # Downloaded libs
 /lib/libzim_*/
 
+# Build output
+/dist/
+
 # Go
 vendor/
 

@@ -10,11 +10,12 @@ ZIM_INC      := $(ZIM_LIBDIR)/include
 ZIM_LIB      := $(ZIM_LIBDIR)/lib/x86_64-linux-gnu
 ZIM_URL      := https://download.openzim.org/release/libzim
 
-CGO_CXXFLAGS := -std=c++17 -Iinternal/zim -I$(ZIM_INC)
-CGO_LDFLAGS  := -L$(ZIM_LIB) -lzim -Wl,-rpath,\$$ORIGIN/$(ZIM_LIB) -Wl,--disable-new-dtags
+CGO_CXXFLAGS := -std=c++17 -I$(shell pwd)/internal/zim -I$(shell pwd)/$(ZIM_INC)
+CGO_LDFLAGS  := -L$(shell pwd)/$(ZIM_LIB) -lzim -Wl,-rpath,\$$ORIGIN/$(ZIM_LIB) -Wl,--disable-new-dtags
 
 .PHONY: build test vet lint clean run info
 .PHONY: deps build-linux-arm64 build-linux-armv8 build-linux-amd64
+.PHONY: dist-arm64
 
 build: $(ZIM_LIB)/libzim.so
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" \
@@ -49,10 +50,10 @@ build-linux-armv8:
 		$(GO) build -o $(APP)-armv8 $(SRC)
 
 test:
-	$(GO) test ./...
+	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test ./...
 
 vet:
-	$(GOFLAGS) $(GO) vet ./...
+	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" $(GO) vet ./...
 
 lint:
 	@which golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
@@ -66,3 +67,13 @@ run: build
 
 info:
 	@echo "ZIM_LIB=$(ZIM_LIB)"
+
+# ARM64 PortMaster distribution via Docker.
+dist-arm64:
+	docker build -t kiwix-arm64 -f Dockerfile.arm64 .
+	@mkdir -p dist
+	docker create --name kiwix-extract kiwix-arm64 >/dev/null 2>&1
+	docker cp kiwix-extract:/dist/kiwix-sdl dist/
+	docker rm kiwix-extract >/dev/null 2>&1
+	@echo "=== Done: dist/kiwix-sdl/ ==="
+	@ls -lh dist/kiwix-sdl/
