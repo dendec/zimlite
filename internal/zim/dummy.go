@@ -4,7 +4,9 @@ package zim
 
 import "github.com/kiwix-sdl/kiwix-sdl/internal/document"
 
-type Reader struct{}
+type Reader struct {
+	rootPrefix string
+}
 
 type ArticleEntry struct {
 	Title string
@@ -33,7 +35,7 @@ func (r *Reader) GetArticle(path string) (*document.Document, error) {
 	return nil, nil
 }
 
-func (r *Reader) ResolveArticle(rawURL string) (*document.Document, error) {
+func (r *Reader) ResolveArticle(rawURL string, referrer string) (*document.Document, error) {
 	return nil, nil
 }
 

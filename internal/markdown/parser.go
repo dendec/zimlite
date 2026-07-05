@@ -68,6 +68,17 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		return ast.WalkSkipChildren, nil
 
 	case *ast.Paragraph:
+		// Convert paragraph with a single standalone image into an Image block
+		if node.ChildCount() == 1 {
+			if img, ok := node.FirstChild().(*ast.Image); ok {
+				alt := c.collectText(img)
+				c.document.Blocks = append(c.document.Blocks, &document.Image{
+					Alt: alt,
+					URL: string(img.Destination),
+				})
+				return ast.WalkSkipChildren, nil
+			}
+		}
 		inlines := c.collectInlines(n)
 		if len(inlines) > 0 {
 			c.document.Blocks = append(c.document.Blocks, &document.Paragraph{

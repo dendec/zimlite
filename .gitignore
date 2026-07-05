@@ -7,3 +7,8 @@
 
 # Go
 vendor/
+
+# Test files
+/test.md
+/test_image.png
+/test_rich.md

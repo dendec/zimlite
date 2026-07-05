@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 	"unsafe"
 
@@ -23,7 +24,8 @@ import (
 
 // Reader wraps a libzim Archive handle.
 type Reader struct {
-	handle C.zim_archive_t
+	handle     C.zim_archive_t
+	rootPrefix string
 }
 
 // Open opens a ZIM file. Caller must Close().
@@ -35,7 +37,20 @@ func Open(path string) (*Reader, error) {
 	if h == nil {
 		return nil, fmt.Errorf("open zim: %s", path)
 	}
-	return &Reader{handle: h}, nil
+
+	entry := C.zim_get_main_entry(h)
+	rootPrefix := "A" // default fallback
+	if entry != nil {
+		defer C.zim_entry_free(entry)
+		mainPath := C.GoString(C.zim_entry_get_path(entry))
+		if idx := strings.Index(mainPath, "/"); idx != -1 {
+			rootPrefix = mainPath[:idx]
+		} else if mainPath != "" {
+			rootPrefix = mainPath
+		}
+	}
+
+	return &Reader{handle: h, rootPrefix: rootPrefix}, nil
 }
 
 // ArticleEntry holds the title and internal path of an article.
@@ -105,24 +120,62 @@ func (r *Reader) GetArticle(path string) (*document.Document, error) {
 
 // ResolveArticle tries multiple path formats to find an article.
 // ZIM links may lose namespace prefix (A/) or extension during HTML→MD conversion.
-func (r *Reader) ResolveArticle(rawURL string) (*document.Document, error) {
+func (r *Reader) ResolveArticle(rawURL string, referrer string) (*document.Document, error) {
 	// Skip external URLs.
 	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") ||
 		strings.HasPrefix(rawURL, "//") {
 		return nil, fmt.Errorf("external URL: %s", rawURL)
 	}
 
-	decoded, err := url.PathUnescape(rawURL)
-	if err != nil {
-		decoded = rawURL
+	// Strip query parameters and anchors/fragments
+	pathOnly := rawURL
+	if idx := strings.IndexAny(pathOnly, "?#"); idx != -1 {
+		pathOnly = pathOnly[:idx]
 	}
 
+	decoded, err := url.PathUnescape(pathOnly)
+	if err != nil {
+		decoded = pathOnly
+	}
+
+	clean := decoded
+	if strings.HasPrefix(clean, "/") {
+		clean = path.Join(r.rootPrefix, clean)
+	} else {
+		isRelative := !strings.HasPrefix(clean, "A/") && !strings.HasPrefix(clean, r.rootPrefix+"/") && clean != r.rootPrefix
+		if isRelative {
+			if referrer != "" {
+				clean = path.Join(path.Dir(referrer), clean)
+			} else {
+				clean = path.Join(r.rootPrefix, clean)
+			}
+		}
+	}
+
+	for strings.HasPrefix(clean, "../") {
+		clean = clean[3:]
+	}
+	clean = strings.TrimPrefix(clean, "/")
+
 	candidates := []string{
-		rawURL,                        // as-is
-		decoded,                       // decoded
-		"A/" + decoded,                // old namespace prefix
-		decoded + ".html",             // with extension
-		"A/" + decoded + ".html",      // old namespace + extension
+		pathOnly,
+		decoded,
+		clean,
+		clean + "/",
+		clean + ".html",
+		clean + "/index.html",
+		clean + "/index.htm",
+	}
+
+	if r.rootPrefix != "" && !strings.HasPrefix(clean, r.rootPrefix+"/") {
+		prefix := r.rootPrefix + "/"
+		candidates = append(candidates,
+			prefix+clean,
+			prefix+clean+"/",
+			prefix+clean+".html",
+			prefix+clean+"/index.html",
+			prefix+clean+"/index.htm",
+		)
 	}
 
 	for _, c := range candidates {

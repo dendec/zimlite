@@ -4,6 +4,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -216,8 +217,23 @@ func (app *App) openZIM(path string) (*document.Document, error) {
 }
 
 func (app *App) navigateLink(url string) {
+	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "//") {
+		fmt.Fprintf(os.Stderr, "Opening external URL: %s\n", url)
+		_ = exec.Command("xdg-open", url).Start()
+		return
+	}
+	if strings.HasPrefix(url, "#") {
+		fmt.Fprintf(os.Stderr, "Anchor link clicked: %s\n", url)
+		return
+	}
+
 	if app.zimReader != nil {
-		doc, err := app.zimReader.ResolveArticle(url)
+		var referrer string
+		current := app.navigator.Current()
+		if strings.HasPrefix(current, "zim:") {
+			referrer = strings.TrimPrefix(current, "zim:")
+		}
+		doc, err := app.zimReader.ResolveArticle(url, referrer)
 		if err == nil {
 			app.mode = modeDoc
 			app.renderer.SetDocument(doc)
