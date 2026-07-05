@@ -6,7 +6,7 @@ import (
 	"sort"
 	"unicode/utf8"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 )
 
 // LeafInfo holds metadata for a terminal (article) node.
@@ -23,13 +23,13 @@ type RadixNode struct {
 	parent   *RadixNode
 
 	expanded bool
-	articles []zim.ArticleEntry // lazy: only populated on Expand for non-root
+	articles []document.ArticleEntry // lazy: only populated on Expand for non-root
 	built    bool
 }
 
 // NewTree builds a tree from a pre-fetched article list.
 // Builds first level eagerly (grouping by first rune).
-func NewTree(articles []zim.ArticleEntry) *RadixNode {
+func NewTree(articles []document.ArticleEntry) *RadixNode {
 	root := &RadixNode{prefix: "", expanded: true}
 	if len(articles) == 0 {
 		return root
@@ -38,7 +38,7 @@ func NewTree(articles []zim.ArticleEntry) *RadixNode {
 	// Group by first rune.
 	type group struct {
 		r    rune
-		arts []zim.ArticleEntry
+		arts []document.ArticleEntry
 	}
 	var groups []group
 	for _, a := range articles {
@@ -84,7 +84,7 @@ func (n *RadixNode) Expand() {
 	prefixLen := len([]rune(n.prefix))
 	type group struct {
 		key  string
-		arts []zim.ArticleEntry
+		arts []document.ArticleEntry
 	}
 	groups := make(map[string]*group)
 	var order []string

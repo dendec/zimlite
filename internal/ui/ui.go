@@ -4,50 +4,9 @@ package ui
 import (
 	"strings"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/renderer"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
 	"github.com/veandco/go-sdl2/sdl"
 )
-
-// DocViewer is the interface for core rendering operations.
-type DocViewer interface {
-	SetDocument(doc *document.Document)
-	SetResourceLoader(loader renderer.ResourceLoader)
-	Relayout()
-	Render()
-	ToggleTheme()
-	Zoom(delta int) error
-	SetStatusOverride(status string)
-	SetHasTree(has bool)
-	FindAnchorY(anchor string) (int32, bool)
-}
-
-// LinkBrowser is the interface for navigating hyperlinks in a document.
-type LinkBrowser interface {
-	LinkCount() int
-	SelectPrevLink()
-	SelectNextLink()
-	SelectedLinkURL() string
-	HandleClick(mx, my int32) string
-}
-
-// Scroller is the interface for scrolling and tree-view display.
-type Scroller interface {
-	ScrollBy(delta int32)
-	ScrollPageUp()
-	ScrollPageDown()
-	ScrollToY(y int32)
-	SetTextLines(lines []string)
-	ScrollToLine(lineIdx int)
-}
-
-// DocNavigator manages document history (back/forward).
-type DocNavigator interface {
-	Open(id string)
-	Back() bool
-	Current() string
-}
 
 type appMode int
 

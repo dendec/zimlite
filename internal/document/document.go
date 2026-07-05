@@ -2,9 +2,15 @@
 // Renderer works only with these types — never with markdown or HTML directly.
 package document
 
-// Document is the universal internal representation.
+// Document represents a fully parsed markdown/html document.
 type Document struct {
 	Blocks []Block
+}
+
+// ArticleEntry holds the title and internal path of a library article.
+type ArticleEntry struct {
+	Title string
+	Path  string
 }
 
 // --- Block types ---
