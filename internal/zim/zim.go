@@ -25,8 +25,9 @@ import (
 
 // Reader wraps a libzim Archive handle.
 type Reader struct {
-	handle     C.zim_archive_t
-	rootPrefix string
+	handle        C.zim_archive_t
+	rootPrefix    string
+	mainPagePath  string
 }
 
 // Open opens a ZIM file. Caller must Close().
@@ -45,6 +46,15 @@ func Open(filePath string) (*Reader, error) {
 	if entry != nil {
 		defer C.zim_entry_free(entry)
 		mainPagePath = C.GoString(C.zim_entry_get_path(entry))
+	}
+
+	// Follow main page redirect to get real namespace prefix.
+	redirect := C.zim_get_main_page_redirect(h)
+	if redirect != nil {
+		realPath := C.GoString(redirect)
+		rootPrefix = path.Dir(realPath)
+		mainPagePath = realPath
+	} else if mainPagePath != "" {
 		rootPrefix = path.Dir(mainPagePath)
 	}
 
@@ -54,16 +64,23 @@ func Open(filePath string) (*Reader, error) {
 			filePath, rootPrefix, mainPagePath)
 	}
 
-	return &Reader{handle: h, rootPrefix: rootPrefix}, nil
+	return &Reader{handle: h, rootPrefix: rootPrefix, mainPagePath: mainPagePath}, nil
 }
 
-// MainPagePath returns the internal path of the main page.
+// MainPagePath returns the real (redirected) main page path.
 func (r *Reader) MainPagePath() string {
+	if r.mainPagePath != "" {
+		return r.mainPagePath
+	}
 	entry := C.zim_get_main_entry(r.handle)
 	if entry == nil {
 		return ""
 	}
 	defer C.zim_entry_free(entry)
+	redirect := C.zim_get_main_page_redirect(r.handle)
+	if redirect != nil {
+		return C.GoString(redirect)
+	}
 	return C.GoString(C.zim_entry_get_path(entry))
 }
 

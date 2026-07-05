@@ -40,6 +40,20 @@ zim_entry_t zim_get_main_entry(zim_archive_t archive) {
     }
 }
 
+const char* zim_get_main_page_redirect(zim_archive_t archive) {
+    try {
+        auto* a = static_cast<zim::Archive*>(archive);
+        auto entry = a->getMainEntry();
+        // Follow redirect chain to get the real target.
+        entry = entry.getRedirectEntry();
+        static thread_local std::string path;
+        path = entry.getPath();
+        return path.c_str();
+    } catch (...) {
+        return nullptr;
+    }
+}
+
 zim_entry_t zim_get_entry_by_path(zim_archive_t archive, const char* path) {
     try {
         auto* a = static_cast<zim::Archive*>(archive);

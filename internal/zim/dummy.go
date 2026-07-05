@@ -5,7 +5,8 @@ package zim
 import "github.com/kiwix-sdl/kiwix-sdl/internal/document"
 
 type Reader struct {
-	rootPrefix string
+	rootPrefix   string
+	mainPagePath string
 }
 
 type ArticleEntry struct {
