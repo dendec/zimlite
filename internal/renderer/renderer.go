@@ -125,12 +125,17 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
 	sdl.SetHint("SDL_HINT_KEY_REPEAT_DELAY", "300")
 	sdl.SetHint("SDL_HINT_KEY_REPEAT_INTERVAL", "40")
-	if err := sdl.Init(sdl.INIT_VIDEO); err != nil {
+	if err := sdl.Init(sdl.INIT_VIDEO | sdl.INIT_JOYSTICK); err != nil {
 		return nil, fmt.Errorf("sdl init: %w", err)
 	}
 	if err := ttf.Init(); err != nil {
 		sdl.Quit()
 		return nil, fmt.Errorf("ttf init: %w", err)
+	}
+
+	// Open first joystick/gamepad if available.
+	if sdl.NumJoysticks() > 0 {
+		sdl.JoystickOpen(0)
 	}
 
 	window, err := sdl.CreateWindow(title,

@@ -312,6 +312,7 @@ func (app *App) processEvent(event sdl.Event) {
 			return
 		}
 		sc := e.Keysym.Scancode
+		debugEvent("KEY", int(sc), 0)
 
 		// Global keys (work in both modes).
 		switch sc {
@@ -327,6 +328,8 @@ func (app *App) processEvent(event sdl.Event) {
 		case sdl.SCANCODE_D: // D = toggle dark/light theme
 			app.renderer.ToggleTheme()
 			return
+		case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
+			// Global back — also works as doc back.
 		}
 
 		// Mode-specific handling.
@@ -334,6 +337,83 @@ func (app *App) processEvent(event sdl.Event) {
 			app.processTreeKey(sc)
 		} else {
 			app.processDocKey(sc)
+		}
+
+	case *sdl.JoyAxisEvent:
+		v := e.Value
+		debugEvent("AXIS", int(e.Axis), int(v))
+		// Dead zone: ignore small movements.
+		if v > -8000 && v < 8000 {
+			return
+		}
+		if app.mode == modeTree {
+			switch e.Axis {
+			case 1: // vertical
+				if v < 0 {
+					app.navState.MoveUp()
+				} else {
+					app.navState.MoveDown()
+				}
+			case 0: // horizontal
+				if v < 0 {
+					app.navState.ActionLeft()
+				} else {
+					app.navState.ActionRight()
+				}
+			}
+			app.renderTree()
+		} else {
+			switch e.Axis {
+			case 1:
+				app.renderer.ScrollBy(scrollStep * int32(v / 16000))
+			case 0:
+				if v < 0 {
+					app.renderer.SelectPrevLink()
+				} else {
+					app.renderer.SelectNextLink()
+				}
+			}
+		}
+
+	case *sdl.JoyButtonEvent:
+		if e.Type != sdl.JOYBUTTONDOWN {
+			return
+		}
+		debugEvent("BTN", int(e.Button), 0)
+		switch e.Button {
+		case 0, 1: // A/B — open/enter
+			app.processJoyA()
+		case 2, 3: // X/Y — back
+			app.processJoyB()
+		case 4: // L1 — page up
+			app.renderer.ScrollPageUp()
+		case 5: // R1 — page down
+			app.renderer.ScrollPageDown()
+		case 6: // Select — toggle tree
+			app.toggleMode()
+		case 7: // Start — go home
+			app.goHome()
+		case 8: // Menu/Guide — quit
+			app.running = false
+		}
+
+	case *sdl.JoyHatEvent:
+		debugEvent("HAT", int(e.Value), 0)
+		if app.mode == modeTree {
+			switch e.Value {
+			case sdl.HAT_UP: app.navState.MoveUp()
+			case sdl.HAT_DOWN: app.navState.MoveDown()
+			case sdl.HAT_LEFT: app.navState.ActionLeft()
+			case sdl.HAT_RIGHT: app.navState.ActionRight()
+			}
+			app.renderTree()
+		} else {
+			switch e.Value {
+			case sdl.HAT_UP: app.renderer.ScrollBy(-scrollStep)
+			case sdl.HAT_DOWN: app.renderer.ScrollBy(scrollStep)
+			case sdl.HAT_LEFT: app.renderer.SelectPrevLink()
+			case sdl.HAT_RIGHT: app.renderer.SelectNextLink()
+			}
 		}
 
 	case *sdl.WindowEvent:
@@ -430,5 +510,39 @@ func (app *App) processDocKey(sc sdl.Scancode) {
 		} else if app.zimReader != nil {
 			app.enterTreeMode()
 		}
+	}
+}
+
+func (app *App) processJoyA() {
+	if app.mode == modeTree {
+		if app.navState.CursorIsLeaf() {
+			path := app.navState.CursorPath()
+			if path != "" { app.navigateLink(path) }
+		} else {
+			app.navState.ActionRight()
+			app.renderTree()
+		}
+	} else {
+		url := app.renderer.SelectedLinkURL()
+		if url != "" { app.navigateLink(url) }
+	}
+}
+
+func (app *App) processJoyB() {
+	if app.mode == modeTree {
+		app.navState.ActionLeft()
+		app.renderTree()
+	} else if app.navigator.Back() {
+		prevPath := app.navigator.Current()
+		if doc, ok := app.docCache[prevPath]; ok {
+			app.renderer.SetDocument(doc)
+			app.renderer.Relayout()
+		}
+	}
+}
+
+func debugEvent(kind string, code int, val int) {
+	if os.Getenv("KIWIX_DEBUG_INPUT") != "" {
+		fmt.Fprintf(os.Stderr, "[INPUT] %s code=%d val=%d\n", kind, code, val)
 	}
 }
