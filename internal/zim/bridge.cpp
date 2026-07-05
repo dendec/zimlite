@@ -59,6 +59,13 @@ const char* zim_entry_get_path(zim_entry_t entry) {
     return path.c_str();
 }
 
+char zim_entry_get_namespace(zim_entry_t entry) {
+    if (!entry) return '\0';
+    auto* e = static_cast<zim::Entry*>(entry);
+    std::string path = e->getPath();
+    return path.empty() ? '\0' : path[0];
+}
+
 const char* zim_entry_get_title(zim_entry_t entry) {
     if (!entry) return nullptr;
     auto* e = static_cast<zim::Entry*>(entry);

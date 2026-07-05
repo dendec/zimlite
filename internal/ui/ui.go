@@ -179,7 +179,12 @@ func (app *App) OpenFile(path string) error {
 	})
 
 	app.renderer.SetDocument(doc)
-	app.navigator.Open(absPath)
+	if isZIM && app.zimReader != nil {
+		mainPath := app.zimReader.MainPagePath()
+		app.navigator.Open("zim:" + mainPath)
+	} else {
+		app.navigator.Open(absPath)
+	}
 	
 	hasTree := app.zimReader != nil && app.zimReader.ArticleCount() > 1
 	app.renderer.SetHasTree(hasTree)

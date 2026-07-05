@@ -29,28 +29,34 @@ type Reader struct {
 }
 
 // Open opens a ZIM file. Caller must Close().
-func Open(path string) (*Reader, error) {
-	cPath := C.CString(path)
+func Open(filePath string) (*Reader, error) {
+	cPath := C.CString(filePath)
 	defer C.free(unsafe.Pointer(cPath))
 
 	h := C.zim_open(cPath)
 	if h == nil {
-		return nil, fmt.Errorf("open zim: %s", path)
+		return nil, fmt.Errorf("open zim: %s", filePath)
 	}
 
 	entry := C.zim_get_main_entry(h)
 	rootPrefix := "A" // default fallback
 	if entry != nil {
 		defer C.zim_entry_free(entry)
-		mainPath := C.GoString(C.zim_entry_get_path(entry))
-		if idx := strings.Index(mainPath, "/"); idx != -1 {
-			rootPrefix = mainPath[:idx]
-		} else if mainPath != "" {
-			rootPrefix = mainPath
-		}
+		mainPagePath := C.GoString(C.zim_entry_get_path(entry))
+		rootPrefix = path.Dir(mainPagePath)
 	}
 
 	return &Reader{handle: h, rootPrefix: rootPrefix}, nil
+}
+
+// MainPagePath returns the internal path of the main page.
+func (r *Reader) MainPagePath() string {
+	entry := C.zim_get_main_entry(r.handle)
+	if entry == nil {
+		return ""
+	}
+	defer C.zim_entry_free(entry)
+	return C.GoString(C.zim_entry_get_path(entry))
 }
 
 // ArticleEntry holds the title and internal path of an article.
@@ -138,54 +144,76 @@ func (r *Reader) ResolveArticle(rawURL string, referrer string) (*document.Docum
 		decoded = pathOnly
 	}
 
-	clean := decoded
-	if strings.HasPrefix(clean, "/") {
-		clean = path.Join(r.rootPrefix, clean)
-	} else {
-		isRelative := !strings.HasPrefix(clean, "A/") && !strings.HasPrefix(clean, r.rootPrefix+"/") && clean != r.rootPrefix
-		if isRelative {
-			if referrer != "" {
-				clean = path.Join(path.Dir(referrer), clean)
-			} else {
-				clean = path.Join(r.rootPrefix, clean)
+	// Deduplicate.
+	var candidates []string
+	add := func(c string) {
+		c = strings.TrimPrefix(c, "/")
+		for strings.HasPrefix(c, "../") {
+			c = c[3:]
+		}
+		for _, prev := range candidates {
+			if prev == c {
+				return
 			}
+		}
+		candidates = append(candidates, c)
+	}
+
+	add(pathOnly)
+	add(decoded)
+
+	// If already has namespace prefix, try directly.
+	if hasNamespace(decoded) {
+		add(decoded + ".html")
+		base := strings.TrimSuffix(decoded, "/")
+		if base != decoded {
+			add(base)
+			add(base + ".html")
+		}
+		for _, c := range candidates {
+			if doc, err := r.GetArticle(c); err == nil {
+				return doc, nil
+			}
+		}
+		return nil, fmt.Errorf("article not found: %s", rawURL)
+	}
+
+	// Build absolute paths.
+	if referrer != "" {
+		add(path.Join(referrer, decoded))
+		add(path.Join(referrer, decoded) + ".html")
+		add(path.Join(path.Dir(referrer), decoded))
+		add(path.Join(path.Dir(referrer), decoded) + ".html")
+	}
+	if r.rootPrefix != "" {
+		add(path.Join(r.rootPrefix, decoded))
+		add(path.Join(r.rootPrefix, decoded) + ".html")
+	}
+
+	// With trailing slash.
+	n := len(candidates)
+	for i := 0; i < n; i++ {
+		if !strings.HasSuffix(candidates[i], "/") && candidates[i] != "" {
+			add(candidates[i] + "/")
 		}
 	}
 
-	for strings.HasPrefix(clean, "../") {
-		clean = clean[3:]
-	}
-	clean = strings.TrimPrefix(clean, "/")
-
-	candidates := []string{
-		pathOnly,
-		decoded,
-		clean,
-		clean + "/",
-		clean + ".html",
-		clean + "/index.html",
-		clean + "/index.htm",
-	}
-
-	if r.rootPrefix != "" && !strings.HasPrefix(clean, r.rootPrefix+"/") {
-		prefix := r.rootPrefix + "/"
-		candidates = append(candidates,
-			prefix+clean,
-			prefix+clean+"/",
-			prefix+clean+".html",
-			prefix+clean+"/index.html",
-			prefix+clean+"/index.htm",
-		)
-	}
-
 	for _, c := range candidates {
-		doc, err := r.GetArticle(c)
-		if err == nil {
+		if doc, err := r.GetArticle(c); err == nil {
 			return doc, nil
 		}
 	}
 
 	return nil, fmt.Errorf("article not found: %s", rawURL)
+}
+
+func hasNamespace(s string) bool {
+	for _, ns := range []string{"A/", "C/", "I/", "M/", "X/", "-/"} {
+		if strings.HasPrefix(s, ns) {
+			return true
+		}
+	}
+	return false
 }
 
 // GetResource retrieves raw bytes and mimetype of any ZIM entry (e.g. images, css).

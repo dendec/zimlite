@@ -17,6 +17,7 @@ int           zim_get_article_count(zim_archive_t archive);
 zim_entry_t   zim_get_main_entry(zim_archive_t archive);
 zim_entry_t   zim_get_entry_by_path(zim_archive_t archive, const char* path);
 const char*   zim_entry_get_path(zim_entry_t entry);
+char          zim_entry_get_namespace(zim_entry_t entry);
 const char*   zim_entry_get_title(zim_entry_t entry);
 zim_item_t    zim_entry_get_item(zim_entry_t entry, int follow);
 const char*   zim_item_get_content(zim_item_t item, int* size_out);

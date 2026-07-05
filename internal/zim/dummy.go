@@ -31,6 +31,10 @@ func (r *Reader) MainPage() (*document.Document, error) {
 	return nil, nil
 }
 
+func (r *Reader) MainPagePath() string {
+	return ""
+}
+
 func (r *Reader) GetArticle(path string) (*document.Document, error) {
 	return nil, nil
 }
