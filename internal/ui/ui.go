@@ -312,17 +312,13 @@ const scrollStep = 40
 func (app *App) processDocKey(sc sdl.Scancode) {
 	switch sc {
 	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
-		if app.renderer.LinkCount() > 0 {
-			app.renderer.SelectPrevLink()
-		} else {
-			app.renderer.ScrollBy(-scrollStep)
-		}
+		app.renderer.ScrollBy(-scrollStep)
 	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
-		if app.renderer.LinkCount() > 0 {
-			app.renderer.SelectNextLink()
-		} else {
-			app.renderer.ScrollBy(scrollStep)
-		}
+		app.renderer.ScrollBy(scrollStep)
+	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4:
+		app.renderer.SelectPrevLink()
+	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_KP_6:
+		app.renderer.SelectNextLink()
 	case sdl.SCANCODE_PAGEUP:
 		app.renderer.ScrollPageUp()
 	case sdl.SCANCODE_PAGEDOWN:
