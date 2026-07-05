@@ -29,7 +29,7 @@ type AtomLink struct {
 // AtomEntry represents a single entry in an Atom/OPDS catalog feed.
 type AtomEntry struct {
 	Title    string     `xml:"title"`
-	Language string     `xml:"http://purl.org/dc/terms/language"`
+	Language string     `xml:"http://purl.org/dc/terms/ language"`
 	Count    int        `xml:"http://purl.org/syndication/thread/1.0 count"`
 	Summary  string     `xml:"summary"`
 	Category string     `xml:"category"`

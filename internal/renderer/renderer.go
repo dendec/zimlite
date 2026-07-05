@@ -88,6 +88,7 @@ type Renderer struct {
 
 	baseFontSize        int
 	fontPath            string
+	docTitle            string
 	statusOverride      string
 	hasActiveAnimations bool
 }
@@ -252,6 +253,7 @@ func (r *Renderer) SetDocument(doc *document.Document) {
 	r.doc = doc
 	r.scrollY = 0
 	r.selectedLink = -1
+	r.docTitle = extractTitle(doc)
 	r.relayout()
 }
 
@@ -580,6 +582,18 @@ func (r *Renderer) Zoom(delta int) error {
 // SetStatusOverride sets a custom status bar message to override help legends.
 func (r *Renderer) SetStatusOverride(status string) {
 	r.statusOverride = status
+}
+
+func extractTitle(doc *document.Document) string {
+	for _, b := range doc.Blocks {
+		if h, ok := b.(*document.Heading); ok && h.Level == 1 {
+			if len(h.Content) > 45 {
+				return h.Content[:42] + "..."
+			}
+			return h.Content
+		}
+	}
+	return ""
 }
 
 func (r *Renderer) HasAnimations() bool {

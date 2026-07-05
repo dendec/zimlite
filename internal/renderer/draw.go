@@ -198,64 +198,107 @@ func (r *Renderer) renderStatusBar() {
 	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
 	r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: r.height - statusBarHeight, W: r.width, H: 1})
 
-	statusText := r.statusOverride
-	if statusText == "" {
-		statusText = r.computeStatusText()
+	font := r.fonts[FontBody].font
+	if font == nil {
+		return
 	}
 
-	font := r.fonts[FontBody].font
-	if font != nil && statusText != "" {
-		surf, err := font.RenderUTF8Blended(statusText, r.theme.TextColor)
-		if err == nil {
-			tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
-			surf.Free()
-			if err == nil {
-				_, _, tw, th, _ := tex.Query()
-				w, h := tw, th
-				maxWidth := r.width - 24
-				if w > maxWidth && maxWidth > 0 {
-					ratio := float64(maxWidth) / float64(w)
-					w = maxWidth
-					h = int32(float64(h) * ratio)
+	if r.statusOverride != "" {
+		r.renderStatusText(r.statusOverride, 12, r.width-24)
+		return
+	}
+
+	// Right: scroll% + link count
+	rightText := r.computeRightStatus()
+	if rightText == "" {
+		if r.textLines != nil {
+			r.renderStatusText("Article tree", 12, r.width-24)
+		}
+		return
+	}
+
+	rightW, _ := measureText(rightText, font, false, false)
+	gap := int32(24)
+	rightX := r.width - rightW - 12
+	availLeft := rightX - gap - 12
+	if availLeft < 20 {
+		availLeft = 0
+	}
+
+	leftText := r.docTitle
+	if leftText != "" {
+		leftW, _ := measureText(leftText, font, false, false)
+		if leftW > availLeft {
+			runeCount := len([]rune(leftText))
+			if runeCount > 0 {
+				for i := runeCount; i > 0; i-- {
+					try := string([]rune(leftText)[:i]) + "..."
+					tw, _ := measureText(try, font, false, false)
+					if tw <= availLeft {
+						leftText = try
+						break
+					}
 				}
-				r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: 12, Y: r.height - statusBarHeight + (statusBarHeight-h)/2, W: w, H: h})
-				tex.Destroy()
 			}
 		}
+		r.renderStatusText(leftText, 12, availLeft)
 	}
+
+	r.renderStatusText(rightText, rightX, rightW)
 }
 
-func (r *Renderer) computeStatusText() string {
-	if r.doc != nil {
-		vpH := r.height - statusBarHeight
-		totalH := r.layout.totalHeight
-		scrollPct := 0
-		if totalH > vpH {
-			maxScroll := totalH - vpH
-			scrollPct = int(float64(r.scrollY) / float64(maxScroll) * 100)
-			if scrollPct > 100 {
-				scrollPct = 100
-			}
-		} else {
+func (r *Renderer) computeRightStatus() string {
+	if r.doc == nil {
+		return ""
+	}
+
+	vpH := r.height - statusBarHeight
+	totalH := r.layout.totalHeight
+	scrollPct := 0
+	if totalH > vpH {
+		maxScroll := totalH - vpH
+		scrollPct = int(float64(r.scrollY) / float64(maxScroll) * 100)
+		if scrollPct > 100 {
 			scrollPct = 100
 		}
+	} else {
+		scrollPct = 100
+	}
 
-		linkCount := len(r.layout.links)
-		if linkCount > 0 {
-			sel := r.selectedLink + 1
-			if sel < 1 {
-				sel = 1
-			}
-			return fmt.Sprintf("%d%%  \u00b7  %d/%d", scrollPct, sel, linkCount)
+	linkCount := len(r.layout.links)
+	if linkCount > 0 {
+		sel := r.selectedLink + 1
+		if sel < 1 {
+			sel = 1
 		}
-		return fmt.Sprintf("%d%%", scrollPct)
+		return fmt.Sprintf("%d%%  \u00b7  %d/%d", scrollPct, sel, linkCount)
 	}
+	return fmt.Sprintf("%d%%", scrollPct)
+}
 
-	if r.textLines != nil {
-		return "Article tree"
+func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
+	if text == "" || maxW <= 0 {
+		return
 	}
-
-	return ""
+	font := r.fonts[FontBody].font
+	surf, err := font.RenderUTF8Blended(text, r.theme.TextColor)
+	if err != nil {
+		return
+	}
+	tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
+	surf.Free()
+	if err != nil {
+		return
+	}
+	_, _, tw, th, _ := tex.Query()
+	w, h := tw, th
+	if w > maxW {
+		ratio := float64(maxW) / float64(w)
+		w = maxW
+		h = int32(float64(h) * ratio)
+	}
+	r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: x, Y: r.height - statusBarHeight + (statusBarHeight-h)/2, W: w, H: h})
+	tex.Destroy()
 }
 
 func (r *Renderer) renderScrollbar() {

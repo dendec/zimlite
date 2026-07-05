@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	scrollStep     = 40
+	scrollStep      = 40
 	axisSensitivity = 16000
 )
 

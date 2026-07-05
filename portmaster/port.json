@@ -1,9 +1,21 @@
 {
-  "version": 2,
+  "version": 4,
   "name": "kiwix-sdl.zip",
   "items": [
     "Kiwix SDL.sh",
     "kiwix-sdl"
   ],
-  "items_opt": []
+  "items_opt": [],
+  "attr": {
+    "title": "Kiwix SDL",
+    "desc": "Offline Wikipedia reader for ZIM archives",
+    "porter": ["denis"],
+    "genres": ["utility"],
+    "rtr": true,
+    "exp": false,
+    "runtime": null,
+    "reqs": [],
+    "arch": ["aarch64"],
+    "image": {}
+  }
 }
