@@ -229,21 +229,10 @@ func (r *Renderer) renderStatusBar() {
 		leftW, _ := measureText(leftText, font, false, false, false)
 		if leftW > availLeft {
 			runes := []rune(leftText)
-			lo, hi := 0, len(runes)
-			for lo < hi {
-				mid := (lo + hi + 1) / 2
-				try := string(runes[:mid]) + "..."
-				tw, _ := measureText(try, font, false, false, false)
-				if tw <= availLeft {
-					lo = mid
-				} else {
-					hi = mid - 1
-				}
-			}
-			if lo > 0 {
-				leftText = string(runes[:lo]) + "..."
-			} else {
-				leftText = "..."
+			dotW, _ := measureText("...", font, false, false, false)
+			n := truncateRunesToWidth(runes, font, availLeft-dotW)
+			if n > 0 && n < len(runes) {
+				leftText = string(runes[:n]) + "..."
 			}
 		}
 		r.renderStatusText(leftText, 12, availLeft)
@@ -352,7 +341,7 @@ func (r *Renderer) renderEmojiTexture(line lineEntry) *sdl.Texture {
 		sz = 4
 	}
 	ek := emojiCacheKey{hex: line.emojiHex, size: sz}
-	tex := r.emojiCache[ek]
+	tex := r.emojiCache.Get(ek)
 	if tex != nil {
 		return tex
 	}
@@ -372,7 +361,7 @@ func (r *Renderer) renderTextTexture(line lineEntry) *sdl.Texture {
 		text: line.text, fontIdx: line.fontIdx, color: line.color,
 		isBold: line.isBold, isItalic: line.isItalic, isCode: line.isCode,
 	}
-	tex := r.textureCache[key]
+	tex := r.textCache.Get(key)
 	if tex != nil {
 		return tex
 	}
@@ -385,14 +374,7 @@ func (r *Renderer) renderTextTexture(line lineEntry) *sdl.Texture {
 	if font == nil {
 		return nil
 	}
-	style := ttf.STYLE_NORMAL
-	if line.isBold && line.isItalic {
-		style = ttf.STYLE_BOLD | ttf.STYLE_ITALIC
-	} else if line.isBold {
-		style = ttf.STYLE_BOLD
-	} else if line.isItalic {
-		style = ttf.STYLE_ITALIC
-	}
+	style := fontStyle(line.isBold, line.isItalic)
 	oldStyle := font.GetStyle()
 	font.SetStyle(style)
 	surf, err := font.RenderUTF8Blended(line.text, line.color)
@@ -405,11 +387,7 @@ func (r *Renderer) renderTextTexture(line lineEntry) *sdl.Texture {
 	if err != nil {
 		return nil
 	}
-	r.textureCache[key] = tex
-	r.textureCacheOrder = append(r.textureCacheOrder, key)
-	if len(r.textureCache) > maxTextureCacheEntries {
-		r.evictTextureCache()
-	}
+	r.textCache.Set(key, tex)
 	return tex
 }
 

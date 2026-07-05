@@ -12,11 +12,79 @@ const (
 )
 
 type InputController struct {
-	app *App
+	app        *App
+	globalKeys map[sdl.Scancode]func()
+	docKeys    map[sdl.Scancode]func()
+	treeKeys   map[sdl.Scancode]func()
 }
 
 func NewInputController(app *App) *InputController {
-	return &InputController{app: app}
+	c := &InputController{app: app}
+	c.globalKeys = map[sdl.Scancode]func(){
+		sdl.SCANCODE_Q:         func() { app.running.Store(false) },
+		sdl.SCANCODE_H:         func() { app.goHome() },
+		sdl.SCANCODE_M:         func() { _ = app.loader.OpenFile("virtual:menu") },
+		sdl.SCANCODE_RETURN2:   func() { app.toggleMode() },
+		sdl.SCANCODE_T:         func() { app.toggleMode() },
+		sdl.SCANCODE_C:         func() { app.viewer.ToggleTheme() },
+		sdl.SCANCODE_EQUALS:    func() { _ = app.viewer.Zoom(1) },
+		sdl.SCANCODE_KP_PLUS:   func() { _ = app.viewer.Zoom(1) },
+		sdl.SCANCODE_MINUS:     func() { _ = app.viewer.Zoom(-1) },
+		sdl.SCANCODE_KP_MINUS:  func() { _ = app.viewer.Zoom(-1) },
+		sdl.SCANCODE_ESCAPE:    func() { app.goBack() },
+		sdl.SCANCODE_BACKSPACE: func() { app.goBack() },
+	}
+	c.docKeys = map[sdl.Scancode]func(){
+		sdl.SCANCODE_UP:       func() { app.scroller.ScrollBy(-scrollStep) },
+		sdl.SCANCODE_W:        func() { app.scroller.ScrollBy(-scrollStep) },
+		sdl.SCANCODE_KP_8:     func() { app.scroller.ScrollBy(-scrollStep) },
+		sdl.SCANCODE_DOWN:     func() { app.scroller.ScrollBy(scrollStep) },
+		sdl.SCANCODE_S:        func() { app.scroller.ScrollBy(scrollStep) },
+		sdl.SCANCODE_KP_2:     func() { app.scroller.ScrollBy(scrollStep) },
+		sdl.SCANCODE_LEFT:     func() { app.links.SelectPrevLink() },
+		sdl.SCANCODE_A:        func() { app.links.SelectPrevLink() },
+		sdl.SCANCODE_KP_4:     func() { app.links.SelectPrevLink() },
+		sdl.SCANCODE_RIGHT:    func() { app.links.SelectNextLink() },
+		sdl.SCANCODE_D:        func() { app.links.SelectNextLink() },
+		sdl.SCANCODE_KP_6:     func() { app.links.SelectNextLink() },
+		sdl.SCANCODE_PAGEUP:   func() { app.scroller.ScrollPageUp() },
+		sdl.SCANCODE_PAGEDOWN: func() { app.scroller.ScrollPageDown() },
+		sdl.SCANCODE_SPACE:    func() { app.scroller.ScrollPageDown() },
+		sdl.SCANCODE_RETURN:   func() { c.openSelectedLink() },
+		sdl.SCANCODE_KP_ENTER: func() { c.openSelectedLink() },
+	}
+	c.treeKeys = map[sdl.Scancode]func(){
+		sdl.SCANCODE_UP:       func() { app.navState.MoveUp() },
+		sdl.SCANCODE_W:        func() { app.navState.MoveUp() },
+		sdl.SCANCODE_KP_8:     func() { app.navState.MoveUp() },
+		sdl.SCANCODE_DOWN:     func() { app.navState.MoveDown() },
+		sdl.SCANCODE_S:        func() { app.navState.MoveDown() },
+		sdl.SCANCODE_KP_2:     func() { app.navState.MoveDown() },
+		sdl.SCANCODE_RIGHT:    func() { c.treeActionRight() },
+		sdl.SCANCODE_D:        func() { c.treeActionRight() },
+		sdl.SCANCODE_KP_6:     func() { c.treeActionRight() },
+		sdl.SCANCODE_LEFT:     func() { app.navState.ActionLeft() },
+		sdl.SCANCODE_A:        func() { app.navState.ActionLeft() },
+		sdl.SCANCODE_KP_4:     func() { app.navState.ActionLeft() },
+		sdl.SCANCODE_RETURN:   func() { c.handleTreeSelection() },
+		sdl.SCANCODE_KP_ENTER: func() { c.handleTreeSelection() },
+	}
+	return c
+}
+
+func (c *InputController) openSelectedLink() {
+	url := c.app.links.SelectedLinkURL()
+	if url != "" {
+		c.app.loader.NavigateLink(url)
+	}
+}
+
+func (c *InputController) treeActionRight() {
+	if c.app.navState.CursorExpandable() {
+		c.app.navState.ActionRight()
+	} else {
+		c.handleTreeSelection()
+	}
 }
 
 func (c *InputController) ProcessEvent(event sdl.Event) {
@@ -32,38 +100,24 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 		sc := e.Keysym.Scancode
 		debugEvent("KEY", int(sc), 0)
 
-		// Global keys (work in both modes).
-		switch sc {
-		case sdl.SCANCODE_Q:
-			app.running.Store(false)
-			return
-		case sdl.SCANCODE_H: // H = go home
-			app.goHome()
-			return
-		case sdl.SCANCODE_M: // M = open file menu
-			_ = app.loader.OpenFile("virtual:menu")
-			return
-		case sdl.SCANCODE_RETURN2, sdl.SCANCODE_T: // T = toggle tree mode
-			app.toggleMode()
-			return
-		case sdl.SCANCODE_C: // C = toggle dark/light theme
-			app.viewer.ToggleTheme()
-			return
-		case sdl.SCANCODE_EQUALS, sdl.SCANCODE_KP_PLUS: // + = zoom in
-			_ = app.viewer.Zoom(1)
-			return
-		case sdl.SCANCODE_MINUS, sdl.SCANCODE_KP_MINUS: // - = zoom out
-			_ = app.viewer.Zoom(-1)
-			return
-		case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
-			// Global back — also works as doc back.
+		if fn, ok := c.globalKeys[sc]; ok {
+			fn()
+			if sc != sdl.SCANCODE_ESCAPE && sc != sdl.SCANCODE_BACKSPACE {
+				return
+			}
 		}
 
-		// Mode-specific handling.
 		if app.mode == modeTree {
-			c.processTreeKey(sc)
+			if fn, ok := c.treeKeys[sc]; ok {
+				fn()
+			}
 		} else {
-			c.processDocKey(sc)
+			if fn, ok := c.docKeys[sc]; ok {
+				fn()
+			}
+		}
+		if app.mode == modeTree {
+			app.renderTree()
 		}
 
 	case *sdl.ControllerAxisEvent, *sdl.ControllerButtonEvent:
@@ -119,71 +173,6 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 	}
 }
 
-func (c *InputController) processTreeKey(sc sdl.Scancode) {
-	app := c.app
-	switch sc {
-	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
-		app.navState.MoveUp()
-	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
-		app.navState.MoveDown()
-	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_D, sdl.SCANCODE_KP_6:
-		if app.navState.CursorExpandable() {
-			app.navState.ActionRight()
-		} else {
-			c.handleTreeSelection()
-		}
-	case sdl.SCANCODE_LEFT, sdl.SCANCODE_A, sdl.SCANCODE_KP_4:
-		app.navState.ActionLeft()
-	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
-		if app.navState.Cursor != nil {
-			slog.Debug("Tree navigation enter", "label", app.navState.Cursor.Label(), "isLeaf", app.navState.CursorIsLeaf(), "path", app.navState.CursorPath())
-		}
-		c.handleTreeSelection()
-	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
-		app.goBack()
-	}
-	if app.mode == modeTree {
-		app.renderTree()
-	}
-}
-
-func (c *InputController) processDocKey(sc sdl.Scancode) {
-	app := c.app
-	switch sc {
-	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
-		app.scroller.ScrollBy(-scrollStep)
-	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
-		app.scroller.ScrollBy(scrollStep)
-	case sdl.SCANCODE_LEFT, sdl.SCANCODE_A, sdl.SCANCODE_KP_4:
-		app.links.SelectPrevLink()
-	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_D, sdl.SCANCODE_KP_6:
-		app.links.SelectNextLink()
-	case sdl.SCANCODE_PAGEUP:
-		app.scroller.ScrollPageUp()
-	case sdl.SCANCODE_PAGEDOWN, sdl.SCANCODE_SPACE:
-		app.scroller.ScrollPageDown()
-	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
-		url := app.links.SelectedLinkURL()
-		if url != "" {
-			app.loader.NavigateLink(url)
-		}
-	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
-		app.goBack()
-	}
-}
-
-func (c *InputController) processJoyA() {
-	app := c.app
-	if app.mode == modeTree {
-		c.handleTreeSelection()
-	} else {
-		url := app.links.SelectedLinkURL()
-		if url != "" {
-			app.loader.NavigateLink(url)
-		}
-	}
-}
-
 func (c *InputController) processJoyB() {
 	c.app.goBack()
 }
@@ -192,7 +181,11 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 	app := c.app
 	switch action {
 	case ActionOpenEnter:
-		c.processJoyA()
+		if app.mode == modeTree {
+			c.handleTreeSelection()
+		} else {
+			c.openSelectedLink()
+		}
 	case ActionBack:
 		c.processJoyB()
 	case ActionScrollUp:

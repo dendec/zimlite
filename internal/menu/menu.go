@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -123,7 +124,7 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, err error) {
 		name := entry.Name()
 		ext := strings.ToLower(filepath.Ext(name))
 
-		if !contains(zimExtensions, ext) && !contains(docExtensions, ext) {
+		if !slices.Contains(zimExtensions, ext) && !slices.Contains(docExtensions, ext) {
 			continue
 		}
 
@@ -140,9 +141,9 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, err error) {
 			Size:        sizeStr,
 		}
 
-		if contains(zimExtensions, ext) {
+		if slices.Contains(zimExtensions, ext) {
 			zims = append(zims, fe)
-		} else if contains(docExtensions, ext) {
+		} else if slices.Contains(docExtensions, ext) {
 			mds = append(mds, fe)
 		}
 	}
@@ -154,15 +155,6 @@ func truncateName(name string, maxLen int) string {
 		return name[:maxLen-3] + "..."
 	}
 	return name
-}
-
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 // CheckInternet pings the Kiwix library catalog and returns true if reachable.

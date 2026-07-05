@@ -17,21 +17,37 @@ type ZimReader interface {
 	ResolveResource(rawURL string) ([]byte, string, error)
 }
 
-// DocViewer is the interface for core rendering operations.
-type DocViewer interface {
+// DocRenderer handles document rendering and display.
+type DocRenderer interface {
 	SetDocument(doc *document.Document)
 	SetResourceLoader(loader renderer.ResourceLoader)
 	Relayout()
 	Render()
 	ToggleTheme()
 	Zoom(delta int) error
-	SetStatusOverride(status string)
 	SetHasTree(has bool)
 	FindAnchorY(anchor string) (int32, bool)
 	HasAnimations() bool
+}
+
+// DocInput handles mouse and touch input on the document view.
+type DocInput interface {
 	HandleMouseMove(mx, my int32)
 	HandleMouseLeave()
 	HandleTouch()
+}
+
+// StatusBar controls the status bar overlay.
+type StatusBar interface {
+	SetStatusOverride(status string)
+}
+
+// DocViewer is the combined interface for backward compatibility.
+// Prefer the narrower interfaces above for new code.
+type DocViewer interface {
+	DocRenderer
+	DocInput
+	StatusBar
 }
 
 // LinkBrowser is the interface for navigating hyperlinks in a document.

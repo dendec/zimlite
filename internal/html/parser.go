@@ -175,22 +175,13 @@ func extractDocMeta(root *html.Node) ([]headingMeta, []anchorInfo) {
 	return headings, anchors
 }
 
+var headingLevels = map[string]int{
+	"h1": 1, "h2": 2, "h3": 3,
+	"h4": 4, "h5": 5, "h6": 6,
+}
+
 func headingLevel(tag string) int {
-	switch tag {
-	case "h1":
-		return 1
-	case "h2":
-		return 2
-	case "h3":
-		return 3
-	case "h4":
-		return 4
-	case "h5":
-		return 5
-	case "h6":
-		return 6
-	}
-	return 0
+	return headingLevels[tag]
 }
 
 func elementAnchorID(n *html.Node) string {

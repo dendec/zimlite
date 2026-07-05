@@ -18,6 +18,7 @@ import (
 	"unsafe"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/util"
 )
 
 // Reader wraps a libzim Archive handle.
@@ -148,8 +149,7 @@ func (r *Reader) GetArticle(path string) ([]byte, string, error) {
 // ResolveArticle tries to resolve an article by URL and referrer.
 func (r *Reader) ResolveArticle(rawURL string, referrer string) ([]byte, string, error) {
 	// Skip external URLs.
-	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") ||
-		strings.HasPrefix(rawURL, "//") {
+	if util.IsExternalURL(rawURL) {
 		return nil, "", fmt.Errorf("external URL: %s", rawURL)
 	}
 
@@ -215,24 +215,7 @@ func (r *Reader) GetResource(path string) ([]byte, string, error) {
 	}
 	defer C.zim_entry_free(entry)
 
-	item := C.zim_entry_get_item(entry, 1)
-	if item == nil {
-		return nil, "", errors.New("cannot get item")
-	}
-	defer C.zim_item_free(item)
-
-	cMime := C.zim_item_get_mimetype(item)
-	mime := C.GoString(cMime)
-	C.free(unsafe.Pointer(cMime))
-
-	var size C.int
-	cData := C.zim_item_get_content(item, &size)
-	if cData == nil {
-		return nil, "", errors.New("empty content")
-	}
-	data := C.GoBytes(unsafe.Pointer(cData), size)
-	C.free(unsafe.Pointer(cData))
-	return data, mime, nil
+	return r.entryToData(entry)
 }
 
 // ResolveResource searches namespaces to resolve a relative resource path.

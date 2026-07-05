@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/veandco/go-sdl2/ttf"
 )
 
 // --- Layout engine ---
@@ -43,6 +44,7 @@ func (r *Renderer) relayout() {
 }
 
 type layoutState struct {
+	document.BaseBlockVisitor
 	r    *Renderer
 	y    int32
 	maxW int32
@@ -105,6 +107,43 @@ func (s *layoutState) VisitList(l *document.List) {
 	s.y += s.r.blockSpacing
 }
 
+// wrapCodeLine splits a code line into chunks that fit within maxW pixels.
+// Each chunk is split at word boundaries (space/tab/dash/comma) when possible.
+func wrapCodeLine(text string, font *ttf.Font, maxW int32) []string {
+	tw, _ := measureText(text, font, false, false, false)
+	if tw <= maxW {
+		return []string{text}
+	}
+
+	var lines []string
+	textLeft := text
+	for len(textLeft) > 0 {
+		tw, _ = measureText(textLeft, font, false, false, false)
+		if tw <= maxW {
+			lines = append(lines, textLeft)
+			break
+		}
+
+		runes := []rune(textLeft)
+		fitCount := truncateRunesToWidth(runes, font, maxW)
+
+		breakAt := fitCount
+		for i := fitCount - 1; i > 0; i-- {
+			if runes[i] == ' ' || runes[i] == '\t' || runes[i] == '-' || runes[i] == ',' {
+				breakAt = i + 1
+				break
+			}
+		}
+		if breakAt > 0 && breakAt < fitCount && breakAt > fitCount/2 {
+			fitCount = breakAt
+		}
+
+		lines = append(lines, string(runes[:fitCount]))
+		textLeft = string(runes[fitCount:])
+	}
+	return lines
+}
+
 func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	startCodeY := s.y
 	fontMono := s.r.fonts[FontMono].font
@@ -142,43 +181,8 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 			continue
 		}
 
-		textLeft := cl
-		for len(textLeft) > 0 {
-			tw, _ := measureText(textLeft, fontMono, false, false, false)
-			if tw <= maxCodeW {
-				addLine(textLeft)
-				break
-			}
-
-			runes := []rune(textLeft)
-			lo, hi := 0, len(runes)
-			for lo < hi {
-				mid := (lo + hi + 1) / 2
-				w, _ := measureText(string(runes[:mid]), fontMono, false, false, false)
-				if w <= maxCodeW {
-					lo = mid
-				} else {
-					hi = mid - 1
-				}
-			}
-			fitCount := lo
-			if fitCount < 1 {
-				fitCount = 1
-			}
-
-			breakAt := fitCount
-			for i := fitCount - 1; i > 0; i-- {
-				if runes[i] == ' ' || runes[i] == '\t' || runes[i] == '-' || runes[i] == ',' {
-					breakAt = i + 1
-					break
-				}
-			}
-			if breakAt > 0 && breakAt < fitCount && breakAt > fitCount/2 {
-				fitCount = breakAt
-			}
-
-			addLine(string(runes[:fitCount]))
-			textLeft = string(runes[fitCount:])
+		for _, line := range wrapCodeLine(cl, fontMono, maxCodeW) {
+			addLine(line)
 		}
 	}
 
@@ -231,6 +235,19 @@ func (s *layoutState) VisitLink(l *document.Link) {
 	s.y = s.r.layoutInlines(inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "")
 }
 
+func scaleToFit(imgW, imgH, maxW, maxH int32) (int32, int32) {
+	scaleW := float64(maxW) / float64(imgW)
+	scaleH := float64(maxH) / float64(imgH)
+	scale := scaleW
+	if scaleH < scale {
+		scale = scaleH
+	}
+	if scale > 1.0 {
+		scale = 1.0
+	}
+	return int32(float64(imgW) * scale), int32(float64(imgH) * scale)
+}
+
 func (s *layoutState) VisitImage(i *document.Image) {
 	alt := i.Alt
 	if alt == "" {
@@ -238,24 +255,12 @@ func (s *layoutState) VisitImage(i *document.Image) {
 	}
 
 	if imgW, imgH, ok := s.r.imgManager.GetDimensions(i.URL); ok && imgW > 0 && imgH > 0 {
-		// Restrict image to half the screen width/height, but respect maxW
-		maxImgW := float64(s.r.width) / 2.0
-		if float64(s.maxW) < maxImgW {
-			maxImgW = float64(s.maxW)
+		maxImgW := int32(float64(s.r.width) / 2.0)
+		if s.maxW < maxImgW {
+			maxImgW = s.maxW
 		}
-		maxImgH := float64(s.r.height) / 2.0
-
-		scaleW := maxImgW / float64(imgW)
-		scaleH := maxImgH / float64(imgH)
-		scale := scaleW
-		if scaleH < scale {
-			scale = scaleH
-		}
-		if scale > 1.0 {
-			scale = 1.0 // don't upscale
-		}
-		targetW := int32(float64(imgW) * scale)
-		targetH := int32(float64(imgH) * scale)
+		maxImgH := int32(float64(s.r.height) / 2.0)
+		targetW, targetH := scaleToFit(imgW, imgH, maxImgW, maxImgH)
 
 		s.r.layout.imageEntries = append(s.r.layout.imageEntries, imageEntry{
 			x:   s.r.marginX + (s.maxW-targetW)/2,
@@ -430,27 +435,108 @@ func (r *Renderer) measureInlinesWidth(inlines []document.Inline, fidx FontKind)
 	return maxW
 }
 
+func (s *layoutState) flushInlineLine(
+	lineWords []document.Word, isFirstLine bool,
+	fidx FontKind, textColor, linkColor sdlColor,
+	indentX int32, prefix *string, y *int32,
+	v *document.InlineWordVisitor, activeLinks map[int]int,
+) {
+	if len(lineWords) == 0 && *prefix == "" {
+		return
+	}
+
+	currX := s.r.marginX + indentX
+
+	if isFirstLine && *prefix != "" {
+		pFont := s.r.fonts[fidx].font
+		pw, ph := measureText(*prefix, pFont, false, false, false)
+		s.r.layout.lines = append(s.r.layout.lines, lineEntry{
+			text: *prefix, fontIdx: fidx, color: textColor,
+			x: currX, y: *y, w: pw, h: ph,
+		})
+		currX += pw
+		*prefix = ""
+	}
+
+	var maxH int32
+	for _, w := range lineWords {
+		if w.PixH > maxH {
+			maxH = w.PixH
+		}
+	}
+	if maxH == 0 {
+		maxH = v.SpaceH
+	}
+
+	for _, w := range lineWords {
+		if w.Text == "" && !w.IsImage && !w.IsEmoji {
+			continue
+		}
+
+		wordY := *y + (maxH - w.PixH)
+
+		if w.IsImage {
+			s.r.layout.imageEntries = append(s.r.layout.imageEntries, imageEntry{
+				x: currX, y: wordY, w: w.PixW, h: w.PixH, url: w.ImageURL,
+			})
+		} else if w.IsEmoji {
+			wColor := textColor
+			if w.LinkID != 0 {
+				wColor = linkColor
+			}
+			s.r.layout.lines = append(s.r.layout.lines, lineEntry{
+				text: w.Text, fontIdx: fidx, color: wColor,
+				x: currX, y: wordY, w: w.PixW, h: w.PixH,
+				isEmoji: true, emojiHex: w.EmojiHex,
+			})
+		} else {
+			wColor := textColor
+			if w.LinkID != 0 {
+				wColor = linkColor
+			}
+			s.r.layout.lines = append(s.r.layout.lines, lineEntry{
+				text: w.Text, fontIdx: fidx, color: wColor,
+				x: currX, y: wordY, w: w.PixW, h: w.PixH,
+				isBold: w.IsBold, isItalic: w.IsItalic, isCode: w.IsCode,
+			})
+			if w.IsCode {
+				s.r.layout.codeSpans = append(s.r.layout.codeSpans, codeSpanRange{
+					x: currX - 2, y: wordY - 2,
+					w: w.PixW + 4, h: w.PixH + 4,
+				})
+			}
+		}
+
+		if w.LinkID != 0 {
+			idx, ok := activeLinks[w.LinkID]
+			if !ok {
+				idx = len(s.r.layout.links)
+				s.r.layout.links = append(s.r.layout.links, linkEntry{
+					url: v.LinkURLs[w.LinkID],
+				})
+				activeLinks[w.LinkID] = idx
+			}
+			rect := sdlRect{X: currX, Y: wordY, W: w.PixW, H: w.PixH}
+			s.r.layout.links[idx].rects = append(s.r.layout.links[idx].rects, rect)
+		}
+
+		currX += w.PixW
+	}
+
+	*y += maxH + s.r.lineSpacing
+}
+
 func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 	textColor, linkColor sdlColor, maxW int32, startY int32, indentX int32, prefix string) int32 {
 
 	measureImg := func(url string) (int32, int32) {
 		if w, h, ok := r.imgManager.GetDimensions(url); ok && w > 0 && h > 0 {
-			maxImgW := float64(r.width) / 2.0
-			if float64(maxW) < maxImgW {
-				maxImgW = float64(maxW)
+			maxImgW := int32(float64(r.width) / 2.0)
+			if maxW < maxImgW {
+				maxImgW = maxW
 			}
-			maxImgH := float64(r.height) / 2.0
-
-			scaleW := maxImgW / float64(w)
-			scaleH := maxImgH / float64(h)
-			scale := scaleW
-			if scaleH < scale {
-				scale = scaleH
-			}
-			if scale > 1.0 {
-				scale = 1.0
-			}
-			return int32(float64(w) * scale), int32(float64(h) * scale)
+			maxImgH := int32(float64(r.height) / 2.0)
+			return scaleToFit(w, h, maxImgW, maxImgH)
 		}
 		return 0, 0
 	}
@@ -458,98 +544,17 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 	v := document.NewInlineWordVisitor(&sdlFont{r: r, baseIdx: fidx}, measureImg)
 	document.VisitInlines(inlines, v)
 
+	ls := &layoutState{r: r}
 	y := startY
 	var lineWords []document.Word
 	var lineWidth int32
 	activeLinks := make(map[int]int)
 
-	flushLine := func(isFirstLine bool) {
+	flush := func(isFirstLine bool) {
 		if len(lineWords) == 0 && prefix == "" {
 			return
 		}
-
-		currX := r.marginX + indentX
-
-		if isFirstLine && prefix != "" {
-			pFont := r.fonts[fidx].font
-			pw, ph := measureText(prefix, pFont, false, false, false)
-			r.layout.lines = append(r.layout.lines, lineEntry{
-				text: prefix, fontIdx: fidx, color: textColor,
-				x: currX, y: y, w: pw, h: ph,
-			})
-			currX += pw
-			prefix = "" // clear so it only draws on first line
-		}
-
-		var maxH int32
-		for _, w := range lineWords {
-			if w.PixH > maxH {
-				maxH = w.PixH
-			}
-		}
-		if maxH == 0 {
-			maxH = v.SpaceH
-		}
-
-		for _, w := range lineWords {
-			if w.Text == "" && !w.IsImage && !w.IsEmoji {
-				continue
-			}
-
-			wordY := y + (maxH - w.PixH)
-
-			if w.IsImage {
-				r.layout.imageEntries = append(r.layout.imageEntries, imageEntry{
-					x: currX, y: wordY, w: w.PixW, h: w.PixH, url: w.ImageURL,
-				})
-			} else if w.IsEmoji {
-				wColor := textColor
-				if w.LinkID != 0 {
-					wColor = linkColor
-				}
-
-				r.layout.lines = append(r.layout.lines, lineEntry{
-					text: w.Text, fontIdx: fidx, color: wColor,
-					x: currX, y: wordY, w: w.PixW, h: w.PixH,
-					isEmoji: true, emojiHex: w.EmojiHex,
-				})
-			} else {
-				wColor := textColor
-				if w.LinkID != 0 {
-					wColor = linkColor
-				}
-
-				r.layout.lines = append(r.layout.lines, lineEntry{
-					text: w.Text, fontIdx: fidx, color: wColor,
-					x: currX, y: wordY, w: w.PixW, h: w.PixH,
-					isBold: w.IsBold, isItalic: w.IsItalic, isCode: w.IsCode,
-				})
-
-				if w.IsCode {
-					r.layout.codeSpans = append(r.layout.codeSpans, codeSpanRange{
-						x: currX - 2, y: wordY - 2,
-						w: w.PixW + 4, h: w.PixH + 4,
-					})
-				}
-			}
-
-			if w.LinkID != 0 {
-				idx, ok := activeLinks[w.LinkID]
-				if !ok {
-					idx = len(r.layout.links)
-					r.layout.links = append(r.layout.links, linkEntry{
-						url: v.LinkURLs[w.LinkID],
-					})
-					activeLinks[w.LinkID] = idx
-				}
-				rect := sdlRect{X: currX, Y: wordY, W: w.PixW, H: w.PixH}
-				r.layout.links[idx].rects = append(r.layout.links[idx].rects, rect)
-			}
-
-			currX += w.PixW
-		}
-
-		y += maxH + r.lineSpacing
+		ls.flushInlineLine(lineWords, isFirstLine, fidx, textColor, linkColor, indentX, &prefix, &y, v, activeLinks)
 		lineWords = nil
 		lineWidth = 0
 	}
@@ -557,7 +562,7 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 	isFirst := true
 	for _, w := range v.Words {
 		if w.IsHardBreak {
-			flushLine(isFirst)
+			flush(isFirst)
 			isFirst = false
 			continue
 		}
@@ -566,7 +571,7 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 		}
 
 		if lineWidth+w.PixW > maxW && len(lineWords) > 0 {
-			flushLine(isFirst)
+			flush(isFirst)
 			isFirst = false
 			if w.IsSpace {
 				continue
@@ -577,6 +582,6 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 		lineWidth += w.PixW
 	}
 
-	flushLine(isFirst)
+	flush(isFirst)
 	return y
 }

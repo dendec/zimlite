@@ -66,10 +66,6 @@ func (r *Renderer) createEmojiTexture(img *image.RGBA, hex string, size int32) *
 	tex.SetBlendMode(sdl.BLENDMODE_BLEND)
 	tex.Update(nil, unsafe.Pointer(&img.Pix[0]), img.Stride)
 	key := emojiCacheKey{hex: hex, size: size}
-	r.emojiCache[key] = tex
-	r.emojiCacheOrder = append(r.emojiCacheOrder, key)
-	if len(r.emojiCache) > maxEmojiCacheEntries {
-		r.evictEmojiCache()
-	}
+	r.emojiCache.Set(key, tex)
 	return tex
 }

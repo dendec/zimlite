@@ -19,18 +19,24 @@ func headingFontIdx(level int) FontKind {
 	return FontBody
 }
 
+func fontStyle(isBold, isItalic bool) int {
+	if isBold && isItalic {
+		return ttf.STYLE_BOLD | ttf.STYLE_ITALIC
+	}
+	if isBold {
+		return ttf.STYLE_BOLD
+	}
+	if isItalic {
+		return ttf.STYLE_ITALIC
+	}
+	return ttf.STYLE_NORMAL
+}
+
 func measureText(text string, font *ttf.Font, isBold, isItalic, isCode bool) (int32, int32) {
 	if font == nil {
 		return 0, 0
 	}
-	style := ttf.STYLE_NORMAL
-	if isBold && isItalic {
-		style = ttf.STYLE_BOLD | ttf.STYLE_ITALIC
-	} else if isBold {
-		style = ttf.STYLE_BOLD
-	} else if isItalic {
-		style = ttf.STYLE_ITALIC
-	}
+	style := fontStyle(isBold, isItalic)
 	oldStyle := font.GetStyle()
 	font.SetStyle(style)
 	defer font.SetStyle(oldStyle)
@@ -50,6 +56,25 @@ func measureText(text string, font *ttf.Font, isBold, isItalic, isCode bool) (in
 		return 0, int32(font.Height())
 	}
 	return int32(w), int32(h)
+}
+
+// truncateRunesToWidth returns the largest rune count such that
+// text[:n] fits within maxW pixels. Always returns ≥ 1.
+func truncateRunesToWidth(runes []rune, font *ttf.Font, maxW int32) int {
+	lo, hi := 0, len(runes)
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		w, _ := measureText(string(runes[:mid]), font, false, false, false)
+		if w <= maxW {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	if lo < 1 {
+		lo = 1
+	}
+	return lo
 }
 
 func loadFonts(baseSize int, fontPath string) ([fontCount]fontSlot, error) {

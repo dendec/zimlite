@@ -277,12 +277,7 @@ func (m *ImageManager) evictTextures() {
 }
 
 func (m *ImageManager) ClearCache() {
-	for k, tex := range m.textures {
-		if tex != nil {
-			tex.Destroy()
-		}
-		delete(m.textures, k)
-	}
+	destroyTextures(m.textures)
 	m.textureOrder = nil
 	for k, anim := range m.animated {
 		if anim.Texture != nil {

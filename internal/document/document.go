@@ -168,6 +168,21 @@ type BlockVisitor interface {
 	VisitAnchor(a *Anchor)
 }
 
+// BaseBlockVisitor provides no-op defaults for all BlockVisitor methods.
+// Embed it and override only the methods you need.
+type BaseBlockVisitor struct{}
+
+func (*BaseBlockVisitor) VisitHeading(h *Heading)             {}
+func (*BaseBlockVisitor) VisitParagraph(p *Paragraph)         {}
+func (*BaseBlockVisitor) VisitList(l *List)                   {}
+func (*BaseBlockVisitor) VisitCodeBlock(c *CodeBlock)         {}
+func (*BaseBlockVisitor) VisitThematicBreak(t *ThematicBreak) {}
+func (*BaseBlockVisitor) VisitBlockquote(b *Blockquote)       {}
+func (*BaseBlockVisitor) VisitLink(l *Link)                   {}
+func (*BaseBlockVisitor) VisitImage(i *Image)                 {}
+func (*BaseBlockVisitor) VisitTable(t *Table)                 {}
+func (*BaseBlockVisitor) VisitAnchor(a *Anchor)               {}
+
 // VisitBlocks dispatches each block to the visitor.
 func VisitBlocks(blocks []Block, v BlockVisitor) {
 	for _, b := range blocks {

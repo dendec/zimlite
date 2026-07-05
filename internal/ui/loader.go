@@ -18,6 +18,7 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/menu"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/util"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -25,16 +26,16 @@ import (
 type VirtualPageGenerator func(path string, loader *DocumentLoader) (*document.Document, error)
 
 type DocumentLoader struct {
-	app               *App
+	host              LoaderHost
 	docCache          map[string]*document.Document
 	zimReader         ZimReader
 	internetAvailable atomic.Bool
 	virtualPages      map[string]VirtualPageGenerator
 }
 
-func NewDocumentLoader(app *App) *DocumentLoader {
+func NewDocumentLoader(host LoaderHost) *DocumentLoader {
 	l := &DocumentLoader{
-		app:          app,
+		host:         host,
 		docCache:     make(map[string]*document.Document),
 		virtualPages: make(map[string]VirtualPageGenerator),
 	}
@@ -63,7 +64,7 @@ func (l *DocumentLoader) shutdown() {
 		l.zimReader.Close()
 		l.zimReader = nil
 	}
-	l.app.navState = nil
+	l.host.navStateClear()
 }
 
 func (l *DocumentLoader) checkInternetAsync() {
@@ -71,10 +72,10 @@ func (l *DocumentLoader) checkInternetAsync() {
 		hasInternet := menu.CheckInternet()
 		if hasInternet != l.internetAvailable.Load() {
 			l.internetAvailable.Store(hasInternet)
-			if l.app.navigator.Current() == "virtual:menu" {
+			if l.host.getNavigator().Current() == "virtual:menu" {
 				if doc, err := menu.FileSelector(hasInternet); err == nil {
-					l.app.viewer.SetDocument(doc)
-					l.app.viewer.Relayout()
+					l.host.getViewer().SetDocument(doc)
+					l.host.getViewer().Relayout()
 					_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 				}
 			}
@@ -84,7 +85,6 @@ func (l *DocumentLoader) checkInternetAsync() {
 
 // OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim, and virtual:menu.
 func (l *DocumentLoader) OpenFile(pathStr string) error {
-	app := l.app
 	var absPath string
 	var isZIM bool
 	var doc *document.Document
@@ -147,10 +147,10 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 		mainPath := l.zimReader.MainPagePath()
 		navKey := "zim:" + mainPath
 		l.docCache[navKey] = doc
-		app.viewer.SetHasTree(l.zimReader.ArticleCount() > 1)
-		app.showDocument(doc, navKey)
+		l.host.getViewer().SetHasTree(l.zimReader.ArticleCount() > 1)
+		l.host.showDocument(doc, navKey)
 	} else {
-		app.showDocument(doc, absPath)
+		l.host.showDocument(doc, absPath)
 	}
 
 	slog.Info("Successfully loaded document", "path", pathStr, "isZIM", isZIM)
@@ -161,7 +161,7 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 // always resolves relative paths against the current navigator location, so it
 // remains correct across navigations without being recreated per OpenFile.
 func (l *DocumentLoader) loadResource(rawURL string) ([]byte, error) {
-	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+	if util.IsExternalURL(rawURL) {
 		client := storage.HTTPClient(10 * time.Second)
 		resp, err := client.Get(rawURL)
 		if err != nil {
@@ -174,7 +174,7 @@ func (l *DocumentLoader) loadResource(rawURL string) ([]byte, error) {
 		data, _, err := l.zimReader.ResolveResource(rawURL)
 		return data, err
 	}
-	docPath := l.app.navigator.Current()
+	docPath := l.host.getNavigator().Current()
 	if docPath == "" || strings.HasPrefix(docPath, "virtual:") {
 		return os.ReadFile(rawURL)
 	}
@@ -184,82 +184,96 @@ func (l *DocumentLoader) loadResource(rawURL string) ([]byte, error) {
 }
 
 func (l *DocumentLoader) NavigateLink(url string) {
-	app := l.app
-	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") || strings.HasPrefix(url, "//") {
-		slog.Info("Opening external URL", "url", url)
-		_ = exec.Command("xdg-open", url).Start()
-		return
+	switch {
+	case util.IsExternalURL(url):
+		l.openExternalURL(url)
+	case strings.HasPrefix(url, "virtual:delete?file="):
+		l.handleDeleteFile(url)
+	case strings.HasPrefix(url, "virtual:settings?"):
+		l.handleSettings(url)
+	case strings.HasPrefix(url, "#"):
+		l.scrollToAnchor(url[1:])
+	case l.zimReader != nil && !strings.HasPrefix(url, "virtual:"):
+		l.navigateZIMArticle(url)
+	default:
+		l.openFileOrFallback(url)
 	}
-	if strings.HasPrefix(url, "virtual:delete?file=") {
-		u, err := neturl.Parse(url)
-		if err == nil {
-			filename := u.Query().Get("file")
-			if filename != "" {
-				slog.Info("Deleting file", "filename", filename)
-				if err := os.Remove(filename); err != nil {
-					slog.Error("Failed to delete file", "filename", filename, "error", err)
-				}
-				if app.navigator.Current() == "virtual:menu" {
-					_ = l.OpenFile("virtual:menu")
-					_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-				}
-			}
-		}
-		return
-	}
-	if strings.HasPrefix(url, "virtual:settings?") {
-		u, err := neturl.Parse(url)
-		if err == nil {
-			app.HandleSettingsAction(u)
-		}
-		return
-	}
-	if strings.HasPrefix(url, "#") {
-		anchor := url[1:]
-		if y, ok := app.viewer.FindAnchorY(anchor); ok {
-			app.scroller.ScrollToY(y)
-		} else {
-			slog.Warn("Anchor not found", "anchor", url)
-		}
-		return
-	}
+}
 
-	if l.zimReader != nil && !strings.HasPrefix(url, "virtual:") {
-		var referrer string
-		current := app.navigator.Current()
-		if strings.HasPrefix(current, "zim:") {
-			referrer = strings.TrimPrefix(current, "zim:")
-		}
-		data, mime, err := l.zimReader.ResolveArticle(url, referrer)
-		if err == nil {
-			if !strings.HasPrefix(mime, "text/html") {
-				slog.Warn("Unsupported article mime", "mime", mime)
-				return
-			}
-			doc, err := html.Parse(bytes.NewReader(data))
-			if err != nil {
-				slog.Error("Parse error", "error", err)
-				return
-			}
+func (l *DocumentLoader) openExternalURL(url string) {
+	slog.Info("Opening external URL", "url", url)
+	_ = exec.Command("xdg-open", url).Start()
+}
 
-			// Store full resolved path so ../ links work across levels.
-			resolved := url
-			if !strings.HasPrefix(url, "A/") && !strings.HasPrefix(url, "C/") &&
-				!strings.HasPrefix(url, "I/") && !strings.HasPrefix(url, "M/") &&
-				!strings.HasPrefix(url, "X/") && !strings.HasPrefix(url, "-/") {
-				if referrer != "" {
-					resolved = path.Join(referrer, url)
-				}
-			}
-			navKey := "zim:" + resolved
-			l.docCache[navKey] = doc
-			app.showDocument(doc, navKey)
-			slog.Info("Navigated to article", "url", navKey)
-			return
-		}
+func (l *DocumentLoader) handleDeleteFile(url string) {
+	u, err := neturl.Parse(url)
+	if err != nil {
+		return
+	}
+	filename := u.Query().Get("file")
+	if filename == "" {
+		return
+	}
+	slog.Info("Deleting file", "filename", filename)
+	if err := os.Remove(filename); err != nil {
+		slog.Error("Failed to delete file", "filename", filename, "error", err)
+	}
+	if l.host.getNavigator().Current() == "virtual:menu" {
+		_ = l.OpenFile("virtual:menu")
+		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	}
+}
+
+func (l *DocumentLoader) handleSettings(url string) {
+	u, err := neturl.Parse(url)
+	if err == nil {
+		l.host.HandleSettingsAction(u)
+	}
+}
+
+func (l *DocumentLoader) scrollToAnchor(anchor string) {
+	if y, ok := l.host.getViewer().FindAnchorY(anchor); ok {
+		l.host.getScroller().ScrollToY(y)
+	} else {
+		slog.Warn("Anchor not found", "anchor", anchor)
+	}
+}
+
+func (l *DocumentLoader) navigateZIMArticle(url string) {
+	var referrer string
+	current := l.host.getNavigator().Current()
+	if strings.HasPrefix(current, "zim:") {
+		referrer = strings.TrimPrefix(current, "zim:")
+	}
+	data, mime, err := l.zimReader.ResolveArticle(url, referrer)
+	if err != nil {
 		slog.Error("ResolveArticle failed", "url", url, "error", err)
 		return
 	}
+	if !strings.HasPrefix(mime, "text/html") {
+		slog.Warn("Unsupported article mime", "mime", mime)
+		return
+	}
+	doc, err := html.Parse(bytes.NewReader(data))
+	if err != nil {
+		slog.Error("Parse error", "error", err)
+		return
+	}
+	resolved := url
+	if !strings.HasPrefix(url, "A/") && !strings.HasPrefix(url, "C/") &&
+		!strings.HasPrefix(url, "I/") && !strings.HasPrefix(url, "M/") &&
+		!strings.HasPrefix(url, "X/") && !strings.HasPrefix(url, "-/") {
+		if referrer != "" {
+			resolved = path.Join(referrer, url)
+		}
+	}
+	navKey := "zim:" + resolved
+	l.docCache[navKey] = doc
+	l.host.showDocument(doc, navKey)
+	slog.Info("Navigated to article", "url", navKey)
+}
+
+func (l *DocumentLoader) openFileOrFallback(url string) {
 	if err := l.OpenFile(url); err != nil {
 		slog.Error("Cannot open file", "url", url, "error", err)
 	} else {
@@ -268,23 +282,24 @@ func (l *DocumentLoader) NavigateLink(url string) {
 }
 
 func (l *DocumentLoader) startDownload(downloadURL, filename string) {
-	app := l.app
+	viewer := l.host.getViewer()
+	navigator := l.host.getNavigator()
 	slog.Info("Initiating download", "url", downloadURL, "filename", filename)
 	go func() {
 		err := storage.Download(downloadURL, filename, func(status string) {
-			app.viewer.SetStatusOverride(status)
+			viewer.SetStatusOverride(status)
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 		})
 		if err != nil {
 			slog.Error("Download failed", "url", downloadURL, "filename", filename, "error", err)
-			app.viewer.SetStatusOverride("❌ Download failed: " + err.Error())
+			viewer.SetStatusOverride("❌ Download failed: " + err.Error())
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 			return
 		}
 		slog.Info("Download completed successfully", "filename", filename)
 		time.Sleep(3 * time.Second)
-		app.viewer.SetStatusOverride("")
-		current := app.navigator.Current()
+		viewer.SetStatusOverride("")
+		current := navigator.Current()
 		if current == "virtual:menu" || strings.HasPrefix(current, "virtual:library/download") {
 			_ = l.OpenFile("virtual:menu")
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})

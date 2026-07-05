@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -45,10 +46,63 @@ type emojiCacheKey struct {
 }
 
 const (
-	statusBarHeight        = 24
-	maxTextureCacheEntries = 1500
-	maxEmojiCacheEntries   = 512
+	statusBarHeight = 24
 )
+
+// TextureCache manages GPU texture caching with LRU eviction.
+type TextureCache[K comparable] struct {
+	textures map[K]*sdl.Texture
+	order    []K
+	maxSize  int
+}
+
+func NewTextureCache[K comparable](maxSize int) *TextureCache[K] {
+	return &TextureCache[K]{
+		textures: make(map[K]*sdl.Texture),
+		maxSize:  maxSize,
+	}
+}
+
+func (c *TextureCache[K]) Get(key K) *sdl.Texture {
+	return c.textures[key]
+}
+
+func (c *TextureCache[K]) Set(key K, tex *sdl.Texture) {
+	c.textures[key] = tex
+	c.order = append(c.order, key)
+	if len(c.textures) > c.maxSize {
+		c.Evict()
+	}
+}
+
+func (c *TextureCache[K]) Evict() {
+	remove := len(c.order) / 4
+	if remove < 1 {
+		return
+	}
+	for _, k := range c.order[:remove] {
+		if tex, ok := c.textures[k]; ok && tex != nil {
+			tex.Destroy()
+		}
+		delete(c.textures, k)
+	}
+	c.order = c.order[remove:]
+}
+
+func (c *TextureCache[K]) Clear() {
+	destroyTextures(c.textures)
+	c.order = nil
+}
+
+func (c *TextureCache[K]) DestroyAll() {
+	for _, tex := range c.textures {
+		if tex != nil {
+			tex.Destroy()
+		}
+	}
+	c.textures = make(map[K]*sdl.Texture)
+	c.order = nil
+}
 
 type ResourceLoader func(url string) ([]byte, error)
 
@@ -99,11 +153,9 @@ type Renderer struct {
 	light   bool
 	hasTree bool
 
-	textureCache      map[textureKey]*sdl.Texture
-	textureCacheOrder []textureKey
-	emojiCache        map[emojiCacheKey]*sdl.Texture
-	emojiCacheOrder   []emojiCacheKey
-	imgManager        *ImageManager
+	textCache  *TextureCache[textureKey]
+	emojiCache *TextureCache[emojiCacheKey]
+	imgManager *ImageManager
 
 	baseFontSize        int
 	fontPath            string
@@ -213,8 +265,8 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		listIndent:   16,
 		theme:        LightTheme(),
 		light:        true,
-		textureCache: make(map[textureKey]*sdl.Texture),
-		emojiCache:   make(map[emojiCacheKey]*sdl.Texture),
+		textCache:    NewTextureCache[textureKey](1500),
+		emojiCache:   NewTextureCache[emojiCacheKey](512),
 		imgManager:   NewImageManager(sdlRend),
 		baseFontSize: baseFontSize,
 		fontPath:     fontPath,
@@ -232,53 +284,19 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	return r, nil
 }
 
-func (r *Renderer) evictTextureCache() {
-	remove := len(r.textureCacheOrder) / 4
-	if remove < 1 {
-		return
-	}
-	for _, k := range r.textureCacheOrder[:remove] {
-		if tex, ok := r.textureCache[k]; ok && tex != nil {
+// destroyTextures destroys all textures in the map and clears it.
+func destroyTextures[K comparable](m map[K]*sdl.Texture) {
+	for k, tex := range m {
+		if tex != nil {
 			tex.Destroy()
 		}
-		delete(r.textureCache, k)
+		delete(m, k)
 	}
-	r.textureCacheOrder = r.textureCacheOrder[remove:]
-}
-
-func (r *Renderer) evictEmojiCache() {
-	remove := len(r.emojiCacheOrder) / 4
-	if remove < 1 {
-		return
-	}
-	for _, k := range r.emojiCacheOrder[:remove] {
-		if tex, ok := r.emojiCache[k]; ok && tex != nil {
-			tex.Destroy()
-		}
-		delete(r.emojiCache, k)
-	}
-	r.emojiCacheOrder = r.emojiCacheOrder[remove:]
 }
 
 func (r *Renderer) ClearCache() {
-	if r.textureCache != nil {
-		for k, tex := range r.textureCache {
-			if tex != nil {
-				tex.Destroy()
-			}
-			delete(r.textureCache, k)
-		}
-	}
-	r.textureCacheOrder = nil
-	if r.emojiCache != nil {
-		for k, tex := range r.emojiCache {
-			if tex != nil {
-				tex.Destroy()
-			}
-			delete(r.emojiCache, k)
-		}
-	}
-	r.emojiCacheOrder = nil
+	r.textCache.Clear()
+	r.emojiCache.Clear()
 	if r.imgManager != nil {
 		r.imgManager.ClearCache()
 	}
@@ -645,11 +663,11 @@ func (f *sdlFont) Measure(text string, isBold, isItalic, isCode bool) (int32, in
 // Zoom adjusts baseFontSize by delta and re-initializes fonts at runtime.
 func (r *Renderer) Zoom(delta int) error {
 	newSize := r.baseFontSize + delta
-	if newSize < 10 {
-		newSize = 10
+	if newSize < config.MinFontSize {
+		newSize = config.MinFontSize
 	}
-	if newSize > 32 {
-		newSize = 32
+	if newSize > config.MaxFontSize {
+		newSize = config.MaxFontSize
 	}
 	if newSize == r.baseFontSize {
 		return nil
@@ -670,10 +688,7 @@ func (r *Renderer) Zoom(delta int) error {
 	r.fonts = fonts
 
 	// Destroy cached text textures to prevent stale text sizes/images
-	for _, tex := range r.textureCache {
-		tex.Destroy()
-	}
-	r.textureCache = make(map[textureKey]*sdl.Texture)
+	r.textCache.DestroyAll()
 
 	// Recalculate document layout with new font sizes
 	r.relayout()

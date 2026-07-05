@@ -237,55 +237,72 @@ func (app *App) ReloadCurrentDocument(doc *document.Document) {
 	_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 }
 
-// HandleSettingsAction parses settings URL and updates config and UI.
-func (app *App) HandleSettingsAction(u *neturl.URL) {
-	themeParam := u.Query().Get("theme")
-	langParam := u.Query().Get("lang")
-	fsParam := u.Query().Get("fontsize")
+// settingsChange describes the result of parsing a settings URL.
+type settingsChange struct {
+	Theme    string
+	Language string
+	FontSize int // delta
+	HasTheme bool
+	HasLang  bool
+	HasFs    bool
+}
 
-	var fsDelta int
-	hasFsDelta := false
+func parseSettingsURL(u *neturl.URL) settingsChange {
+	sc := settingsChange{
+		Theme:    u.Query().Get("theme"),
+		Language: u.Query().Get("lang"),
+	}
+	fsParam := u.Query().Get("fontsize")
 	if fsParam != "" {
-		if _, err := fmt.Sscanf(fsParam, "%d", &fsDelta); err != nil {
+		if _, err := fmt.Sscanf(fsParam, "%d", &sc.FontSize); err != nil {
 			slog.Warn("Invalid fontsize value", "value", fsParam)
 		} else {
-			hasFsDelta = true
+			sc.HasFs = true
 		}
 	}
+	sc.HasTheme = sc.Theme != ""
+	sc.HasLang = sc.Language != ""
+	return sc
+}
 
-	changed := false
-	themeChanged := false
+func applySettings(sc settingsChange) (themeChanged, anyChanged bool) {
 	config.Update(func(c *config.Config) {
-		if themeParam != "" && themeParam != c.Theme {
-			c.Theme = themeParam
-			changed = true
+		if sc.HasTheme && sc.Theme != c.Theme {
+			c.Theme = sc.Theme
 			themeChanged = true
+			anyChanged = true
 		}
-		if langParam != "" && langParam != c.Language {
-			c.Language = langParam
-			changed = true
+		if sc.HasLang && sc.Language != c.Language {
+			c.Language = sc.Language
+			anyChanged = true
 		}
-		if hasFsDelta {
-			c.FontSize += fsDelta
-			if c.FontSize < 10 {
-				c.FontSize = 10
+		if sc.HasFs {
+			c.FontSize += sc.FontSize
+			if c.FontSize < config.MinFontSize {
+				c.FontSize = config.MinFontSize
 			}
-			if c.FontSize > 32 {
-				c.FontSize = 32
+			if c.FontSize > config.MaxFontSize {
+				c.FontSize = config.MaxFontSize
 			}
-			changed = true
+			anyChanged = true
 		}
 	})
+	return
+}
+
+// HandleSettingsAction parses settings URL and updates config and UI.
+func (app *App) HandleSettingsAction(u *neturl.URL) {
+	sc := parseSettingsURL(u)
+	themeChanged, anyChanged := applySettings(sc)
 
 	if themeChanged {
-		app.viewer.ToggleTheme() // Update UI immediately
+		app.viewer.ToggleTheme()
 	}
-	if hasFsDelta {
-		_ = app.viewer.Zoom(fsDelta)
+	if sc.HasFs {
+		_ = app.viewer.Zoom(sc.FontSize)
 	}
-	if changed {
+	if anyChanged {
 		_ = config.Save()
-		// Reload the settings page inline without pushing to history
 		doc, _ := menu.SettingsPage()
 		app.ReloadCurrentDocument(doc)
 	}

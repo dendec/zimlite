@@ -15,6 +15,28 @@ type Config struct {
 	FontSize int    `json:"font_size"`
 }
 
+const (
+	MinFontSize = 10
+	MaxFontSize = 32
+)
+
+// Provider abstracts config access for dependency injection.
+type Provider interface {
+	Get() Config
+	Update(mutate func(c *Config)) Config
+	Save() error
+}
+
+// defaultProvider implements Provider using the global config singleton.
+type defaultProvider struct{}
+
+func (defaultProvider) Get() Config                          { return Get() }
+func (defaultProvider) Update(mutate func(c *Config)) Config { return Update(mutate) }
+func (defaultProvider) Save() error                          { return Save() }
+
+// NewProvider returns the default config provider backed by the global singleton.
+func NewProvider() Provider { return defaultProvider{} }
+
 var (
 	mu            sync.RWMutex
 	currentConfig Config
