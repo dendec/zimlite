@@ -11,13 +11,7 @@ import (
 
 func (r *Renderer) relayout() {
 	r.ClearCache()
-	r.lines = nil
-	r.links = nil
-	r.codeRanges = nil
-	r.codeSpans = nil
-	r.imageEntries = nil
-	r.blockquotes = nil
-	r.totalHeight = 0
+	r.layout = PageLayout{}
 
 	if r.doc == nil {
 		return
@@ -28,7 +22,7 @@ func (r *Renderer) relayout() {
 	if maxW < 100 {
 		maxW = 100
 	}
-	r.contentWidth = maxW
+	r.layout.contentWidth = maxW
 
 	ls := &layoutState{
 		r:    r,
@@ -41,7 +35,7 @@ func (r *Renderer) relayout() {
 	if ls.y < r.height-statusBarHeight {
 		ls.y = r.height - statusBarHeight
 	}
-	r.totalHeight = ls.y
+	r.layout.totalHeight = ls.y
 	r.clampScroll()
 	r.clampSelection()
 }
@@ -61,7 +55,7 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 
 	if h.Level == 1 || h.Level == 2 {
 		s.y += 4
-		s.r.lines = append(s.r.lines, lineEntry{
+		s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 			fontIdx: FontBody, color: s.r.theme.RuleColor,
 			x: s.r.marginX, y: s.y, w: s.maxW, h: 1,
 		})
@@ -112,7 +106,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 
 	for _, cl := range strings.Split(codeText, "\n") {
 		tw, th := measureText(cl, fontMono, false, false)
-		s.r.lines = append(s.r.lines, lineEntry{
+		s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 			text: cl, fontIdx: FontMono, color: s.r.theme.TextColor,
 			x: s.r.marginX + 12, y: s.y, w: tw, h: th, // Text indent
 			isCode: true,
@@ -122,7 +116,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 
 	s.y += 8 // bottom padding
 
-	s.r.codeRanges = append(s.r.codeRanges, codeBlockRange{
+	s.r.layout.codeRanges = append(s.r.layout.codeRanges, codeBlockRange{
 		x: oldMarginX, y: startCodeY, w: oldMaxW, h: s.y - startCodeY,
 	})
 
@@ -130,7 +124,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 }
 
 func (s *layoutState) VisitThematicBreak(_ *document.ThematicBreak) {
-	s.r.lines = append(s.r.lines, lineEntry{
+	s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 		fontIdx: FontBody, color: s.r.theme.RuleColor,
 		x: s.r.marginX, y: s.y, w: s.maxW, h: 1,
 	})
@@ -154,7 +148,7 @@ func (s *layoutState) VisitBlockquote(b *document.Blockquote) {
 	s.y -= s.r.blockSpacing
 	s.y += 8 // bottom padding
 
-	s.r.blockquotes = append(s.r.blockquotes, sdlRect{
+	s.r.layout.blockquotes = append(s.r.layout.blockquotes, sdlRect{
 		X: oldMarginX, Y: startY, W: oldMaxW, H: s.y - startY,
 	})
 
@@ -195,7 +189,7 @@ func (s *layoutState) VisitImage(i *document.Image) {
 		targetW := int32(float64(imgW) * scale)
 		targetH := int32(float64(imgH) * scale)
 
-		s.r.imageEntries = append(s.r.imageEntries, imageEntry{
+		s.r.layout.imageEntries = append(s.r.layout.imageEntries, imageEntry{
 			x:   s.r.marginX + (s.maxW-targetW)/2,
 			y:   s.y,
 			w:   targetW,
@@ -209,7 +203,7 @@ func (s *layoutState) VisitImage(i *document.Image) {
 	// Fallback to alt-text if image load/decode fails
 	font := s.r.fonts[FontBody].font
 	tw, th := measureText(alt, font, false, false)
-	s.r.lines = append(s.r.lines, lineEntry{
+	s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 		text: alt, fontIdx: FontBody, color: sdlColor{R: 150, G: 150, B: 150, A: 255},
 		x: s.r.marginX, y: s.y, w: tw, h: th,
 	})
@@ -259,7 +253,7 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 		if isFirstLine && prefix != "" {
 			pFont := r.fonts[fidx].font
 			pw, ph := measureText(prefix, pFont, false, false)
-			r.lines = append(r.lines, lineEntry{
+			r.layout.lines = append(r.layout.lines, lineEntry{
 				text: prefix, fontIdx: fidx, color: textColor,
 				x: currX, y: y, w: pw, h: ph,
 			})
@@ -285,7 +279,7 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 			wordY := y + (maxH - w.PixH)
 
 			if w.IsImage {
-				r.imageEntries = append(r.imageEntries, imageEntry{
+				r.layout.imageEntries = append(r.layout.imageEntries, imageEntry{
 					x: currX, y: wordY, w: w.PixW, h: w.PixH, url: w.ImageURL,
 				})
 			} else {
@@ -294,14 +288,14 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 					wColor = linkColor
 				}
 
-				r.lines = append(r.lines, lineEntry{
+				r.layout.lines = append(r.layout.lines, lineEntry{
 					text: w.Text, fontIdx: fidx, color: wColor,
 					x: currX, y: wordY, w: w.PixW, h: w.PixH,
 					isBold: w.IsBold, isItalic: w.IsItalic, isCode: w.IsCode,
 				})
 
 				if w.IsCode {
-					r.codeSpans = append(r.codeSpans, codeSpanRange{
+					r.layout.codeSpans = append(r.layout.codeSpans, codeSpanRange{
 						x: currX - 2, y: wordY - 2,
 						w: w.PixW + 4, h: w.PixH + 4,
 					})
@@ -311,14 +305,14 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 			if w.LinkID != 0 {
 				idx, ok := activeLinks[w.LinkID]
 				if !ok {
-					idx = len(r.links)
-					r.links = append(r.links, linkEntry{
+					idx = len(r.layout.links)
+					r.layout.links = append(r.layout.links, linkEntry{
 						url: v.LinkURLs[w.LinkID],
 					})
 					activeLinks[w.LinkID] = idx
 				}
 				rect := sdlRect{X: currX, Y: wordY, W: w.PixW, H: w.PixH}
-				r.links[idx].rects = append(r.links[idx].rects, rect)
+				r.layout.links[idx].rects = append(r.layout.links[idx].rects, rect)
 			}
 
 			currX += w.PixW

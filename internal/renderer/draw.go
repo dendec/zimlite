@@ -19,7 +19,7 @@ func (r *Renderer) Render() {
 }
 
 func (r *Renderer) renderImages() {
-	for _, img := range r.imageEntries {
+	for _, img := range r.layout.imageEntries {
 		screenY := img.y - r.scrollY
 		if screenY <= -img.h || screenY >= r.height-statusBarHeight {
 			continue
@@ -32,14 +32,14 @@ func (r *Renderer) renderImages() {
 }
 
 func (r *Renderer) renderCodeBackgrounds() {
-	for _, cr := range r.codeRanges {
+	for _, cr := range r.layout.codeRanges {
 		screenY := cr.y - r.scrollY
 		if screenY > -cr.h && screenY < r.height-statusBarHeight {
 			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: cr.x, Y: screenY, W: cr.w, H: cr.h})
 		}
 	}
-	for _, cs := range r.codeSpans {
+	for _, cs := range r.layout.codeSpans {
 		screenY := cs.y - r.scrollY
 		if screenY > -cs.h && screenY < r.height-statusBarHeight {
 			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
@@ -49,7 +49,7 @@ func (r *Renderer) renderCodeBackgrounds() {
 }
 
 func (r *Renderer) renderBlockquotes() {
-	for _, bq := range r.blockquotes {
+	for _, bq := range r.layout.blockquotes {
 		screenY := bq.Y - r.scrollY
 		if screenY > -bq.H && screenY < r.height-statusBarHeight {
 			// Draw background
@@ -63,7 +63,7 @@ func (r *Renderer) renderBlockquotes() {
 }
 
 func (r *Renderer) renderLines() {
-	for _, line := range r.lines {
+	for _, line := range r.layout.lines {
 		screenY := line.y - r.scrollY
 		if screenY < -line.h || screenY > r.height-statusBarHeight {
 			continue
@@ -121,17 +121,17 @@ func (r *Renderer) renderLines() {
 }
 
 func (r *Renderer) renderLinkHighlight() {
-	if r.selectedLink < 0 || r.selectedLink >= len(r.links) {
+	if r.selectedLink < 0 || r.selectedLink >= len(r.layout.links) {
 		return
 	}
-	link := r.links[r.selectedLink]
+	link := r.layout.links[r.selectedLink]
 
 	var mergedText []sdl.Rect
 	var imgRects []sdl.Rect
 
 	for _, rect := range link.rects {
 		isImg := false
-		for _, img := range r.imageEntries {
+		for _, img := range r.layout.imageEntries {
 			if img.x == rect.X && img.y == rect.Y && img.w == rect.W && img.h == rect.H {
 				isImg = true
 				break

@@ -58,13 +58,8 @@ type Renderer struct {
 	sdlRenderer *sdl.Renderer
 	fonts       [fontCount]fontSlot
 
-	lines        []lineEntry
-	links        []linkEntry
-	codeRanges   []codeBlockRange
-	codeSpans    []codeSpanRange
-	blockquotes  []sdl.Rect
-	totalHeight  int32
-	contentWidth int32
+	layout PageLayout
+
 	textLines    []string // cached for theme toggle
 
 	doc *document.Document
@@ -85,7 +80,6 @@ type Renderer struct {
 	hasTree bool
 
 	textureCache  map[textureKey]*sdl.Texture
-	imageEntries  []imageEntry
 	imgManager    *ImageManager
 
 	baseFontSize   int
@@ -114,6 +108,17 @@ type linkEntry struct {
 
 type codeBlockRange struct {
 	x, y, w, h int32
+}
+
+type PageLayout struct {
+	lines        []lineEntry
+	links        []linkEntry
+	codeRanges   []codeBlockRange
+	codeSpans    []codeSpanRange
+	blockquotes  []sdlRect
+	imageEntries []imageEntry
+	totalHeight  int32
+	contentWidth int32
 }
 
 // New creates a Renderer.
@@ -153,22 +158,22 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	}
 
 	r := &Renderer{
-		window:        window,
-		sdlRenderer:   sdlRend,
-		selectedLink:  -1,
-		width:         winW,
-		height:        winH,
-		marginX:       20,
-		marginY:       16,
-		lineSpacing:   6,
-		blockSpacing:  12,
-		listIndent:    16,
-		theme:         LightTheme(),
-		light:         true,
-		textureCache:  make(map[textureKey]*sdl.Texture),
-		imgManager:    NewImageManager(sdlRend),
-		baseFontSize:  baseFontSize,
-		fontPath:      fontPath,
+		window:       window,
+		sdlRenderer:  sdlRend,
+		selectedLink: -1,
+		width:        winW,
+		height:       winH,
+		marginX:      20,
+		marginY:      16,
+		lineSpacing:  6,
+		blockSpacing: 12,
+		listIndent:   16,
+		theme:        LightTheme(),
+		light:        true,
+		textureCache: make(map[textureKey]*sdl.Texture),
+		imgManager:   NewImageManager(sdlRend),
+		baseFontSize: baseFontSize,
+		fontPath:     fontPath,
 	}
 
 	fonts, err := loadFonts(baseFontSize, fontPath)
@@ -251,9 +256,7 @@ func (r *Renderer) Relayout() {
 // SetTextLines configures the renderer for simple text-line display mode.
 func (r *Renderer) SetTextLines(lines []string) {
 	r.textLines = lines
-	r.lines = nil
-	r.links = nil
-	r.codeRanges = nil
+	r.layout = PageLayout{}
 	r.doc = nil
 	r.selectedLink = -1
 
@@ -267,7 +270,7 @@ func (r *Renderer) SetTextLines(lines []string) {
 			displayText = text[1:]
 		}
 		tw, th := measureText(displayText, font, false, false)
-		r.lines = append(r.lines, lineEntry{
+		r.layout.lines = append(r.layout.lines, lineEntry{
 			text: displayText, fontIdx: FontBody, color: r.theme.TextColor,
 			x: r.marginX, y: y, w: tw, h: th,
 			isCursor: isCursor,
@@ -277,7 +280,7 @@ func (r *Renderer) SetTextLines(lines []string) {
 	if y < r.height-statusBarHeight {
 		y = r.height - statusBarHeight
 	}
-	r.totalHeight = y
+	r.layout.totalHeight = y
 	r.clampScroll()
 }
 
@@ -290,10 +293,10 @@ func (r *Renderer) relayoutTextLines() {
 
 // ScrollToLine ensures the given line index is visible.
 func (r *Renderer) ScrollToLine(lineIdx int) {
-	if lineIdx < 0 || lineIdx >= len(r.lines) {
+	if lineIdx < 0 || lineIdx >= len(r.layout.lines) {
 		return
 	}
-	line := r.lines[lineIdx]
+	line := r.layout.lines[lineIdx]
 	screenY := line.y - r.scrollY
 	if screenY < r.marginY {
 		r.scrollY = line.y - r.marginY
@@ -305,29 +308,29 @@ func (r *Renderer) ScrollToLine(lineIdx int) {
 
 // --- Link API ---
 
-func (r *Renderer) LinkCount() int  { return len(r.links) }
+func (r *Renderer) LinkCount() int  { return len(r.layout.links) }
 func (r *Renderer) SelectNextLink() { r.moveLink(+1) }
 func (r *Renderer) SelectPrevLink() { r.moveLink(-1) }
 func (r *Renderer) SelectedLinkURL() string {
-	if r.selectedLink < 0 || r.selectedLink >= len(r.links) {
+	if r.selectedLink < 0 || r.selectedLink >= len(r.layout.links) {
 		return ""
 	}
-	return r.links[r.selectedLink].url
+	return r.layout.links[r.selectedLink].url
 }
 
 func (r *Renderer) moveLink(delta int) {
-	if len(r.links) == 0 {
+	if len(r.layout.links) == 0 {
 		return
 	}
 	r.selectedLink += delta
 	if r.selectedLink < 0 {
 		r.selectedLink = 0
 	}
-	if r.selectedLink >= len(r.links) {
-		r.selectedLink = len(r.links) - 1
+	if r.selectedLink >= len(r.layout.links) {
+		r.selectedLink = len(r.layout.links) - 1
 	}
-	if r.selectedLink >= 0 && r.selectedLink < len(r.links) {
-		link := r.links[r.selectedLink]
+	if r.selectedLink >= 0 && r.selectedLink < len(r.layout.links) {
+		link := r.layout.links[r.selectedLink]
 		if len(link.rects) > 0 {
 			first := link.rects[0]
 			last := link.rects[len(link.rects)-1]
@@ -344,15 +347,15 @@ func (r *Renderer) moveLink(delta int) {
 }
 
 func (r *Renderer) clampSelection() {
-	if len(r.links) == 0 {
+	if len(r.layout.links) == 0 {
 		r.selectedLink = -1
 		return
 	}
 	if r.selectedLink < 0 {
 		r.selectedLink = 0
 	}
-	if r.selectedLink >= len(r.links) {
-		r.selectedLink = len(r.links) - 1
+	if r.selectedLink >= len(r.layout.links) {
+		r.selectedLink = len(r.layout.links) - 1
 	}
 }
 
@@ -375,7 +378,7 @@ func (r *Renderer) ScrollPageDown() {
 
 func (r *Renderer) ScrollToTop() { r.scrollY = 0 }
 func (r *Renderer) ScrollToBottom() {
-	r.scrollY = r.totalHeight - (r.height - statusBarHeight)
+	r.scrollY = r.layout.totalHeight - (r.height - statusBarHeight)
 	r.clampScroll()
 }
 
@@ -387,7 +390,7 @@ func (r *Renderer) ScrollToY(y int32) {
 func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
 	// 1. Try to find a heading
 	headingText := strings.ReplaceAll(strings.ToLower(anchor), "_", " ")
-	for _, line := range r.lines {
+	for _, line := range r.layout.lines {
 		if line.fontIdx == FontH1 || line.fontIdx == FontH2 || line.fontIdx == FontH3 || line.fontIdx == FontH4 {
 			if strings.ToLower(line.text) == headingText {
 				return line.y, true
@@ -416,7 +419,7 @@ func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
 			expectedPrefix += "-"
 		}
 
-		for _, l := range r.links {
+		for _, l := range r.layout.links {
 			nURL := norm(l.url)
 			if nURL == expected || strings.HasPrefix(nURL, expectedPrefix) {
 				if len(l.rects) > 0 {
@@ -430,7 +433,7 @@ func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
 }
 
 func (r *Renderer) clampScroll() {
-	maxScroll := r.totalHeight - (r.height - statusBarHeight)
+	maxScroll := r.layout.totalHeight - (r.height - statusBarHeight)
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -444,7 +447,7 @@ func (r *Renderer) clampScroll() {
 
 func (r *Renderer) HandleClick(mx, my int32) string {
 	docY := my + r.scrollY
-	for i, link := range r.links {
+	for i, link := range r.layout.links {
 		for _, rect := range link.rects {
 			if mx >= rect.X && mx <= rect.X+rect.W &&
 				docY >= rect.Y && docY <= rect.Y+rect.H {
