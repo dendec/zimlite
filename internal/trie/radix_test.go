@@ -3,11 +3,11 @@ package trie
 import (
 	"testing"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 )
 
 func TestNewTree(t *testing.T) {
-	articles := []zim.ArticleEntry{
+	articles := []document.ArticleEntry{
 		{Title: "Apple", Path: "A/Apple"},
 		{Title: "Apricot", Path: "A/Apricot"},
 		{Title: "Banana", Path: "A/Banana"},
@@ -53,7 +53,7 @@ func TestNewTree(t *testing.T) {
 }
 
 func TestNavStateNew(t *testing.T) {
-	articles := []zim.ArticleEntry{
+	articles := []document.ArticleEntry{
 		{Title: "A", Path: "A"},
 		{Title: "B", Path: "B"},
 		{Title: "C", Path: "C"},
@@ -84,7 +84,7 @@ func TestNavStateNew(t *testing.T) {
 }
 
 func TestCyrillic(t *testing.T) {
-	articles := []zim.ArticleEntry{
+	articles := []document.ArticleEntry{
 		{Title: "Абрикос", Path: "A/Абрикос"},
 		{Title: "Ананас", Path: "A/Ананас"},
 		{Title: "Банан", Path: "A/Банан"},
@@ -104,7 +104,7 @@ func TestCyrillic(t *testing.T) {
 
 func TestAutoDrill(t *testing.T) {
 	// Single-child chains are absorbed on manual Expand(), not on tree load.
-	articles := []zim.ArticleEntry{
+	articles := []document.ArticleEntry{
 		{Title: "XYZ Alpha", Path: "A/Alpha"},
 		{Title: "XYZ Beta", Path: "A/Beta"},
 		{Title: "XYZ Gamma", Path: "A/Gamma"},
@@ -138,7 +138,7 @@ func TestAutoDrill(t *testing.T) {
 
 func TestMultiBranchStops(t *testing.T) {
 	// Multiple children at first level → no auto-drill.
-	articles := []zim.ArticleEntry{
+	articles := []document.ArticleEntry{
 		{Title: "Alpha", Path: "A"},
 		{Title: "Beta", Path: "B"},
 		{Title: "Gamma", Path: "C"},
@@ -156,7 +156,7 @@ func TestMultiBranchStops(t *testing.T) {
 
 func TestMultiBranchAfterDrill(t *testing.T) {
 	// Manual Expand() drills single-child chain and absorbs it, stopping at first branching.
-	articles := []zim.ArticleEntry{
+	articles := []document.ArticleEntry{
 		{Title: "A X Alpha", Path: "A"},
 		{Title: "A X Beta", Path: "B"},
 		{Title: "A Y Gamma", Path: "C"},
@@ -199,7 +199,7 @@ func TestMultiBranchAfterDrill(t *testing.T) {
 }
 
 func TestFlatNavigation(t *testing.T) {
-	articles := []zim.ArticleEntry{
+	articles := []document.ArticleEntry{
 		{Title: "Apple", Path: "A/Apple"},
 		{Title: "Apricot", Path: "A/Apricot"},
 		{Title: "Banana", Path: "A/Banana"},
@@ -239,7 +239,7 @@ func TestFlatNavigation(t *testing.T) {
 }
 
 func TestActionLeftRight(t *testing.T) {
-	articles := []zim.ArticleEntry{
+	articles := []document.ArticleEntry{
 		{Title: "Apple", Path: "A/Apple"},
 		{Title: "Apricot", Path: "A/Apricot"},
 		{Title: "Banana", Path: "A/Banana"},
