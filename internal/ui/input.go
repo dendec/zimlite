@@ -100,6 +100,7 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 						if app.navState.CursorIsLeaf() {
 							path := app.navState.CursorPath()
 							if path != "" {
+								app.navigator.Open("virtual:tree")
 								app.loader.NavigateLink(path)
 							}
 						} else {
@@ -130,6 +131,7 @@ func (c *InputController) processTreeKey(sc sdl.Scancode) {
 			// Open article.
 			path := app.navState.CursorPath()
 			if path != "" {
+				app.navigator.Open("virtual:tree")
 				app.loader.NavigateLink(path)
 			}
 		} else {
@@ -180,6 +182,7 @@ func (c *InputController) processJoyA() {
 		if app.navState.CursorIsLeaf() {
 			path := app.navState.CursorPath()
 			if path != "" {
+				app.navigator.Open("virtual:tree")
 				app.loader.NavigateLink(path)
 			}
 		} else {

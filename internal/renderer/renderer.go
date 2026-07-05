@@ -305,8 +305,8 @@ func (r *Renderer) ScrollToLine(lineIdx int) {
 	screenY := line.y - r.scrollY
 	if screenY < r.marginY {
 		r.scrollY = line.y - r.marginY
-	} else if screenY+line.h > r.height-r.marginY {
-		r.scrollY = line.y + line.h - r.height + r.marginY
+	} else if screenY+line.h > r.height-r.marginY-statusBarHeight {
+		r.scrollY = line.y + line.h - r.height + r.marginY + statusBarHeight
 	}
 	r.clampScroll()
 }

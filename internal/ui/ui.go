@@ -61,6 +61,10 @@ func (app *App) goBack() {
 			_ = app.loader.OpenFile("virtual:menu")
 			return
 		}
+		if prevPath == "virtual:tree" {
+			app.enterTreeMode()
+			return
+		}
 		if doc, ok := app.loader.docCache[prevPath]; ok {
 			app.viewer.SetDocument(doc)
 			app.viewer.Relayout()
@@ -80,16 +84,18 @@ func (app *App) enterTreeMode() {
 	if app.loader.zimReader == nil {
 		return
 	}
-	articles := app.loader.zimReader.ListArticles()
-	if len(articles) == 0 {
-		return
-	}
 	app.navigator.UpdateCurrentState(document.ViewState{
 		ScrollY:      app.scroller.CurrentScrollY(),
 		SelectedLink: app.links.SelectedLinkIndex(),
 	})
-	root := trie.NewTree(articles)
-	app.navState = trie.NewNavState(root)
+	if app.navState == nil {
+		articles := app.loader.zimReader.ListArticles()
+		if len(articles) == 0 {
+			return
+		}
+		root := trie.NewTree(articles)
+		app.navState = trie.NewNavState(root)
+	}
 	app.mode = modeTree
 	app.renderTree()
 }
@@ -97,6 +103,9 @@ func (app *App) enterTreeMode() {
 func (app *App) exitTreeMode() {
 	app.mode = modeDoc
 	// Restore last viewed document from history.
+	for app.navigator.Current() == "virtual:tree" {
+		app.navigator.Back()
+	}
 	prevPath := app.navigator.Current()
 	if doc, ok := app.loader.docCache[prevPath]; ok {
 		app.viewer.SetDocument(doc)

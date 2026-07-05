@@ -169,10 +169,6 @@ func (r *Reader) ResolveArticle(rawURL string, referrer string) ([]byte, string,
 	// Deduplicate.
 	var candidates []string
 	add := func(c string) {
-		c = strings.TrimPrefix(c, "/")
-		for strings.HasPrefix(c, "../") {
-			c = c[3:]
-		}
 		for _, prev := range candidates {
 			if prev == c {
 				return
@@ -181,13 +177,21 @@ func (r *Reader) ResolveArticle(rawURL string, referrer string) ([]byte, string,
 		candidates = append(candidates, c)
 	}
 
+	// 1. Exact match (handles ZIM paths that actually start with '/')
 	add(decoded)
 
+	// 2. Cleaned match (handles HTML absolute links which often have leading '/')
+	cleaned := strings.TrimPrefix(decoded, "/")
+	for strings.HasPrefix(cleaned, "../") {
+		cleaned = cleaned[3:]
+	}
+	add(cleaned)
+
 	if referrer != "" {
-		add(path.Join(path.Dir(referrer), decoded))
+		add(path.Join(path.Dir(referrer), cleaned))
 	}
 	if r.rootPrefix != "" {
-		add(path.Join(r.rootPrefix, decoded))
+		add(path.Join(r.rootPrefix, cleaned))
 	}
 
 	for _, c := range candidates {
