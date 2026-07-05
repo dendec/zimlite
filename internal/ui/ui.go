@@ -2,14 +2,17 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	neturl "net/url"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/menu"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
 	"github.com/veandco/go-sdl2/sdl"
@@ -130,20 +133,37 @@ func (app *App) exitTreeMode() {
 }
 
 func (app *App) goHome() {
-	if app.loader.zimReader != nil {
-		mainPath := app.loader.zimReader.MainPagePath()
-		navKey := "zim:" + mainPath
-		if doc, ok := app.loader.docCache[navKey]; ok {
-			app.navigator.UpdateCurrentState(document.ViewState{
-				ScrollY:      app.scroller.CurrentScrollY(),
-				SelectedLink: app.links.SelectedLinkIndex(),
-			})
-			app.mode = modeDoc
-			app.viewer.SetDocument(doc)
-			app.navigator.Open(navKey)
-			app.viewer.Relayout()
-		}
+	if app.loader.zimReader == nil {
+		return
 	}
+	mainPath := app.loader.zimReader.MainPagePath()
+	navKey := "zim:" + mainPath
+	doc, ok := app.loader.docCache[navKey]
+	if !ok {
+		data, mime, err := app.loader.zimReader.MainPage()
+		if err != nil {
+			slog.Error("goHome: cannot load main page", "error", err)
+			return
+		}
+		if !strings.HasPrefix(mime, "text/html") {
+			slog.Error("goHome: main page not HTML", "mime", mime)
+			return
+		}
+		doc, err = html.Parse(bytes.NewReader(data))
+		if err != nil {
+			slog.Error("goHome: cannot parse main page", "error", err)
+			return
+		}
+		app.loader.docCache[navKey] = doc
+	}
+	app.navigator.UpdateCurrentState(document.ViewState{
+		ScrollY:      app.scroller.CurrentScrollY(),
+		SelectedLink: app.links.SelectedLinkIndex(),
+	})
+	app.mode = modeDoc
+	app.viewer.SetDocument(doc)
+	app.navigator.Open(navKey)
+	app.viewer.Relayout()
 }
 
 func (app *App) toggleMode() {

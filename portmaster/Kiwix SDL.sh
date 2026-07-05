@@ -23,9 +23,4 @@ export LD_LIBRARY_PATH="$GAMEDIR/lib:/usr/lib:$LD_LIBRARY_PATH"
 
 exec > >(tee "$GAMEDIR/log.txt") 2>&1
 
-ZIM=$(ls "$GAMEDIR"/*.zim 2>/dev/null | head -1)
-if [ -n "$ZIM" ]; then
-  exec ./kiwix-sdl "$ZIM"
-else
-  exec ./kiwix-sdl
-fi
+exec ./kiwix-sdl "$@"
