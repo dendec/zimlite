@@ -7,8 +7,11 @@ import (
 	"image/draw"
 	_ "image/jpeg"
 	_ "image/png"
+	"strings"
 	"unsafe"
 
+	"github.com/srwiley/oksvg"
+	"github.com/srwiley/rasterx"
 	"github.com/veandco/go-sdl2/sdl"
 	_ "golang.org/x/image/webp"
 )
@@ -48,6 +51,22 @@ func (m *ImageManager) GetDimensions(url string) (int32, int32, bool) {
 		return 0, 0, false
 	}
 
+	isSVG := strings.HasSuffix(strings.ToLower(url), ".svg") || bytes.HasPrefix(bytes.TrimSpace(data), []byte("<?xml")) || bytes.HasPrefix(bytes.TrimSpace(data), []byte("<svg"))
+
+	if isSVG {
+		icon, err := oksvg.ReadIconStream(bytes.NewReader(data))
+		if err != nil {
+			fmt.Printf("[DEBUG] SVG Decode failed for %s: %v\n", url, err)
+			return 0, 0, false
+		}
+		w, h := int32(icon.ViewBox.W), int32(icon.ViewBox.H)
+		if w == 0 || h == 0 {
+			w, h = 300, 150 // default fallback
+		}
+		m.dimensions[url] = struct{ w, h int32 }{w, h}
+		return w, h, true
+	}
+
 	config, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		fmt.Printf("[DEBUG] DecodeConfig failed for %s: format=%s err=%v len=%d\n", url, format, err, len(data))
@@ -73,8 +92,32 @@ func (m *ImageManager) GetTexture(url string) *sdl.Texture {
 		return nil
 	}
 
-	img, _, err := image.Decode(bytes.NewReader(data))
-	if err != nil {
+	var img image.Image
+	isSVG := strings.HasSuffix(strings.ToLower(url), ".svg") || bytes.HasPrefix(bytes.TrimSpace(data), []byte("<?xml")) || bytes.HasPrefix(bytes.TrimSpace(data), []byte("<svg"))
+
+	if isSVG {
+		icon, err := oksvg.ReadIconStream(bytes.NewReader(data))
+		if err == nil {
+			w, h := int(icon.ViewBox.W), int(icon.ViewBox.H)
+			if w == 0 || h == 0 {
+				w, h = 300, 150
+			}
+			icon.SetTarget(0, 0, float64(w), float64(h))
+			rgba := image.NewRGBA(image.Rect(0, 0, w, h))
+			scanner := rasterx.NewScannerGV(w, h, rgba, rgba.Bounds())
+			dasher := rasterx.NewDasher(w, h, scanner)
+			icon.Draw(dasher, 1.0)
+			img = rgba
+		}
+	} else {
+		var err error
+		img, _, err = image.Decode(bytes.NewReader(data))
+		if err != nil {
+			return nil
+		}
+	}
+
+	if img == nil {
 		return nil
 	}
 
