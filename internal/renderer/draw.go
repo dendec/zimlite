@@ -244,7 +244,14 @@ func (r *Renderer) renderStatusBar() {
 			surf.Free()
 			if err == nil {
 				_, _, tw, th, _ := tex.Query()
-				r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: 12, Y: r.height - statusBarHeight + (statusBarHeight-th)/2, W: tw, H: th})
+				w, h := tw, th
+				maxWidth := r.width - 24
+				if w > maxWidth && maxWidth > 0 {
+					ratio := float64(maxWidth) / float64(w)
+					w = maxWidth
+					h = int32(float64(h) * ratio)
+				}
+				r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: 12, Y: r.height - statusBarHeight + (statusBarHeight-h)/2, W: w, H: h})
 				tex.Destroy()
 			}
 		}
