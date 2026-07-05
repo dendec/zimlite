@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -67,9 +69,15 @@ func (app *App) OpenFile(path string) error {
 		}
 		defer f.Close()
 
-		doc, err = markdown.Parse(f)
+		ext := strings.ToLower(filepath.Ext(absPath))
+		switch ext {
+		case ".html", ".htm":
+			doc, err = html.Parse(f)
+		default:
+			doc, err = markdown.Parse(f)
+		}
 		if err != nil {
-			return fmt.Errorf("parse markdown: %w", err)
+			return fmt.Errorf("parse: %w", err)
 		}
 		app.docCache[absPath] = doc
 	}
