@@ -82,12 +82,12 @@ func loadFonts(baseSize int, fontPath string) ([fontCount]fontSlot, error) {
 
 	sizes := [fontCount]int{
 		FontBody: baseSize,
-		FontH1:   baseSize + 8,
-		FontH2:   baseSize + 5,
+		FontH1:   baseSize + 5,
+		FontH2:   baseSize + 4,
 		FontH3:   baseSize + 3,
-		FontH4:   baseSize + 1,
-		FontH5:   baseSize,
-		FontH6:   baseSize - 1,
+		FontH4:   baseSize + 2,
+		FontH5:   baseSize + 1,
+		FontH6:   baseSize,
 		FontMono: baseSize,
 	}
 

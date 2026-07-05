@@ -18,7 +18,6 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/util"
 )
 
 //go:embed assets/menu.md.tmpl
@@ -33,6 +32,15 @@ var helpGamepadTemplate string
 //go:embed assets/settings.md.tmpl
 var settingsTemplate string
 
+//go:embed assets/library_languages.md.tmpl
+var libraryLanguagesTemplate string
+
+//go:embed assets/library_categories.md.tmpl
+var libraryCategoriesTemplate string
+
+//go:embed assets/library_entries.md.tmpl
+var libraryEntriesTemplate string
+
 var tmpl = template.Must(template.New("menu").Funcs(template.FuncMap{
 	"urlquery": url.QueryEscape,
 }).Parse(menuTemplate))
@@ -40,6 +48,9 @@ var tmpl = template.Must(template.New("menu").Funcs(template.FuncMap{
 var helpKeyboardTmpl = template.Must(template.New("help_keyboard").Parse(helpKeyboardTemplate))
 var helpGamepadTmpl = template.Must(template.New("help_gamepad").Parse(helpGamepadTemplate))
 var settingsTmpl = template.Must(template.New("settings").Parse(settingsTemplate))
+var libraryLanguagesTmpl = template.Must(template.New("library_languages").Funcs(template.FuncMap{"urlquery": url.QueryEscape}).Parse(libraryLanguagesTemplate))
+var libraryCategoriesTmpl = template.Must(template.New("library_categories").Funcs(template.FuncMap{"urlquery": url.QueryEscape}).Parse(libraryCategoriesTemplate))
+var libraryEntriesTmpl = template.Must(template.New("library_entries").Funcs(template.FuncMap{"urlquery": url.QueryEscape}).Parse(libraryEntriesTemplate))
 
 // FileEntry represents a file in the menu with formatted details.
 type FileEntry struct {
@@ -81,7 +92,7 @@ func FileSelector(internetAvailable bool) (*document.Document, error) {
 		ZIMs:              zims,
 		Docs:              mds,
 		Downloads:         downloads,
-		HasContent:        len(zims) > 0 || len(mds) > 0 || len(downloads) > 0,
+		HasContent:        len(zims) > 0 || len(downloads) > 0,
 	}
 
 	var buf bytes.Buffer
@@ -142,14 +153,14 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, downloads []D
 
 			var sizeStr string
 			if dInfo, err := storage.LoadDownloadInfo(filepath.Join(dir, baseName+".info")); err == nil && dInfo.TotalSize > 0 {
-				sizeStr = fmt.Sprintf("%s / %s", storage.FormatSize(downloaded), storage.FormatSize(dInfo.TotalSize))
+				sizeStr = formatProgress(downloaded, dInfo.TotalSize)
 			} else {
 				sizeStr = storage.FormatSize(downloaded) + " / ?"
 			}
 
 			downloads = append(downloads, DownloadEntry{
 				Name:        baseName,
-				DisplayName: util.Truncate(baseName, 45),
+				DisplayName: strings.TrimSuffix(baseName, ".zim"),
 				Size:        sizeStr,
 				Active:      storage.Manager.IsActive(baseName),
 			})
@@ -169,7 +180,7 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, downloads []D
 
 		fe := FileEntry{
 			Name:        name,
-			DisplayName: util.Truncate(name, 45),
+			DisplayName: strings.TrimSuffix(name, ".zim"),
 			Size:        sizeStr,
 		}
 
@@ -180,6 +191,19 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, downloads []D
 		}
 	}
 	return zims, mds, downloads, nil
+}
+
+func formatProgress(current, total int64) string {
+	const unit = 1024
+	if total < unit {
+		return fmt.Sprintf("%d / %d B", current, total)
+	}
+	div, exp := int64(unit), 0
+	for n := total / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f / %.1f %s", float64(current)/float64(div), float64(total)/float64(div), []string{"kB", "MB", "GB", "TB"}[exp])
 }
 
 // CheckInternet pings the Kiwix library catalog and returns true if reachable.

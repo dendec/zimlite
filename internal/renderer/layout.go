@@ -10,6 +10,21 @@ import (
 
 // --- Layout engine ---
 
+const (
+	minContentWidth         = 100
+	headingBottomMargin     = 4
+	minListItemWidth        = 50
+	codeBlockPadding        = 8
+	codeBlockLeftPadding    = 12
+	defaultCodeLineHeight   = 18
+	blockquoteIndent        = 16
+	blockquotePadding       = 8
+	tableCellPadding        = 4
+	minTableCellWidth       = 10
+	fallbackImageColorValue = 150
+	codeSpanPadding         = 2
+)
+
 func (r *Renderer) relayout() {
 	r.ClearCache()
 	r.layout = PageLayout{
@@ -22,8 +37,8 @@ func (r *Renderer) relayout() {
 
 	r.width, r.height = r.window.GetSize()
 	maxW := r.width - 2*r.marginX
-	if maxW < 100 {
-		maxW = 100
+	if maxW < minContentWidth {
+		maxW = minContentWidth
 	}
 	r.layout.contentWidth = maxW
 
@@ -67,7 +82,7 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 	}
 
 	if h.Level == 1 || h.Level == 2 {
-		s.y += 4
+		s.y += headingBottomMargin
 		s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 			fontIdx: FontBody, color: s.r.theme.RuleColor,
 			x: s.r.marginX, y: s.y, w: s.maxW, h: 1,
@@ -95,8 +110,8 @@ func (s *layoutState) VisitList(l *document.List) {
 
 		indentX := s.r.listIndent * int32(entry.Indent)
 		itemW := s.maxW - indentX - s.r.listIndent
-		if itemW < 50 {
-			itemW = 50
+		if itemW < minListItemWidth {
+			itemW = minListItemWidth
 		}
 		if idx > 0 {
 			s.y += s.r.lineSpacing / 2
@@ -152,8 +167,8 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	oldMarginX := s.r.marginX
 	oldMaxW := s.maxW
 
-	pad := int32(8)
-	leftPad := int32(12)
+	pad := int32(codeBlockPadding)
+	leftPad := int32(codeBlockLeftPadding)
 
 	s.y += pad
 
@@ -165,7 +180,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	addLine := func(text string) {
 		tw, th := measureText(text, fontMono, false, false, false)
 		if th == 0 {
-			th = 18
+			th = defaultCodeLineHeight
 		}
 		s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 			text: text, fontIdx: FontMono, color: s.r.theme.TextColor,
@@ -207,18 +222,18 @@ func (s *layoutState) VisitBlockquote(b *document.Blockquote) {
 	oldMarginX := s.r.marginX
 	oldMaxW := s.maxW
 
-	s.r.marginX += 16
-	s.maxW -= 16
+	s.r.marginX += blockquoteIndent
+	s.maxW -= blockquoteIndent
 
 	startY := s.y
-	s.y += 8 // top padding
+	s.y += blockquotePadding // top padding
 
 	document.VisitBlocks(b.Blocks, s)
 
 	// Since child blocks add blockSpacing at their end, we subtract it to not double-pad,
 	// or just accept it as bottom padding. Let's subtract blockSpacing and add our own.
 	s.y -= s.r.blockSpacing
-	s.y += 8 // bottom padding
+	s.y += blockquotePadding // bottom padding
 
 	s.r.layout.blockquotes = append(s.r.layout.blockquotes, sdlRect{
 		X: oldMarginX, Y: startY, W: oldMaxW, H: s.y - startY,
@@ -277,7 +292,7 @@ func (s *layoutState) VisitImage(i *document.Image) {
 	font := s.r.fonts[FontBody].font
 	tw, th := measureText(alt, font, false, false, false)
 	s.r.layout.lines = append(s.r.layout.lines, lineEntry{
-		text: alt, fontIdx: FontBody, color: sdlColor{R: 150, G: 150, B: 150, A: 255},
+		text: alt, fontIdx: FontBody, color: sdlColor{R: fallbackImageColorValue, G: fallbackImageColorValue, B: fallbackImageColorValue, A: 255},
 		x: s.r.marginX, y: s.y, w: tw, h: th,
 	})
 	s.y += th + s.r.lineSpacing
@@ -321,7 +336,8 @@ func (s *layoutState) VisitTable(t *document.Table) {
 	}
 
 	colWidths := make([]int32, colCount)
-	padding := int32(8)
+	padding := int32(tableCellPadding)
+	spaceW, _ := measureText(" ", s.r.fonts[FontBody].font, false, false, false)
 
 	// Pass 1: measure natural column widths
 	for _, row := range activeRows {
@@ -329,7 +345,7 @@ func (s *layoutState) VisitTable(t *document.Table) {
 			if int(cIdx) >= colCount {
 				continue
 			}
-			w := s.r.measureInlinesWidth(cell.Inlines, FontBody) + 2*padding
+			w := s.r.measureInlinesWidth(cell.Inlines, FontBody) + 2*padding + spaceW
 			if w > colWidths[cIdx] {
 				colWidths[cIdx] = w
 			}
@@ -341,12 +357,14 @@ func (s *layoutState) VisitTable(t *document.Table) {
 		totalW += w
 	}
 
-	// Shrink proportionally if it exceeds max width
+	// Expand to fill width or shrink proportionally
 	if totalW > s.maxW {
 		scale := float64(s.maxW) / float64(totalW)
 		for i := range colWidths {
 			colWidths[i] = int32(float64(colWidths[i]) * scale)
 		}
+	} else if totalW < s.maxW && colCount > 0 {
+		colWidths[0] += s.maxW - totalW
 	}
 
 	var tableGrid tableGridEntry
@@ -370,12 +388,15 @@ func (s *layoutState) VisitTable(t *document.Table) {
 			cellX := s.r.marginX + cellXOffset
 			cellY := s.y + padding
 			cellMaxW := cellW - 2*padding
-			if cellMaxW < 10 {
-				cellMaxW = 10
+			if cellMaxW < minTableCellWidth {
+				cellMaxW = minTableCellWidth
 			}
 
-			// Render cell text
-			bottomY := s.r.layoutInlines(cell.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, cellMaxW, cellY, cellX-s.r.marginX, "")
+			// Measure a space to use as left padding for the cell content
+			spaceW, _ := measureText(" ", s.r.fonts[FontBody].font, false, false, false)
+
+			// Render cell text with spaceW added to indentX
+			bottomY := s.r.layoutInlines(cell.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, cellMaxW-spaceW, cellY, cellX-s.r.marginX+spaceW, "")
 
 			h := bottomY - cellY
 			if h > maxH {
@@ -501,8 +522,8 @@ func (s *layoutState) flushInlineLine(
 			})
 			if w.IsCode {
 				s.r.layout.codeSpans = append(s.r.layout.codeSpans, codeSpanRange{
-					x: currX - 2, y: wordY - 2,
-					w: w.PixW + 4, h: w.PixH + 4,
+					x: currX - codeSpanPadding, y: wordY - codeSpanPadding,
+					w: w.PixW + codeSpanPadding*2, h: w.PixH + codeSpanPadding*2,
 				})
 			}
 		}

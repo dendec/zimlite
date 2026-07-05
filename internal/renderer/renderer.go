@@ -46,7 +46,14 @@ type emojiCacheKey struct {
 }
 
 const (
-	statusBarHeight = 24
+	statusBarHeight     = 24
+	defaultMarginX      = 20
+	defaultMarginY      = 16
+	defaultLineSpacing  = 6
+	defaultBlockSpacing = 8
+	defaultListIndent   = 16
+	maxTextCacheSize    = 1500
+	maxEmojiCacheSize   = 512
 )
 
 // TextureCache manages GPU texture caching with LRU eviction.
@@ -262,15 +269,15 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		selectedLink: -1,
 		width:        winW,
 		height:       winH,
-		marginX:      20,
-		marginY:      16,
-		lineSpacing:  6,
-		blockSpacing: 12,
-		listIndent:   16,
+		marginX:      defaultMarginX,
+		marginY:      defaultMarginY,
+		lineSpacing:  defaultLineSpacing,
+		blockSpacing: defaultBlockSpacing,
+		listIndent:   defaultListIndent,
 		theme:        LightTheme(),
 		light:        true,
-		textCache:    NewTextureCache[textureKey](1500),
-		emojiCache:   NewTextureCache[emojiCacheKey](512),
+		textCache:    NewTextureCache[textureKey](maxTextCacheSize),
+		emojiCache:   NewTextureCache[emojiCacheKey](maxEmojiCacheSize),
 		imgManager:   NewImageManager(sdlRend),
 		baseFontSize: baseFontSize,
 		fontPath:     fontPath,
@@ -702,6 +709,11 @@ func (r *Renderer) Zoom(delta int) error {
 // SetStatusOverride sets a custom status bar message to override help legends.
 func (r *Renderer) SetStatusOverride(status string) {
 	r.statusOverride = status
+}
+
+// GetStatusOverride returns the current custom status bar message.
+func (r *Renderer) GetStatusOverride() string {
+	return r.statusOverride
 }
 
 func extractTitle(doc *document.Document) string {

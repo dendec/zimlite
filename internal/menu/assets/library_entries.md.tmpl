@@ -1,0 +1,18 @@
+# 🌐 Archive Library - {{.LanguageName}} - {{.Category}}
+
+[🔙 Back to Categories](virtual:library/categories?lang={{.Language}}&name={{urlquery .LanguageName}})
+
+{{if not .Entries}}
+{{if gt .Page 0}}*📭 No more archives on this page.*{{else}}*📭 No archives found in this language and category.*{{end}}
+{{else}}
+{{range .Entries}}
+### {{.Title}}
+
+{{if .Summary}}*📝 Description*: {{.Summary}}
+{{end}}*💾 Size*: {{.Size}}
+[⬇ Download {{.Filename}}](virtual:library/download?url={{urlquery .DownloadURL}}&filename={{urlquery .Filename}})
+
+---
+{{end}}
+{{if gt .Page 0}}[◀ Previous Page](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{.Category}}&page={{.PrevPage}})  {{end}}{{if .HasNextPage}}[Next Page ▶](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{.Category}}&page={{.NextPage}}){{end}}
+{{end}}

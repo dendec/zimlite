@@ -422,6 +422,23 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 		}
 
 		if err != nil {
+			if strings.Contains(err.Error(), "context canceled") {
+				slog.Info("Download stopped by user", "filename", filename)
+				msg := "🛑 Download stopped"
+				viewer.SetStatusOverride(msg)
+				l.pendingMenuReload.Store(true) // Ensure UI updates back to "Start" button
+				_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+
+				go func() {
+					time.Sleep(10 * time.Second)
+					if viewer.GetStatusOverride() == msg {
+						viewer.SetStatusOverride("")
+						_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+					}
+				}()
+				return
+			}
+
 			slog.Error("Download failed", "url", downloadURL, "filename", filename, "error", err)
 
 			errStr := err.Error()
@@ -432,9 +449,18 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 			}
 
 			errMsg := util.Truncate(errStr, 60)
-			viewer.SetStatusOverride("❌ Download failed: " + errMsg)
+			msg := "❌ Download failed: " + errMsg
+			viewer.SetStatusOverride(msg)
 			l.pendingMenuReload.Store(true) // Ensure UI updates back to "Start" button
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+
+			go func() {
+				time.Sleep(10 * time.Second)
+				if viewer.GetStatusOverride() == msg {
+					viewer.SetStatusOverride("")
+					_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+				}
+			}()
 			return
 		}
 

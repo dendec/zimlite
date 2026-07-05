@@ -1,11 +1,11 @@
-# 📖 Kiwix SDL Document Menu
+# 📖 Menu
 
-[❓ Help & Shortcuts](virtual:help)
+[❓ Help](virtual:help)
 
 [⚙️ Settings](virtual:settings)
 
 {{if .InternetAvailable}}
-[📥 Browse and Download ZIM Archives](virtual:library)
+[📥 Archive Library](virtual:library)
 {{end}}
 
 {{if .Downloads}}
@@ -13,27 +13,19 @@
 
 | | | | |
 |------|------|--------|--------|
-{{range .Downloads}}| {{.DisplayName}} | {{.Size}} | {{if .Active}}[⏸ Stop](virtual:download/stop?file={{urlquery .Name}}){{else}}[▶ Start](virtual:download/start?file={{urlquery .Name}}){{end}} | [🗑️ Delete](virtual:download/delete?file={{urlquery .Name}}) |
+{{range .Downloads}}| {{.DisplayName}} | {{.Size}} | {{if .Active}}[⏸ Stop](virtual:download/stop?file={{urlquery .Name}}){{else}}[▶ Start](virtual:download/start?file={{urlquery .Name}}){{end}} | [❌ Delete](virtual:download/delete?file={{urlquery .Name}}) |
 {{end}}
 {{end}}
 
 {{if .ZIMs}}
-## 📦 ZIM Archives
+## 📦 Archives
 
 | | | |
 |------|------|--------|
-{{range .ZIMs}}| [{{.DisplayName}}]( {{.Name}} ) | {{.Size}} | [🗑️ Delete](virtual:delete?file={{urlquery .Name}}) |
+{{range .ZIMs}}| [{{.DisplayName}}]( {{.Name}} ) | {{.Size}} | [❌ Delete](virtual:delete?file={{urlquery .Name}}) |
 {{end}}
 {{end}}
 
-{{if .Docs}}
-## 📄 Documents
-
-| | | |
-|------|------|--------|
-{{range .Docs}}| [{{.DisplayName}}]( {{.Name}} ) | {{.Size}} | [🗑️ Delete](virtual:delete?file={{urlquery .Name}}) |
-{{end}}
-{{end}}
 
 {{if not .HasContent}}
 *📭 No documents or ZIM archives found in current directory.*

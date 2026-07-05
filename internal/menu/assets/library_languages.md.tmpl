@@ -1,0 +1,8 @@
+# 🌐 Archive Library - Languages
+
+[🔙 Back](virtual:menu)
+
+👇 Select a language:
+
+{{range .Entries}}{{if .Language}}* [{{.Title}} ({{.Count}} archives)](virtual:library/categories?lang={{.Language}}&name={{urlquery .Title}})
+{{end}}{{end}}

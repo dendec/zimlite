@@ -109,7 +109,7 @@ func (r *Renderer) renderLines() {
 		// Draw underline for cursor or hover in tree mode.
 		if line.isCursor || r.hoveredTreeLine >= 0 && r.isTreeLineHovered(i) {
 			if line.labelW > 0 {
-				underlineY := screenY + line.h - 1
+				underlineY := screenY + line.h
 				r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
 				r.sdlRenderer.FillRect(&sdl.Rect{X: line.labelX, Y: underlineY, W: line.labelW, H: 1})
 			}
@@ -186,7 +186,7 @@ func (r *Renderer) drawLinkUnderline(idx int) {
 			continue
 		}
 
-		underlineY := sy + rect.H - 1
+		underlineY := sy + rect.H
 		r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
 		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X, Y: underlineY, W: rect.W, H: 1})
 	}

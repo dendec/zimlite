@@ -17,30 +17,30 @@ type Theme struct {
 
 func LightTheme() *Theme {
 	return &Theme{
-		BgColor:               sdl.Color{R: 245, G: 245, B: 240, A: 255},
-		TextColor:             sdl.Color{R: 30, G: 30, B: 30, A: 255},
-		LinkColor:             sdl.Color{R: 0, G: 80, B: 180, A: 255},
-		HeadingColor:          sdl.Color{R: 50, G: 50, B: 50, A: 255},
-		SelBgColor:            sdl.Color{R: 255, G: 230, B: 150, A: 255},
-		SelImgColor:           sdl.Color{R: 255, G: 180, B: 0, A: 60},
-		CodeBgColor:           sdl.Color{R: 235, G: 235, B: 230, A: 255},
-		RuleColor:             sdl.Color{R: 180, G: 180, B: 170, A: 255},
-		BlockquoteBgColor:     sdl.Color{R: 240, G: 240, B: 240, A: 255},
-		BlockquoteBorderColor: sdl.Color{R: 180, G: 180, B: 180, A: 255},
+		BgColor:               sdl.Color{R: 255, G: 255, B: 255, A: 255}, // Clean white
+		TextColor:             sdl.Color{R: 32, G: 33, B: 36, A: 255},    // Dark grey for readability
+		LinkColor:             sdl.Color{R: 26, G: 115, B: 232, A: 255},  // Vibrant modern blue
+		HeadingColor:          sdl.Color{R: 0, G: 0, B: 0, A: 255},       // Pure black for contrast
+		SelBgColor:            sdl.Color{R: 179, G: 212, B: 255, A: 255}, // Light blue selection
+		SelImgColor:           sdl.Color{R: 26, G: 115, B: 232, A: 60},
+		CodeBgColor:           sdl.Color{R: 245, G: 245, B: 245, A: 255},
+		RuleColor:             sdl.Color{R: 230, G: 230, B: 230, A: 255}, // Subtle light gray separator
+		BlockquoteBgColor:     sdl.Color{R: 248, G: 249, B: 250, A: 255},
+		BlockquoteBorderColor: sdl.Color{R: 200, G: 200, B: 200, A: 255},
 	}
 }
 
 func DarkTheme() *Theme {
 	return &Theme{
-		BgColor:               sdl.Color{R: 20, G: 22, B: 28, A: 255},
+		BgColor:               sdl.Color{R: 18, G: 20, B: 24, A: 255}, // Deep dark slate
 		TextColor:             sdl.Color{R: 220, G: 220, B: 220, A: 255},
-		LinkColor:             sdl.Color{R: 100, G: 180, B: 255, A: 255},
-		HeadingColor:          sdl.Color{R: 200, G: 210, B: 220, A: 255},
-		SelBgColor:            sdl.Color{R: 80, G: 60, B: 20, A: 255},
-		SelImgColor:           sdl.Color{R: 150, G: 120, B: 30, A: 70},
-		CodeBgColor:           sdl.Color{R: 35, G: 38, B: 45, A: 255},
-		RuleColor:             sdl.Color{R: 60, G: 65, B: 70, A: 255},
-		BlockquoteBgColor:     sdl.Color{R: 35, G: 38, B: 45, A: 255},
-		BlockquoteBorderColor: sdl.Color{R: 80, G: 85, B: 90, A: 255},
+		LinkColor:             sdl.Color{R: 100, G: 180, B: 255, A: 255}, // Bright readable blue
+		HeadingColor:          sdl.Color{R: 240, G: 240, B: 240, A: 255},
+		SelBgColor:            sdl.Color{R: 30, G: 70, B: 120, A: 255}, // Dark blue selection
+		SelImgColor:           sdl.Color{R: 100, G: 180, B: 255, A: 60},
+		CodeBgColor:           sdl.Color{R: 28, G: 31, B: 38, A: 255},
+		RuleColor:             sdl.Color{R: 45, G: 50, B: 55, A: 255}, // Subtle dark separator
+		BlockquoteBgColor:     sdl.Color{R: 25, G: 28, B: 34, A: 255},
+		BlockquoteBorderColor: sdl.Color{R: 70, G: 75, B: 80, A: 255},
 	}
 }

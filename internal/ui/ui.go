@@ -26,6 +26,11 @@ const (
 	modeTree
 )
 
+const (
+	maxTreeExpansionLevel = 100
+	frameDuration         = 33 * time.Millisecond
+)
+
 // App is the top-level application state.
 type App struct {
 	viewer    DocViewer
@@ -141,7 +146,7 @@ func (app *App) enterTreeMode() {
 func (app *App) exitTreeMode() {
 	app.mode = modeDoc
 	// Restore last viewed document from history.
-	for i := 0; i < 100 && app.navigator.Current() == "virtual:tree"; i++ {
+	for i := 0; i < maxTreeExpansionLevel && app.navigator.Current() == "virtual:tree"; i++ {
 		app.navigator.Back()
 	}
 	prevPath := app.navigator.Current()
@@ -326,7 +331,7 @@ func (app *App) Run() {
 
 	// Background ticker to wake up the event loop for animations at ~30 FPS
 	go func() {
-		ticker := time.NewTicker(33 * time.Millisecond)
+		ticker := time.NewTicker(frameDuration)
 		defer ticker.Stop()
 		for {
 			select {

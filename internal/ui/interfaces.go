@@ -40,6 +40,7 @@ type DocInput interface {
 // StatusBar controls the status bar overlay.
 type StatusBar interface {
 	SetStatusOverride(status string)
+	GetStatusOverride() string
 }
 
 // DocViewer is the combined interface for backward compatibility.
