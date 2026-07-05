@@ -134,9 +134,9 @@ func TestAutoExpand(t *testing.T) {
 }
 
 func TestNoAutoExpand(t *testing.T) {
-	// Large group (>20) should NOT auto-expand.
-	articles := make([]zim.ArticleEntry, 25)
-	for i := 0; i < 25; i++ {
+	// Large group (>12) should NOT auto-expand.
+	articles := make([]zim.ArticleEntry, 15)
+	for i := 0; i < 15; i++ {
 		articles[i] = zim.ArticleEntry{
 			Title: "A" + string(rune('A'+i)) + "title",
 			Path:  "A/title",
@@ -146,6 +146,6 @@ func TestNoAutoExpand(t *testing.T) {
 	root := NewTree(articles)
 	aNode := root.children[0]
 	if aNode.Expanded() {
-		t.Error("A node with 25 articles should NOT auto-expand")
+		t.Error("A node with 15 articles should NOT auto-expand")
 	}
 }
