@@ -186,14 +186,26 @@ func (r *Renderer) Render() {
 
 	// Render status bar text.
 	var statusText string
-	if r.doc != nil {
-		if r.hasTree {
-			statusText = "←→:links  ↑↓:scroll  ↩:open  ⌫:back  H:home  T:tree  D:theme"
+	if sdl.NumJoysticks() > 0 {
+		if r.doc != nil {
+			if r.hasTree {
+				statusText = "←→:links  ↑↓:scroll  A:open  X:back  Start:home  Select:tree"
+			} else {
+				statusText = "←→:links  ↑↓:scroll  A:open  X:back"
+			}
 		} else {
-			statusText = "←→:links  ↑↓:scroll  ↩:open  ⌫:back  D:theme"
+			statusText = "↑↓:nav  A/→:enter  X/←:back  Select:doc"
 		}
 	} else {
-		statusText = "↑↓:nav  ↩→:enter  ←⌫:back  T:doc  D:theme"
+		if r.doc != nil {
+			if r.hasTree {
+				statusText = "←→:links  ↑↓:scroll  ↩:open  ⌫:back  H:home  T:tree  D:theme"
+			} else {
+				statusText = "←→:links  ↑↓:scroll  ↩:open  ⌫:back  D:theme"
+			}
+		} else {
+			statusText = "↑↓:nav  ↩→:enter  ←⌫:back  T:doc  D:theme"
+		}
 	}
 
 	font := r.fonts[FontBody].font
