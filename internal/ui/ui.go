@@ -49,7 +49,7 @@ type DocNavigator interface {
 type appMode int
 
 const (
-	modeDoc  appMode = iota
+	modeDoc appMode = iota
 	modeTree
 )
 
@@ -62,6 +62,7 @@ type App struct {
 	docCache  map[string]*document.Document
 	zimReader *zim.Reader
 	navState  *trie.NavState
+	gamepad   GamepadState
 }
 
 // New creates the app with injected dependencies.
@@ -221,10 +222,10 @@ func (app *App) OpenFile(path string) error {
 	} else {
 		app.navigator.Open(absPath)
 	}
-	
+
 	hasTree := app.zimReader != nil && app.zimReader.ArticleCount() > 1
 	app.renderer.SetHasTree(hasTree)
-	
+
 	app.renderer.Relayout()
 	return nil
 }
@@ -425,84 +426,14 @@ func (app *App) processEvent(event sdl.Event) {
 			app.processDocKey(sc)
 		}
 
-	case *sdl.JoyAxisEvent:
-		v := e.Value
-		debugEvent("AXIS", int(e.Axis), int(v))
-		// Dead zone: ignore small movements.
-		if v > -8000 && v < 8000 {
-			return
-		}
-		if app.mode == modeTree {
-			switch e.Axis {
-			case 1: // vertical
-				if v < 0 {
-					app.navState.MoveUp()
-				} else {
-					app.navState.MoveDown()
+	case *sdl.JoyAxisEvent, *sdl.JoyButtonEvent, *sdl.JoyHatEvent:
+		if action, ok := app.gamepad.TranslateEvent(event, app.mode); ok {
+			if action != ActionNone {
+				var val int16
+				if ax, ok := event.(*sdl.JoyAxisEvent); ok {
+					val = ax.Value
 				}
-			case 0: // horizontal
-				if v < 0 {
-					app.navState.ActionLeft()
-				} else {
-					app.navState.ActionRight()
-				}
-			}
-			app.renderTree()
-		} else {
-			switch e.Axis {
-			case 1:
-				app.renderer.ScrollBy(scrollStep * int32(v / 16000))
-			case 0:
-				if v < 0 {
-					app.renderer.SelectPrevLink()
-				} else {
-					app.renderer.SelectNextLink()
-				}
-			}
-		}
-
-	case *sdl.JoyButtonEvent:
-		if e.Type != sdl.JOYBUTTONDOWN {
-			return
-		}
-		debugEvent("BTN", int(e.Button), 0)
-		switch e.Button {
-		case 0, 1: // A/B — open/enter
-			app.processJoyA()
-		case 2, 3: // X/Y — back
-			app.processJoyB()
-		case 4: // L1 — page up
-			app.renderer.ScrollPageUp()
-		case 5: // R1 — page down
-			app.renderer.ScrollPageDown()
-		case 6: // Select — toggle tree
-			app.toggleMode()
-		case 7: // Start — go home
-			app.goHome()
-		case 8: // Menu/Guide — quit
-			app.running = false
-		case 9: // L2 — zoom out
-			_ = app.renderer.Zoom(-1)
-		case 10: // R2 — zoom in
-			_ = app.renderer.Zoom(1)
-		}
-
-	case *sdl.JoyHatEvent:
-		debugEvent("HAT", int(e.Value), 0)
-		if app.mode == modeTree {
-			switch e.Value {
-			case sdl.HAT_UP: app.navState.MoveUp()
-			case sdl.HAT_DOWN: app.navState.MoveDown()
-			case sdl.HAT_LEFT: app.navState.ActionLeft()
-			case sdl.HAT_RIGHT: app.navState.ActionRight()
-			}
-			app.renderTree()
-		} else {
-			switch e.Value {
-			case sdl.HAT_UP: app.renderer.ScrollBy(-scrollStep)
-			case sdl.HAT_DOWN: app.renderer.ScrollBy(scrollStep)
-			case sdl.HAT_LEFT: app.renderer.SelectPrevLink()
-			case sdl.HAT_RIGHT: app.renderer.SelectNextLink()
+				app.executeGamepadAction(action, val)
 			}
 		}
 
@@ -612,14 +543,18 @@ func (app *App) processJoyA() {
 	if app.mode == modeTree {
 		if app.navState.CursorIsLeaf() {
 			path := app.navState.CursorPath()
-			if path != "" { app.navigateLink(path) }
+			if path != "" {
+				app.navigateLink(path)
+			}
 		} else {
 			app.navState.ActionRight()
 			app.renderTree()
 		}
 	} else {
 		url := app.renderer.SelectedLinkURL()
-		if url != "" { app.navigateLink(url) }
+		if url != "" {
+			app.navigateLink(url)
+		}
 	}
 }
 
@@ -637,6 +572,55 @@ func (app *App) processJoyB() {
 		if app.navigator.Current() != "virtual:menu" {
 			_ = app.OpenFile("virtual:menu")
 		}
+	}
+}
+
+func (app *App) executeGamepadAction(action Action, val int16) {
+	switch action {
+	case ActionOpenEnter:
+		app.processJoyA()
+	case ActionBack:
+		app.processJoyB()
+	case ActionScrollUp:
+		if app.mode == modeTree {
+			app.navState.MoveUp()
+			app.renderTree()
+		} else {
+			if val != 0 {
+				app.renderer.ScrollBy(-scrollStep * int32(-val/16000))
+			} else {
+				app.renderer.ScrollBy(-scrollStep)
+			}
+		}
+	case ActionScrollDown:
+		if app.mode == modeTree {
+			app.navState.MoveDown()
+			app.renderTree()
+		} else {
+			if val != 0 {
+				app.renderer.ScrollBy(scrollStep * int32(val/16000))
+			} else {
+				app.renderer.ScrollBy(scrollStep)
+			}
+		}
+	case ActionPageUp:
+		app.renderer.ScrollPageUp()
+	case ActionPageDown:
+		app.renderer.ScrollPageDown()
+	case ActionToggleTree:
+		app.toggleMode()
+	case ActionGoHome:
+		app.goHome()
+	case ActionQuit:
+		app.running = false
+	case ActionZoomIn:
+		_ = app.renderer.Zoom(1)
+	case ActionZoomOut:
+		_ = app.renderer.Zoom(-1)
+	case ActionSelectPrevLink:
+		app.renderer.SelectPrevLink()
+	case ActionSelectNextLink:
+		app.renderer.SelectNextLink()
 	}
 }
 

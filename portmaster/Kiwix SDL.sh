@@ -21,6 +21,8 @@ cd "$GAMEDIR"
 
 export LD_LIBRARY_PATH="$GAMEDIR/lib:/usr/lib:$LD_LIBRARY_PATH"
 
+export KIWIX_DEBUG_INPUT=1
+
 # Write logs
 exec > >(tee "$GAMEDIR/log.txt") 2>&1
 
