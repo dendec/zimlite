@@ -1,6 +1,8 @@
 package renderer
 
 import (
+	"fmt"
+
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -198,11 +200,11 @@ func (r *Renderer) renderStatusBar() {
 
 	statusText := r.statusOverride
 	if statusText == "" {
-		statusText = r.defaultStatus
+		statusText = r.computeStatusText()
 	}
 
 	font := r.fonts[FontBody].font
-	if font != nil {
+	if font != nil && statusText != "" {
 		surf, err := font.RenderUTF8Blended(statusText, r.theme.TextColor)
 		if err == nil {
 			tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
@@ -221,6 +223,39 @@ func (r *Renderer) renderStatusBar() {
 			}
 		}
 	}
+}
+
+func (r *Renderer) computeStatusText() string {
+	if r.doc != nil {
+		vpH := r.height - statusBarHeight
+		totalH := r.layout.totalHeight
+		scrollPct := 0
+		if totalH > vpH {
+			maxScroll := totalH - vpH
+			scrollPct = int(float64(r.scrollY) / float64(maxScroll) * 100)
+			if scrollPct > 100 {
+				scrollPct = 100
+			}
+		} else {
+			scrollPct = 100
+		}
+
+		linkCount := len(r.layout.links)
+		if linkCount > 0 {
+			sel := r.selectedLink + 1
+			if sel < 1 {
+				sel = 1
+			}
+			return fmt.Sprintf("%d%%  \u00b7  %d/%d", scrollPct, sel, linkCount)
+		}
+		return fmt.Sprintf("%d%%", scrollPct)
+	}
+
+	if r.textLines != nil {
+		return "Article tree"
+	}
+
+	return ""
 }
 
 func (r *Renderer) renderScrollbar() {

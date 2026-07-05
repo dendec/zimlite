@@ -39,7 +39,7 @@ type codeSpanRange struct {
 }
 
 const (
-	statusBarHeight      = 24
+	statusBarHeight        = 24
 	maxTextureCacheEntries = 1500
 )
 
@@ -89,7 +89,6 @@ type Renderer struct {
 	baseFontSize        int
 	fontPath            string
 	statusOverride      string
-	defaultStatus       string
 	hasActiveAnimations bool
 }
 
@@ -253,7 +252,6 @@ func (r *Renderer) SetDocument(doc *document.Document) {
 	r.doc = doc
 	r.scrollY = 0
 	r.selectedLink = -1
-	r.defaultStatus = "\u2191\u2193 scroll  \u23CE open  B back  M menu  H home"
 	r.relayout()
 }
 
@@ -291,7 +289,6 @@ func (r *Renderer) SetTextLines(lines []string) {
 	r.layout = PageLayout{}
 	r.doc = nil
 	r.selectedLink = -1
-	r.defaultStatus = "\u2191\u2193 navigate  \u2192 expand  \u2190 collapse  \u23CE open  B back"
 
 	font := r.fonts[FontBody].font
 	y := r.marginY
@@ -583,11 +580,6 @@ func (r *Renderer) Zoom(delta int) error {
 // SetStatusOverride sets a custom status bar message to override help legends.
 func (r *Renderer) SetStatusOverride(status string) {
 	r.statusOverride = status
-}
-
-// SetDefaultStatus sets the default status bar text shown when no override is active.
-func (r *Renderer) SetDefaultStatus(status string) {
-	r.defaultStatus = status
 }
 
 func (r *Renderer) HasAnimations() bool {
