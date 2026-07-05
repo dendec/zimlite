@@ -95,9 +95,10 @@ func (p *mathPlugin) Init(c *converter.Converter) error {
 		if img != nil {
 			var alt, src string
 			for _, a := range img.Attr {
-				if a.Key == "alt" {
+				switch a.Key {
+				case "alt":
 					alt = a.Val
-				} else if a.Key == "src" {
+				case "src":
 					src = a.Val
 				}
 			}

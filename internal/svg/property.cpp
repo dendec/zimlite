@@ -574,6 +574,10 @@ double Length::value(double max) const
         return m_value * dpi / 72.0;
     case LengthUnits::Pc:
         return m_value * dpi / 6.0;
+    case LengthUnits::Em:
+        return m_value * 16.0;
+    case LengthUnits::Ex:
+        return m_value * 8.0;
     case LengthUnits::Percent:
         return m_value * max / 100.0;
     default:
