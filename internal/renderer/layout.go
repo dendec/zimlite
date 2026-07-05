@@ -8,6 +8,8 @@ import (
 	_ "image/png"
 	"strings"
 
+	_ "golang.org/x/image/webp"
+
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 )
 
@@ -182,7 +184,7 @@ func (s *layoutState) VisitImage(i *document.Image) {
 	if s.r.loader != nil && i.URL != "" {
 		data, err := s.r.loader(i.URL)
 		if err == nil {
-			config, _, errConfig := image.DecodeConfig(bytes.NewReader(data))
+			config, format, errConfig := image.DecodeConfig(bytes.NewReader(data))
 			if errConfig == nil && config.Width > 0 && config.Height > 0 {
 				imgW := int32(config.Width)
 				imgH := int32(config.Height)
@@ -204,7 +206,11 @@ func (s *layoutState) VisitImage(i *document.Image) {
 				})
 				s.y += targetH + s.r.blockSpacing
 				return
+			} else {
+				fmt.Printf("[DEBUG] Block DecodeConfig failed for %s: format=%s err=%v len=%d\n", i.URL, format, errConfig, len(data))
 			}
+		} else {
+			fmt.Printf("[DEBUG] Block Loader failed for %s: %v\n", i.URL, err)
 		}
 	}
 
@@ -225,7 +231,7 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 		if r.loader != nil && url != "" {
 			data, err := r.loader(url)
 			if err == nil {
-				config, _, errConfig := image.DecodeConfig(bytes.NewReader(data))
+				config, format, errConfig := image.DecodeConfig(bytes.NewReader(data))
 				if errConfig == nil && config.Width > 0 && config.Height > 0 {
 					w := int32(config.Width)
 					h := int32(config.Height)
@@ -234,7 +240,11 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 						scale = 1.0
 					}
 					return int32(float64(w) * scale), int32(float64(h) * scale)
+				} else {
+					fmt.Printf("[DEBUG] DecodeConfig failed for %s: format=%s err=%v len=%d\n", url, format, errConfig, len(data))
 				}
+			} else {
+				fmt.Printf("[DEBUG] Loader failed for %s: %v\n", url, err)
 			}
 		}
 		return 0, 0

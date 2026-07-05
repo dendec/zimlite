@@ -85,6 +85,7 @@ type Renderer struct {
 	linkColor             sdl.Color
 	headingColor          sdl.Color
 	selBgColor            sdl.Color
+	selImgColor           sdl.Color
 	codeBgColor           sdl.Color
 	ruleColor             sdl.Color
 	blockquoteBgColor     sdl.Color
@@ -177,6 +178,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		linkColor:             sdl.Color{R: 0, G: 80, B: 180, A: 255},
 		headingColor:          sdl.Color{R: 50, G: 50, B: 50, A: 255},
 		selBgColor:            sdl.Color{R: 255, G: 230, B: 150, A: 255},
+		selImgColor:           sdl.Color{R: 255, G: 180, B: 0, A: 60},
 		codeBgColor:           sdl.Color{R: 235, G: 235, B: 230, A: 255},
 		ruleColor:             sdl.Color{R: 180, G: 180, B: 170, A: 255},
 		blockquoteBgColor:     sdl.Color{R: 240, G: 240, B: 240, A: 255},
@@ -277,6 +279,7 @@ func (r *Renderer) ToggleTheme() {
 		r.linkColor = sdl.Color{R: 0, G: 80, B: 180, A: 255}
 		r.headingColor = sdl.Color{R: 50, G: 50, B: 50, A: 255}
 		r.selBgColor = sdl.Color{R: 255, G: 230, B: 150, A: 255}
+		r.selImgColor = sdl.Color{R: 255, G: 180, B: 0, A: 60}
 		r.codeBgColor = sdl.Color{R: 235, G: 235, B: 230, A: 255}
 		r.ruleColor = sdl.Color{R: 180, G: 180, B: 170, A: 255}
 		r.blockquoteBgColor = sdl.Color{R: 240, G: 240, B: 240, A: 255}
@@ -287,6 +290,7 @@ func (r *Renderer) ToggleTheme() {
 		r.linkColor = sdl.Color{R: 100, G: 180, B: 255, A: 255}
 		r.headingColor = sdl.Color{R: 200, G: 210, B: 220, A: 255}
 		r.selBgColor = sdl.Color{R: 80, G: 60, B: 20, A: 255}
+		r.selImgColor = sdl.Color{R: 150, G: 120, B: 30, A: 70}
 		r.codeBgColor = sdl.Color{R: 35, G: 38, B: 45, A: 255}
 		r.ruleColor = sdl.Color{R: 60, G: 65, B: 70, A: 255}
 		r.blockquoteBgColor = sdl.Color{R: 35, G: 38, B: 45, A: 255}

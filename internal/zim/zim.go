@@ -306,6 +306,9 @@ func (r *Reader) ResolveResource(rawURL string) ([]byte, string, error) {
 	}
 
 	clean := decoded
+	for strings.HasPrefix(clean, "./") {
+		clean = clean[2:]
+	}
 	for strings.HasPrefix(clean, "../") {
 		clean = clean[3:]
 	}
@@ -313,6 +316,7 @@ func (r *Reader) ResolveResource(rawURL string) ([]byte, string, error) {
 
 	candidates := []string{
 		clean,
+		"-/" + clean,
 		"I/" + clean,
 		"images/" + clean,
 	}

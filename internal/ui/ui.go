@@ -222,7 +222,7 @@ func (app *App) OpenFile(path string) error {
 
 		var ok bool
 		doc, ok = app.docCache[absPath]
-		if !ok {
+		if !ok || (isZIM && app.zimReader == nil) {
 			if isZIM {
 				var zr *zim.Reader
 				app.shutdown()

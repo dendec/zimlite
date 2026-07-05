@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"bytes"
+	_ "golang.org/x/image/webp"
 	"image"
 	"image/draw"
 	_ "image/jpeg"
@@ -94,8 +95,10 @@ func (r *Renderer) renderLines() {
 			continue
 		}
 		if line.isCursor {
+			r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
 			r.sdlRenderer.SetDrawColor(r.selBgColor.R, r.selBgColor.G, r.selBgColor.B, r.selBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: screenY, W: r.width, H: line.h})
+			r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
 		}
 		if line.text == "" {
 			if line.h <= 2 {
@@ -148,13 +151,57 @@ func (r *Renderer) renderLinkHighlight() {
 		return
 	}
 	link := r.links[r.selectedLink]
-	r.sdlRenderer.SetDrawColor(r.selBgColor.R, r.selBgColor.G, r.selBgColor.B, r.selBgColor.A)
+
+	var mergedText []sdl.Rect
+	var imgRects []sdl.Rect
+
 	for _, rect := range link.rects {
+		isImg := false
+		for _, img := range r.imageEntries {
+			if img.x == rect.X && img.y == rect.Y && img.w == rect.W && img.h == rect.H {
+				isImg = true
+				break
+			}
+		}
+
 		sy := rect.Y - r.scrollY
 		if sy < -rect.H || sy > r.height-statusBarHeight {
 			continue
 		}
-		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X - 2, Y: sy - 1, W: rect.W + 4, H: rect.H + 2})
+		newR := sdl.Rect{X: rect.X - 2, Y: sy - 1, W: rect.W + 4, H: rect.H + 2}
+
+		if isImg {
+			imgRects = append(imgRects, newR)
+		} else {
+			if len(mergedText) > 0 {
+				last := &mergedText[len(mergedText)-1]
+				if last.Y == newR.Y {
+					newRight := newR.X + newR.W
+					lastRight := last.X + last.W
+					if newRight > lastRight {
+						last.W = newRight - last.X
+					}
+					continue
+				}
+			}
+			mergedText = append(mergedText, newR)
+		}
+	}
+
+	if len(mergedText) > 0 {
+		r.sdlRenderer.SetDrawColor(r.selBgColor.R, r.selBgColor.G, r.selBgColor.B, r.selBgColor.A)
+		for _, rect := range mergedText {
+			r.sdlRenderer.FillRect(&rect)
+		}
+	}
+
+	if len(imgRects) > 0 {
+		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
+		r.sdlRenderer.SetDrawColor(r.selImgColor.R, r.selImgColor.G, r.selImgColor.B, r.selImgColor.A)
+		for _, rect := range imgRects {
+			r.sdlRenderer.FillRect(&rect)
+		}
+		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
 	}
 }
 
