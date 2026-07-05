@@ -400,7 +400,7 @@ func (r *Renderer) SetTextLines(items []TreeItem) {
 			runes := []rune(item.Text)
 			prefixText := string(runes[:item.LabelStart])
 			labelText := string(runes[item.LabelStart:item.LabelEnd])
-			prefixW, _ = measureText(prefixText, font, false, false, false)
+			prefixW, _ = measureText(prefixText, r.fonts[FontMono].font, false, false, false)
 			labelW, _ = measureText(labelText, font, false, false, false)
 			labelX = r.marginX + prefixW
 			prefixRuneN = item.LabelStart

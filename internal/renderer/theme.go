@@ -13,6 +13,8 @@ type Theme struct {
 	RuleColor             sdl.Color
 	BlockquoteBgColor     sdl.Color
 	BlockquoteBorderColor sdl.Color
+	StatusBarBgColor      sdl.Color
+	StatusBarBorderColor  sdl.Color
 }
 
 func LightTheme() *Theme {
@@ -27,6 +29,8 @@ func LightTheme() *Theme {
 		RuleColor:             sdl.Color{R: 230, G: 230, B: 230, A: 255}, // Subtle light gray separator
 		BlockquoteBgColor:     sdl.Color{R: 248, G: 249, B: 250, A: 255},
 		BlockquoteBorderColor: sdl.Color{R: 200, G: 200, B: 200, A: 255},
+		StatusBarBgColor:      sdl.Color{R: 240, G: 240, B: 240, A: 255},
+		StatusBarBorderColor:  sdl.Color{R: 200, G: 200, B: 200, A: 255},
 	}
 }
 
@@ -40,7 +44,9 @@ func DarkTheme() *Theme {
 		SelImgColor:           sdl.Color{R: 100, G: 180, B: 255, A: 60},
 		CodeBgColor:           sdl.Color{R: 28, G: 31, B: 38, A: 255},
 		RuleColor:             sdl.Color{R: 45, G: 50, B: 55, A: 255}, // Subtle dark separator
-		BlockquoteBgColor:     sdl.Color{R: 25, G: 28, B: 34, A: 255},
-		BlockquoteBorderColor: sdl.Color{R: 70, G: 75, B: 80, A: 255},
+		BlockquoteBgColor:     sdl.Color{R: 35, G: 35, B: 35, A: 255},
+		BlockquoteBorderColor: sdl.Color{R: 80, G: 80, B: 80, A: 255},
+		StatusBarBgColor:      sdl.Color{R: 30, G: 30, B: 30, A: 255},
+		StatusBarBorderColor:  sdl.Color{R: 60, G: 60, B: 60, A: 255},
 	}
 }
