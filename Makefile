@@ -14,8 +14,8 @@ CGO_CXXFLAGS := -std=c++17 -I$(shell pwd)/internal/zim -I$(shell pwd)/$(ZIM_INC)
 CGO_LDFLAGS  := -L$(shell pwd)/$(ZIM_LIB) -lzim -Wl,-rpath,\$$ORIGIN/$(ZIM_LIB) -Wl,--disable-new-dtags
 
 .PHONY: build test vet lint clean run info fmt
-.PHONY: deps build-linux-arm64 build-linux-armv8 build-linux-amd64
-.PHONY: dist-arm64 deploy dist-portmaster deploy-portmaster
+.PHONY: deps build-linux-arm64 build-linux-armv8 build-linux-amd64 build-windows-amd64
+.PHONY: dist-arm64 dist-windows deploy dist-portmaster deploy-portmaster
 
 fmt:
 	gofmt -s -w .
@@ -53,6 +53,8 @@ build-linux-armv8:
 		CGO_LDFLAGS="-Llib/libzim_linux-armv8-$(ZIM_VER)/lib/armv8-linux-gnueabihf -lzim" \
 		$(GO) build -o $(APP)-armv8 $(SRC)
 
+build-windows-amd64: dist-windows
+
 test:
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test ./...
 
@@ -89,6 +91,16 @@ dist-arm64:
 	docker rm kiwix-extract >/dev/null 2>&1
 	@echo "=== dist/kiwix-sdl/ ==="
 	@ls -lh dist/kiwix-sdl/
+
+dist-windows:
+	docker build -t kiwix-windows -f Dockerfile.windows .
+	@mkdir -p dist/windows
+	@docker rm -f kiwix-win-extract >/dev/null 2>&1 || true
+	docker create --name kiwix-win-extract kiwix-windows >/dev/null 2>&1
+	docker cp kiwix-win-extract:/dist/kiwix-sdl/. dist/windows/
+	docker rm kiwix-win-extract >/dev/null 2>&1
+	@echo "=== dist/windows/ ==="
+	@ls -lh dist/windows/
 
 deploy: dist-arm64
 	adb shell "mkdir -p $(DEVICE_DIR)/lib"
