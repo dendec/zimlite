@@ -40,6 +40,7 @@ type Renderer struct {
 	codeRanges   []codeBlockRange
 	totalHeight  int32
 	contentWidth int32
+	textLines    []string // cached for theme toggle
 
 	doc *document.Document
 
@@ -61,6 +62,7 @@ type Renderer struct {
 	selBgColor   sdl.Color
 	codeBgColor  sdl.Color
 	ruleColor    sdl.Color
+	light        bool
 }
 
 type lineEntry struct {
@@ -133,6 +135,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		selBgColor:   sdl.Color{R: 255, G: 230, B: 150, A: 255},
 		codeBgColor:  sdl.Color{R: 235, G: 235, B: 230, A: 255},
 		ruleColor:    sdl.Color{R: 180, G: 180, B: 170, A: 255},
+		light:        true,
 	}
 
 	sizes := [fontCount]int{
@@ -180,6 +183,30 @@ func (r *Renderer) SetDocument(doc *document.Document) {
 	r.relayout()
 }
 
+// ToggleTheme switches between light and dark color schemes.
+func (r *Renderer) ToggleTheme() {
+	r.light = !r.light
+	if r.light {
+		r.bgColor = sdl.Color{R: 245, G: 245, B: 240, A: 255}
+		r.textColor = sdl.Color{R: 30, G: 30, B: 30, A: 255}
+		r.linkColor = sdl.Color{R: 0, G: 80, B: 180, A: 255}
+		r.headingColor = sdl.Color{R: 50, G: 50, B: 50, A: 255}
+		r.selBgColor = sdl.Color{R: 255, G: 230, B: 150, A: 255}
+		r.codeBgColor = sdl.Color{R: 235, G: 235, B: 230, A: 255}
+		r.ruleColor = sdl.Color{R: 180, G: 180, B: 170, A: 255}
+	} else {
+		r.bgColor = sdl.Color{R: 20, G: 22, B: 28, A: 255}
+		r.textColor = sdl.Color{R: 220, G: 220, B: 220, A: 255}
+		r.linkColor = sdl.Color{R: 100, G: 180, B: 255, A: 255}
+		r.headingColor = sdl.Color{R: 200, G: 210, B: 220, A: 255}
+		r.selBgColor = sdl.Color{R: 80, G: 60, B: 20, A: 255}
+		r.codeBgColor = sdl.Color{R: 35, G: 38, B: 45, A: 255}
+		r.ruleColor = sdl.Color{R: 60, G: 65, B: 70, A: 255}
+	}
+	r.relayout()
+	r.relayoutTextLines()
+}
+
 func (r *Renderer) Relayout() {
 	r.width, r.height = r.window.GetSize()
 	r.relayout()
@@ -189,6 +216,7 @@ func (r *Renderer) Relayout() {
 
 // SetTextLines configures the renderer for simple text-line display mode.
 func (r *Renderer) SetTextLines(lines []string) {
+	r.textLines = lines
 	r.lines = nil
 	r.links = nil
 	r.codeRanges = nil
@@ -210,6 +238,13 @@ func (r *Renderer) SetTextLines(lines []string) {
 	}
 	r.totalHeight = y
 	r.clampScroll()
+}
+
+func (r *Renderer) relayoutTextLines() {
+	if r.textLines == nil {
+		return
+	}
+	r.SetTextLines(r.textLines)
 }
 
 // ScrollToLine ensures the given line index is visible.

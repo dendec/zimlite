@@ -29,6 +29,7 @@ type DocRenderer interface {
 	ScrollPageDown()
 	SetTextLines(lines []string)
 	ScrollToLine(lineIdx int)
+	ToggleTheme()
 }
 
 // DocNavigator manages document history (back/forward).
@@ -243,8 +244,11 @@ func (app *App) processEvent(event sdl.Event) {
 		case sdl.SCANCODE_Q:
 			app.running = false
 			return
-		case sdl.SCANCODE_RETURN2, sdl.SCANCODE_T: // Start / T = toggle tree mode
+		case sdl.SCANCODE_RETURN2, sdl.SCANCODE_T: // T = toggle tree mode
 			app.toggleMode()
+			return
+		case sdl.SCANCODE_D: // D = toggle dark/light theme
+			app.renderer.ToggleTheme()
 			return
 		}
 
