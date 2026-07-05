@@ -212,29 +212,46 @@ func TestFlatNavigation(t *testing.T) {
 		t.Fatalf("expected initial cursor to be 'A', got %q", ns.Cursor.Label())
 	}
 
-	// Move down -> should go to Banana (since A is collapsed)
+	// Move down -> should go to Banana (sibling at root level)
 	ns.MoveDown()
 	if ns.Cursor.Label() != "Banana" {
 		t.Fatalf("expected cursor to go to 'Banana', got %q", ns.Cursor.Label())
 	}
 
-	// Go back up to A and expand it
+	// Move up -> back to A
 	ns.MoveUp()
-	ns.ActionRight() // expands A and moves to first child "Apple"
+	if ns.Cursor.Label() != "A" {
+		t.Fatalf("expected cursor to go back to 'A', got %q", ns.Cursor.Label())
+	}
+
+	// Expand A and enter
+	ns.ActionRight()
 	if ns.Cursor.Label() != "Apple" {
 		t.Fatalf("expected expanded cursor on 'Apple', got %q", ns.Cursor.Label())
 	}
 
-	// Move down -> should go to Apricot (sibling)
+	// Move down within A's children -> should go to Apricot (sibling)
 	ns.MoveDown()
 	if ns.Cursor.Label() != "Apricot" {
 		t.Fatalf("expected cursor on 'Apricot', got %q", ns.Cursor.Label())
 	}
 
-	// Move down again -> since A is expanded, from last child of A ("Apricot") we should go to "Banana"
+	// Move down again -> should stay at Apricot (last sibling)
 	ns.MoveDown()
-	if ns.Cursor.Label() != "Banana" {
-		t.Fatalf("expected flat navigation down to 'Banana', got %q", ns.Cursor.Label())
+	if ns.Cursor.Label() != "Apricot" {
+		t.Fatalf("expected cursor to stay on 'Apricot', got %q", ns.Cursor.Label())
+	}
+
+	// Move up within A's children -> back to Apple
+	ns.MoveUp()
+	if ns.Cursor.Label() != "Apple" {
+		t.Fatalf("expected cursor on 'Apple', got %q", ns.Cursor.Label())
+	}
+
+	// Move up again -> should stay at Apple (first sibling)
+	ns.MoveUp()
+	if ns.Cursor.Label() != "Apple" {
+		t.Fatalf("expected cursor to stay on 'Apple', got %q", ns.Cursor.Label())
 	}
 }
 
@@ -256,18 +273,182 @@ func TestActionLeftRight(t *testing.T) {
 		t.Errorf("expected cursor to enter 'Apple', got %q", ns.Cursor.Label())
 	}
 
-	// 2. Left on leaf -> goes to parent 'Ap' (originally 'A', but absorbed to 'Ap' during expansion)
+	// 2. Left on leaf -> goes to parent 'Ap' (prefix restored to 'A' on collapse)
 	ns.ActionLeft()
 	if ns.Cursor.Label() != "Ap" {
 		t.Errorf("expected left on leaf to go to parent 'Ap', got %q", ns.Cursor.Label())
 	}
 
-	// 3. Left on expanded node 'Ap' -> collapses it
+	// 3. Left on expanded node 'Ap' -> collapses it, prefix restores to 'A'
 	ns.ActionLeft()
 	if ns.Root.children[0].Expanded() {
 		t.Error("expected left on expanded 'Ap' to collapse it")
 	}
+	if ns.Cursor.Label() != "A" {
+		t.Errorf("expected cursor to remain on 'A' after prefix restore, got %q", ns.Cursor.Label())
+	}
+}
+
+func TestCollapseReExpand(t *testing.T) {
+	articles := []document.ArticleEntry{
+		{Title: "Apple", Path: "A/Apple"},
+		{Title: "Apricot", Path: "A/Apricot"},
+		{Title: "Banana", Path: "A/Banana"},
+	}
+	root := NewTree(articles)
+	ns := NewNavState(root)
+
+	// Expand first-level node A
+	ns.ActionRight()
+	aNode := ns.Root.children[0]
+	if !aNode.Expanded() {
+		t.Fatal("A should be expanded")
+	}
+	childCount := len(aNode.children)
+	if childCount == 0 {
+		t.Fatal("A should have children after expand")
+	}
+
+	// Collapse: Left on leaf goes to parent, Left again collapses
+	ns.ActionLeft() // Apple (leaf) → parent A
 	if ns.Cursor.Label() != "Ap" {
-		t.Errorf("expected cursor to remain on 'Ap', got %q", ns.Cursor.Label())
+		t.Errorf("expected cursor on parent 'Ap', got %q", ns.Cursor.Label())
+	}
+	ns.ActionLeft() // A is expanded → collapse
+	if aNode.Expanded() {
+		t.Error("A should be collapsed")
+	}
+
+	// Re-expand
+	ns.ActionRight()
+	if !aNode.Expanded() {
+		t.Error("A should be re-expanded")
+	}
+	if len(aNode.children) != childCount {
+		t.Errorf("A should have same children count after re-expand: got %d, want %d", len(aNode.children), childCount)
+	}
+
+	// Cursor should be on first child
+	if ns.Cursor.Label() != "Apple" {
+		t.Errorf("cursor should be on first child after re-expand, got %q", ns.Cursor.Label())
+	}
+}
+
+func TestCollapseReExpandPreservesPrefix(t *testing.T) {
+	// After auto-drill absorbs a child, the prefix changes (e.g., "A" → "Ap").
+	// Collapse should restore the original prefix so re-expand produces the same tree.
+	articles := []document.ArticleEntry{
+		{Title: "Apple", Path: "A/Apple"},
+		{Title: "Apricot", Path: "A/Apricot"},
+		{Title: "Banana", Path: "A/Banana"},
+	}
+	root := NewTree(articles)
+	ns := NewNavState(root)
+
+	aNode := ns.Root.children[0]
+
+	// Record prefix before first expand.
+	originalPrefix := aNode.prefix
+
+	// Expand: auto-drill absorbs and prefix changes.
+	ns.ActionRight()
+	drilledPrefix := aNode.prefix
+	if drilledPrefix == originalPrefix {
+		t.Skip("auto-drill did not change prefix, test N/A")
+	}
+
+	// Capture first expansion's children structure.
+	firstChildren := make([]string, len(aNode.children))
+	for i, c := range aNode.children {
+		firstChildren[i] = c.Label()
+	}
+
+	// Collapse and check prefix restored.
+	ns.ActionLeft()
+	ns.ActionLeft()
+	if aNode.prefix != originalPrefix {
+		t.Errorf("after collapse, prefix should be %q, got %q", originalPrefix, aNode.prefix)
+	}
+
+	// Re-expand and check same structure.
+	ns.ActionRight()
+	if aNode.prefix != drilledPrefix {
+		t.Errorf("after re-expand, prefix should be %q, got %q", drilledPrefix, aNode.prefix)
+	}
+	reChildren := make([]string, len(aNode.children))
+	for i, c := range aNode.children {
+		reChildren[i] = c.Label()
+	}
+	if len(firstChildren) != len(reChildren) {
+		t.Fatalf("children count mismatch: first=%d, re=%d", len(firstChildren), len(reChildren))
+	}
+	for i := range firstChildren {
+		if firstChildren[i] != reChildren[i] {
+			t.Errorf("child[%d] mismatch: first=%q, re=%q", i, firstChildren[i], reChildren[i])
+		}
+	}
+}
+
+func TestSiblingNavigationDeep(t *testing.T) {
+	// Build tree with multi-level siblings.
+	articles := []document.ArticleEntry{
+		{Title: "A Alpha", Path: "A/Alpha"},
+		{Title: "A Beta", Path: "A/Beta"},
+		{Title: "A Gamma", Path: "A/Gamma"},
+		{Title: "B Delta", Path: "B/Delta"},
+	}
+	root := NewTree(articles)
+	ns := NewNavState(root)
+
+	// Cursor starts at first root child (A)
+	if ns.Cursor.parent != root {
+		t.Fatal("cursor should be at root level")
+	}
+
+	// Expand A
+	ns.ActionRight()
+	aNode := root.children[0]
+	if !aNode.Expanded() {
+		t.Fatal("A should be expanded")
+	}
+	// Cursor on first child of A
+	if ns.Cursor.parent != aNode {
+		t.Fatalf("cursor should be inside A, got %q (parent=%q)", ns.Cursor.Label(), ns.Cursor.parent.Label())
+	}
+
+	// MoveDown within A: Apple -> Beta
+	ns.MoveDown()
+	if ns.Cursor.Label() != "A Beta" {
+		t.Errorf("expected 'A Beta', got %q", ns.Cursor.Label())
+	}
+
+	// MoveDown within A: Beta -> Gamma
+	ns.MoveDown()
+	if ns.Cursor.Label() != "A Gamma" {
+		t.Errorf("expected 'A Gamma', got %q", ns.Cursor.Label())
+	}
+
+	// MoveDown on last sibling -> no-op
+	ns.MoveDown()
+	if ns.Cursor.Label() != "A Gamma" {
+		t.Errorf("expected stay on 'A Gamma', got %q", ns.Cursor.Label())
+	}
+
+	// MoveUp within A: Gamma -> Beta
+	ns.MoveUp()
+	if ns.Cursor.Label() != "A Beta" {
+		t.Errorf("expected 'A Beta', got %q", ns.Cursor.Label())
+	}
+
+	// MoveUp within A: Beta -> Apple
+	ns.MoveUp()
+	if ns.Cursor.Label() != "A Alpha" {
+		t.Errorf("expected 'A Alpha', got %q", ns.Cursor.Label())
+	}
+
+	// MoveUp on first sibling -> no-op
+	ns.MoveUp()
+	if ns.Cursor.Label() != "A Alpha" {
+		t.Errorf("expected stay on 'A Alpha', got %q", ns.Cursor.Label())
 	}
 }

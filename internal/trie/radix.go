@@ -17,10 +17,11 @@ type LeafInfo struct {
 
 // RadixNode is a node in the compressed prefix tree.
 type RadixNode struct {
-	prefix   string
-	leaf     *LeafInfo
-	children []*RadixNode
-	parent   *RadixNode
+	prefix     string
+	origPrefix string // saved before auto-drill mutates prefix
+	leaf       *LeafInfo
+	children   []*RadixNode
+	parent     *RadixNode
 
 	expanded bool
 	articles []document.ArticleEntry // lazy: only populated on Expand for non-root
@@ -130,6 +131,9 @@ func (n *RadixNode) Expand() {
 		return n.children[i].prefix < n.children[j].prefix
 	})
 
+	// Save original prefix before auto-drill mutates it.
+	n.origPrefix = n.prefix
+
 	// Auto-drill and absorb single-child chains.
 	for len(n.children) == 1 && !n.children[0].IsLeaf() {
 		only := n.children[0]
@@ -142,6 +146,7 @@ func (n *RadixNode) Expand() {
 			c.parent = n
 		}
 	}
+
 }
 
 // Collapse clears children to free memory.
@@ -149,8 +154,15 @@ func (n *RadixNode) Collapse() {
 	if n.leaf != nil {
 		return
 	}
+	// Restore original prefix before auto-drill so re-expand
+	// produces the same tree structure.
+	if n.origPrefix != "" {
+		n.prefix = n.origPrefix
+		n.origPrefix = ""
+	}
 	n.children = nil
 	n.expanded = false
+	n.built = false
 }
 
 // IsLeaf returns true if this node is a direct article.

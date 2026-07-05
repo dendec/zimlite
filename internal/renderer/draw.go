@@ -88,12 +88,6 @@ func (r *Renderer) renderLines() {
 		if screenY < -line.h || screenY > r.height-statusBarHeight {
 			continue
 		}
-		if line.isCursor {
-			r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
-			r.sdlRenderer.SetDrawColor(r.theme.SelBgColor.R, r.theme.SelBgColor.G, r.theme.SelBgColor.B, r.theme.SelBgColor.A)
-			r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: screenY, W: r.width, H: line.h})
-			r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
-		}
 		if line.text == "" {
 			if line.h <= 2 {
 				r.sdlRenderer.SetDrawColor(line.color.R, line.color.G, line.color.B, line.color.A)
@@ -105,6 +99,12 @@ func (r *Renderer) renderLines() {
 		if tex != nil {
 			_, _, tw, th, _ := tex.Query()
 			r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: line.x, Y: screenY, W: tw, H: th})
+		}
+		// Draw underline for cursor in tree mode.
+		if line.isCursor {
+			underlineY := screenY + line.h - 1
+			r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
+			r.sdlRenderer.FillRect(&sdl.Rect{X: line.x, Y: underlineY, W: line.w, H: 1})
 		}
 	}
 }
@@ -162,7 +162,7 @@ func (r *Renderer) renderStatusBar() {
 	// Right: scroll% + link count
 	rightText := r.computeRightStatus()
 	if rightText == "" {
-		if r.textLines != nil {
+		if r.treeItems != nil {
 			r.renderStatusText("Article tree", 12, r.width-24)
 		}
 		return

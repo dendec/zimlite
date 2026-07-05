@@ -30,49 +30,57 @@ func (ns *NavState) CursorPath() string {
 	return ns.Cursor.FullPath()
 }
 
-// flatVisible collects all visible nodes in the tree in a flat list.
-func (ns *NavState) flatVisible() []*RadixNode {
-	var nodes []*RadixNode
-	ns.collectVisible(ns.Root, &nodes)
-	return nodes
-}
-
-func (ns *NavState) collectVisible(node *RadixNode, out *[]*RadixNode) {
-	if node.parent != nil {
-		*out = append(*out, node)
-	}
-	if node.Expanded() {
-		for _, c := range node.children {
-			ns.collectVisible(c, out)
-		}
-	}
-}
-
-// MoveDown moves cursor to the next flat visible node.
+// MoveDown moves cursor to the next sibling (same parent).
 func (ns *NavState) MoveDown() {
-	nodes := ns.flatVisible()
-	for i, n := range nodes {
-		if n == ns.Cursor && i+1 < len(nodes) {
-			ns.Cursor = nodes[i+1]
+	if ns.Cursor == nil || ns.Cursor.parent == nil {
+		return
+	}
+	siblings := ns.Cursor.parent.children
+	for i, s := range siblings {
+		if s == ns.Cursor && i+1 < len(siblings) {
+			ns.Cursor = siblings[i+1]
 			return
 		}
 	}
 }
 
-// MoveTo moves the cursor to the visible node at index idx.
+// MoveTo moves the cursor to the visible node at flat index idx.
 func (ns *NavState) MoveTo(idx int) {
-	nodes := ns.flatVisible()
-	if idx >= 0 && idx < len(nodes) {
-		ns.Cursor = nodes[idx]
+	lines := ns.VisibleNodes()
+	if idx >= 0 && idx < len(lines) {
+		var found int
+		var findNode func(node *RadixNode) *RadixNode
+		findNode = func(node *RadixNode) *RadixNode {
+			if node.parent != nil {
+				if found == idx {
+					return node
+				}
+				found++
+			}
+			if node.Expanded() {
+				for _, c := range node.children {
+					if r := findNode(c); r != nil {
+						return r
+					}
+				}
+			}
+			return nil
+		}
+		if n := findNode(ns.Root); n != nil {
+			ns.Cursor = n
+		}
 	}
 }
 
-// MoveUp moves cursor to the previous flat visible node.
+// MoveUp moves cursor to the previous sibling (same parent).
 func (ns *NavState) MoveUp() {
-	nodes := ns.flatVisible()
-	for i, n := range nodes {
-		if n == ns.Cursor && i > 0 {
-			ns.Cursor = nodes[i-1]
+	if ns.Cursor == nil || ns.Cursor.parent == nil {
+		return
+	}
+	siblings := ns.Cursor.parent.children
+	for i, s := range siblings {
+		if s == ns.Cursor && i > 0 {
+			ns.Cursor = siblings[i-1]
 			return
 		}
 	}
@@ -118,6 +126,7 @@ type VisLine struct {
 	TreePrefix string
 	Label      string
 	Suffix     string
+	Path       string
 	IsLeaf     bool
 	IsExpanded bool
 	IsCursor   bool
@@ -143,6 +152,7 @@ func (ns *NavState) walk(node *RadixNode, prefix string, lines *[]VisLine, isLas
 			TreePrefix: prefix + connector,
 			Label:      node.Label(),
 			Suffix:     node.Suffix(),
+			Path:       node.FullPath(),
 			IsLeaf:     node.IsLeaf(),
 			IsExpanded: node.Expanded() && len(node.children) > 0,
 			IsCursor:   node == ns.Cursor,

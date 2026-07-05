@@ -52,6 +52,14 @@ const (
 
 type ResourceLoader func(url string) ([]byte, error)
 
+// TreeItem describes one item in the tree view for structured rendering.
+type TreeItem struct {
+	Text     string
+	Path     string
+	IsLeaf   bool
+	IsCursor bool
+}
+
 type imageEntry struct {
 	x, y, w, h int32
 	url        string
@@ -70,7 +78,7 @@ type Renderer struct {
 
 	layout PageLayout
 
-	textLines []string // cached for theme toggle
+	treeItems []TreeItem // cached for theme toggle
 
 	doc *document.Document
 
@@ -324,8 +332,8 @@ func (r *Renderer) Relayout() {
 // --- Text line mode (for tree view, etc.) ---
 
 // SetTextLines configures the renderer for simple text-line display mode.
-func (r *Renderer) SetTextLines(lines []string) {
-	r.textLines = lines
+func (r *Renderer) SetTextLines(items []TreeItem) {
+	r.treeItems = items
 	r.layout = PageLayout{}
 	r.doc = nil
 	r.selectedLink = -1
@@ -333,18 +341,12 @@ func (r *Renderer) SetTextLines(lines []string) {
 
 	font := r.fonts[FontBody].font
 	y := r.marginY
-	for _, text := range lines {
-		isCursor := false
-		displayText := text
-		if strings.HasPrefix(text, ">") {
-			isCursor = true
-			displayText = text[1:]
-		}
-		tw, th := measureText(displayText, font, false, false, false)
+	for _, item := range items {
+		tw, th := measureText(item.Text, font, false, false, false)
 		r.layout.lines = append(r.layout.lines, lineEntry{
-			text: displayText, fontIdx: FontBody, color: r.theme.TextColor,
+			text: item.Text, fontIdx: FontBody, color: r.theme.TextColor,
 			x: r.marginX, y: y, w: tw, h: th,
-			isCursor: isCursor,
+			isCursor: item.IsCursor,
 		})
 		y += th
 	}
@@ -356,10 +358,10 @@ func (r *Renderer) SetTextLines(lines []string) {
 }
 
 func (r *Renderer) relayoutTextLines() {
-	if r.textLines == nil {
+	if r.treeItems == nil {
 		return
 	}
-	r.SetTextLines(r.textLines)
+	r.SetTextLines(r.treeItems)
 }
 
 // ScrollToLine ensures the given line index is visible.
@@ -573,7 +575,7 @@ func (r *Renderer) HandleClick(mx, my int32) string {
 }
 
 func (r *Renderer) HandleTreeClick(mx, my int32) int {
-	if r.textLines == nil {
+	if r.treeItems == nil {
 		return -1
 	}
 	docY := my + r.scrollY

@@ -51,7 +51,7 @@ type Scroller interface {
 	ScrollToY(y int32)
 	CurrentScrollY() int32
 	SetScrollY(scrollY int32)
-	SetTextLines(lines []string)
+	SetTextLines(items []renderer.TreeItem)
 	ScrollToLine(lineIdx int)
 	HandleTreeClick(mx, my int32) int
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/menu"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/renderer"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -192,22 +193,26 @@ func (app *App) renderTree() {
 		return
 	}
 	lines := app.navState.VisibleNodes()
-	out := make([]string, 0, len(lines))
-	cursorIdx := -1
-	for i, l := range lines {
-		entry := l.TreePrefix + l.Label
+	items := make([]renderer.TreeItem, 0, len(lines))
+	for _, l := range lines {
+		text := l.TreePrefix + l.Label
 		if l.Suffix != "" {
-			entry += " (" + l.Suffix + ")"
+			text += " (" + l.Suffix + ")"
 		}
-		if l.IsCursor {
-			entry = ">" + entry
-			cursorIdx = i
-		}
-		out = append(out, entry)
+		items = append(items, renderer.TreeItem{
+			Text:     text,
+			Path:     l.Path,
+			IsLeaf:   l.IsLeaf,
+			IsCursor: l.IsCursor,
+		})
 	}
-	app.scroller.SetTextLines(out)
-	if cursorIdx >= 0 {
-		app.scroller.ScrollToLine(cursorIdx)
+	app.scroller.SetTextLines(items)
+	// Scroll to the cursor item if visible.
+	for i, item := range items {
+		if item.IsCursor {
+			app.scroller.ScrollToLine(i)
+			break
+		}
 	}
 }
 
