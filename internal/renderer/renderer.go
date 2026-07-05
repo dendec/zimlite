@@ -324,7 +324,7 @@ func (r *Renderer) SetTextLines(lines []string) {
 			x: r.marginX, y: y, w: tw, h: th,
 			isCursor: isCursor,
 		})
-		y += th + r.lineSpacing
+		y += th
 	}
 	if y < r.height-statusBarHeight {
 		y = r.height - statusBarHeight
