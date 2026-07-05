@@ -131,7 +131,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
 	sdl.SetHint("SDL_HINT_KEY_REPEAT_DELAY", "300")
 	sdl.SetHint("SDL_HINT_KEY_REPEAT_INTERVAL", "40")
-	if err := sdl.Init(sdl.INIT_VIDEO | sdl.INIT_JOYSTICK); err != nil {
+	if err := sdl.Init(sdl.INIT_VIDEO | sdl.INIT_GAMECONTROLLER); err != nil {
 		return nil, fmt.Errorf("sdl init: %w", err)
 	}
 	if err := ttf.Init(); err != nil {
@@ -141,7 +141,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 
 	// Open first joystick/gamepad if available.
 	if sdl.NumJoysticks() > 0 {
-		sdl.JoystickOpen(0)
+		sdl.GameControllerOpen(0)
 	}
 
 	window, err := sdl.CreateWindow(title,
@@ -462,6 +462,19 @@ func (r *Renderer) HandleClick(mx, my int32) string {
 		}
 	}
 	return ""
+}
+
+func (r *Renderer) HandleTreeClick(mx, my int32) int {
+	if r.textLines == nil {
+		return -1
+	}
+	docY := my + r.scrollY
+	for i, line := range r.layout.lines {
+		if docY >= line.y && docY <= line.y+line.h {
+			return i
+		}
+	}
+	return -1
 }
 
 // sdlFont adapts *ttf.Font to document.Font for measurement.

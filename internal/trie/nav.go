@@ -59,6 +59,14 @@ func (ns *NavState) MoveDown() {
 	}
 }
 
+// MoveTo moves the cursor to the visible node at index idx.
+func (ns *NavState) MoveTo(idx int) {
+	nodes := ns.flatVisible()
+	if idx >= 0 && idx < len(nodes) {
+		ns.Cursor = nodes[idx]
+	}
+}
+
 // MoveUp moves cursor to the previous flat visible node.
 func (ns *NavState) MoveUp() {
 	nodes := ns.flatVisible()

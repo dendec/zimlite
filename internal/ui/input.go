@@ -38,13 +38,13 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 		case sdl.SCANCODE_H: // H = go home
 			app.goHome()
 			return
-		case sdl.SCANCODE_F: // F = open file menu
+		case sdl.SCANCODE_M: // M = open file menu
 			_ = app.loader.OpenFile("virtual:menu")
 			return
 		case sdl.SCANCODE_RETURN2, sdl.SCANCODE_T: // T = toggle tree mode
 			app.toggleMode()
 			return
-		case sdl.SCANCODE_D: // D = toggle dark/light theme
+		case sdl.SCANCODE_C: // C = toggle dark/light theme
 			app.viewer.ToggleTheme()
 			return
 		case sdl.SCANCODE_EQUALS, sdl.SCANCODE_KP_PLUS: // + = zoom in
@@ -64,11 +64,11 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 			c.processDocKey(sc)
 		}
 
-	case *sdl.JoyAxisEvent, *sdl.JoyButtonEvent, *sdl.JoyHatEvent:
+	case *sdl.ControllerAxisEvent, *sdl.ControllerButtonEvent:
 		if action, ok := app.gamepad.TranslateEvent(event, app.mode); ok {
 			if action != ActionNone {
 				var val int16
-				if ax, ok := event.(*sdl.JoyAxisEvent); ok {
+				if ax, ok := event.(*sdl.ControllerAxisEvent); ok {
 					val = ax.Value
 				}
 				c.executeGamepadAction(action, val)
@@ -85,10 +85,32 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 		app.scroller.ScrollBy(-scrollStep * e.Y)
 
 	case *sdl.MouseButtonEvent:
-		if e.Type == sdl.MOUSEBUTTONDOWN && e.Button == sdl.BUTTON_LEFT && app.mode == modeDoc {
-			url := app.links.HandleClick(e.X, e.Y)
-			if url != "" {
-				app.loader.NavigateLink(url)
+		if e.Type == sdl.MOUSEBUTTONDOWN {
+			switch e.Button {
+			case sdl.BUTTON_LEFT:
+				switch app.mode {
+				case modeDoc:
+					url := app.links.HandleClick(e.X, e.Y)
+					if url != "" {
+						app.loader.NavigateLink(url)
+					}
+				case modeTree:
+					idx := app.scroller.HandleTreeClick(e.X, e.Y)
+					if idx >= 0 {
+						app.navState.MoveTo(idx)
+						if app.navState.CursorIsLeaf() {
+							path := app.navState.CursorPath()
+							if path != "" {
+								app.loader.NavigateLink(path)
+							}
+						} else {
+							app.navState.ActionRight()
+						}
+						app.renderTree()
+					}
+				}
+			case sdl.BUTTON_RIGHT, sdl.BUTTON_X1:
+				c.processJoyB() // processJoyB does exactly what "Back" does in both modes!
 			}
 		}
 	}
@@ -101,7 +123,7 @@ func (c *InputController) processTreeKey(sc sdl.Scancode) {
 		app.navState.MoveUp()
 	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
 		app.navState.MoveDown()
-	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_KP_6:
+	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_D, sdl.SCANCODE_KP_6:
 		app.navState.ActionRight()
 	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
 		fmt.Fprintf(os.Stderr, "ENTER: label=%q, isLeaf=%v, path=%q\n", app.navState.Cursor.Label(), app.navState.CursorIsLeaf(), app.navState.CursorPath())
@@ -114,13 +136,13 @@ func (c *InputController) processTreeKey(sc sdl.Scancode) {
 		} else {
 			app.navState.ActionRight()
 		}
-	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4:
+	case sdl.SCANCODE_LEFT, sdl.SCANCODE_A, sdl.SCANCODE_KP_4:
 		app.navState.ActionLeft()
 	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
 		app.navState.ActionLeft()
 	case sdl.SCANCODE_PAGEUP:
 		app.scroller.ScrollPageUp()
-	case sdl.SCANCODE_PAGEDOWN:
+	case sdl.SCANCODE_PAGEDOWN, sdl.SCANCODE_SPACE:
 		app.scroller.ScrollPageDown()
 	}
 	if app.mode == modeTree {
@@ -135,13 +157,13 @@ func (c *InputController) processDocKey(sc sdl.Scancode) {
 		app.scroller.ScrollBy(-scrollStep)
 	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
 		app.scroller.ScrollBy(scrollStep)
-	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4:
+	case sdl.SCANCODE_LEFT, sdl.SCANCODE_A, sdl.SCANCODE_KP_4:
 		app.links.SelectPrevLink()
-	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_KP_6:
+	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_D, sdl.SCANCODE_KP_6:
 		app.links.SelectNextLink()
 	case sdl.SCANCODE_PAGEUP:
 		app.scroller.ScrollPageUp()
-	case sdl.SCANCODE_PAGEDOWN:
+	case sdl.SCANCODE_PAGEDOWN, sdl.SCANCODE_SPACE:
 		app.scroller.ScrollPageDown()
 	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
 		url := app.links.SelectedLinkURL()
@@ -258,6 +280,8 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 		app.links.SelectPrevLink()
 	case ActionSelectNextLink:
 		app.links.SelectNextLink()
+	case ActionToggleTheme:
+		app.viewer.ToggleTheme()
 	}
 }
 

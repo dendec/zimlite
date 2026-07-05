@@ -47,6 +47,7 @@ type Scroller interface {
 	ScrollToY(y int32)
 	SetTextLines(lines []string)
 	ScrollToLine(lineIdx int)
+	HandleTreeClick(mx, my int32) int
 }
 
 // DocNavigator manages document history (back/forward).

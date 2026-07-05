@@ -212,26 +212,26 @@ func (r *Renderer) renderStatusBar() {
 		if sdl.NumJoysticks() > 0 {
 			if r.doc != nil {
 				if r.hasTree {
-					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Start:home  Select:tree  L2/R2:zoom  Menu:exit"
+					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  B:back  Y:home  X:tree  Select:theme  L2/R2:zoom  Start:exit"
 				} else if isMenu {
-					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  L2/R2:zoom  Menu:exit"
+					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  B:back  Select:theme  L2/R2:zoom  Start:exit"
 				} else {
-					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Select:menu  L2/R2:zoom  Menu:exit"
+					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  B:back  Y:menu  Select:theme  L2/R2:zoom  Start:exit"
 				}
 			} else {
-				statusText = "↑↓:nav  L1/R1:page  A/→:enter  X/←:back  Select:doc  L2/R2:zoom  Menu:exit"
+				statusText = "↑↓:nav  L1/R1:page  A/→:enter  B/←:back  X:doc  Select:theme  L2/R2:zoom  Start:exit"
 			}
 		} else {
 			if r.doc != nil {
 				if r.hasTree {
-					statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  H:home  T:tree  F:menu  D:theme  +/-:zoom  Q:exit"
+					statusText = "WASD/Arrows:nav  Space:page  Enter/LMB:open  Back/RMB:back  M:menu  T:tree  C:theme  +/-:zoom  Q:exit"
 				} else if isMenu {
-					statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  D:theme  +/-:zoom  Q:exit"
+					statusText = "WASD/Arrows:nav  Space:page  Enter/LMB:open  Back/RMB:back  C:theme  +/-:zoom  Q:exit"
 				} else {
-					statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  F:menu  D:theme  +/-:zoom  Q:exit"
+					statusText = "WASD/Arrows:nav  Space:page  Enter/LMB:open  Back/RMB:back  M:menu  C:theme  +/-:zoom  Q:exit"
 				}
 			} else {
-				statusText = "↑↓:nav  PgUp/PgDn:page  ↩→:enter  ←⌫:back  T:doc  D:theme  +/-:zoom  Q:exit"
+				statusText = "WS/Up/Dn:nav  Space:page  Enter/LMB:open  Back/RMB:back  T:doc  C:theme  +/-:zoom  Q:exit"
 			}
 		}
 	}

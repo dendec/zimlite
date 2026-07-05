@@ -20,6 +20,7 @@ const (
 	ActionZoomOut
 	ActionSelectPrevLink
 	ActionSelectNextLink
+	ActionToggleTheme
 )
 
 // TriggerDebouncer translates continuous analog axis values into discrete digital press events.
@@ -44,19 +45,19 @@ type GamepadState struct {
 	R2 TriggerDebouncer
 }
 
-// TranslateEvent processes a raw SDL event. If the event is a gamepad event, it translates it to an Action and returns true.
+// TranslateEvent processes a raw SDL event. If the event is a GameController event, it translates it to an Action and returns true.
 func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bool) {
 	switch e := event.(type) {
-	case *sdl.JoyAxisEvent:
+	case *sdl.ControllerAxisEvent:
 		v := e.Value
 		// Handle triggers
 		switch e.Axis {
-		case 2, 4: // L2
+		case sdl.CONTROLLER_AXIS_TRIGGERLEFT:
 			if g.L2.Update(v) {
 				return ActionZoomOut, true
 			}
 			return ActionNone, true
-		case 3, 5: // R2
+		case sdl.CONTROLLER_AXIS_TRIGGERRIGHT:
 			if g.R2.Update(v) {
 				return ActionZoomIn, true
 			}
@@ -70,12 +71,12 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 
 		if mode == modeTree {
 			switch e.Axis {
-			case 1: // vertical
+			case sdl.CONTROLLER_AXIS_LEFTY: // vertical
 				if v < 0 {
 					return ActionScrollUp, true
 				}
 				return ActionScrollDown, true
-			case 0: // horizontal
+			case sdl.CONTROLLER_AXIS_LEFTX: // horizontal
 				if v < 0 {
 					return ActionBack, true // translates to ActionLeft
 				}
@@ -83,12 +84,12 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 			}
 		} else {
 			switch e.Axis {
-			case 1:
+			case sdl.CONTROLLER_AXIS_LEFTY:
 				if v < 0 {
 					return ActionScrollUp, true
 				}
 				return ActionScrollDown, true
-			case 0:
+			case sdl.CONTROLLER_AXIS_LEFTX:
 				if v < 0 {
 					return ActionSelectPrevLink, true
 				}
@@ -96,43 +97,37 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 			}
 		}
 
-	case *sdl.JoyButtonEvent:
-		if e.Type != sdl.JOYBUTTONDOWN {
+	case *sdl.ControllerButtonEvent:
+		if e.State != sdl.PRESSED {
 			return ActionNone, true // Swallow release events
 		}
 		switch e.Button {
-		case 0, 1: // A/B
+		case sdl.CONTROLLER_BUTTON_A:
 			return ActionOpenEnter, true
-		case 2, 3: // X/Y
+		case sdl.CONTROLLER_BUTTON_B:
 			return ActionBack, true
-		case 4: // L1
-			return ActionPageUp, true
-		case 5: // R1
-			return ActionPageDown, true
-		case 6: // Select
+		case sdl.CONTROLLER_BUTTON_X:
 			return ActionToggleTree, true
-		case 7: // Start
+		case sdl.CONTROLLER_BUTTON_Y:
 			return ActionGoHome, true
-		case 8: // Menu/Guide
+		case sdl.CONTROLLER_BUTTON_LEFTSHOULDER:
+			return ActionPageUp, true
+		case sdl.CONTROLLER_BUTTON_RIGHTSHOULDER:
+			return ActionPageDown, true
+		case sdl.CONTROLLER_BUTTON_BACK: // Select
+			return ActionToggleTheme, true
+		case sdl.CONTROLLER_BUTTON_START:
 			return ActionQuit, true
-		case 9: // R2 (button fallback)
-			return ActionZoomIn, true
-		case 10: // L2 (button fallback)
-			return ActionZoomOut, true
-		}
-
-	case *sdl.JoyHatEvent:
-		switch e.Value {
-		case sdl.HAT_UP:
+		case sdl.CONTROLLER_BUTTON_DPAD_UP:
 			return ActionScrollUp, true
-		case sdl.HAT_DOWN:
+		case sdl.CONTROLLER_BUTTON_DPAD_DOWN:
 			return ActionScrollDown, true
-		case sdl.HAT_LEFT:
+		case sdl.CONTROLLER_BUTTON_DPAD_LEFT:
 			if mode == modeTree {
 				return ActionBack, true
 			}
 			return ActionSelectPrevLink, true
-		case sdl.HAT_RIGHT:
+		case sdl.CONTROLLER_BUTTON_DPAD_RIGHT:
 			if mode == modeTree {
 				return ActionOpenEnter, true
 			}
