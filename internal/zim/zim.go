@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path"
 	"strings"
 	"unsafe"
@@ -40,10 +41,17 @@ func Open(filePath string) (*Reader, error) {
 
 	entry := C.zim_get_main_entry(h)
 	rootPrefix := "A" // default fallback
+	mainPagePath := ""
 	if entry != nil {
 		defer C.zim_entry_free(entry)
-		mainPagePath := C.GoString(C.zim_entry_get_path(entry))
+		mainPagePath = C.GoString(C.zim_entry_get_path(entry))
 		rootPrefix = path.Dir(mainPagePath)
+	}
+
+	debug := os.Getenv("KIWIX_DEBUG") != ""
+	if debug {
+		fmt.Fprintf(os.Stderr, "[Open] file=%q rootPrefix=%q mainPath=%q\n",
+			filePath, rootPrefix, mainPagePath)
 	}
 
 	return &Reader{handle: h, rootPrefix: rootPrefix}, nil
@@ -118,6 +126,10 @@ func (r *Reader) GetArticle(path string) (*document.Document, error) {
 
 	entry := C.zim_get_entry_by_path(r.handle, cPath)
 	if entry == nil {
+		debug := os.Getenv("KIWIX_DEBUG") != ""
+		if debug {
+			fmt.Fprintf(os.Stderr, "[GetArticle] NOT FOUND: %q\n", path)
+		}
 		return nil, fmt.Errorf("article %q: not found", path)
 	}
 	defer C.zim_entry_free(entry)
@@ -142,6 +154,12 @@ func (r *Reader) ResolveArticle(rawURL string, referrer string) (*document.Docum
 	decoded, err := url.PathUnescape(pathOnly)
 	if err != nil {
 		decoded = pathOnly
+	}
+
+	debug := os.Getenv("KIWIX_DEBUG") != ""
+	if debug {
+		fmt.Fprintf(os.Stderr, "[ResolveArticle] raw=%q referrer=%q rootPrefix=%q decoded=%q\n",
+			rawURL, referrer, r.rootPrefix, decoded)
 	}
 
 	// Deduplicate.
@@ -170,9 +188,19 @@ func (r *Reader) ResolveArticle(rawURL string, referrer string) (*document.Docum
 			add(base)
 			add(base + ".html")
 		}
+		if debug {
+			fmt.Fprintf(os.Stderr, "[ResolveArticle] namespace-prefixed candidates: %v\n", candidates)
+		}
 		for _, c := range candidates {
-			if doc, err := r.GetArticle(c); err == nil {
+			doc, err := r.GetArticle(c)
+			if err == nil {
+				if debug {
+					fmt.Fprintf(os.Stderr, "[ResolveArticle] OK=%q\n", c)
+				}
 				return doc, nil
+			}
+			if debug {
+				fmt.Fprintf(os.Stderr, "[ResolveArticle] try %q → %v\n", c, err)
 			}
 		}
 		return nil, fmt.Errorf("article not found: %s", rawURL)
@@ -198,9 +226,19 @@ func (r *Reader) ResolveArticle(rawURL string, referrer string) (*document.Docum
 		}
 	}
 
+	if debug {
+		fmt.Fprintf(os.Stderr, "[ResolveArticle] all candidates: %v\n", candidates)
+	}
 	for _, c := range candidates {
-		if doc, err := r.GetArticle(c); err == nil {
+		doc, err := r.GetArticle(c)
+		if err == nil {
+			if debug {
+				fmt.Fprintf(os.Stderr, "[ResolveArticle] OK=%q\n", c)
+			}
 			return doc, nil
+		}
+		if debug {
+			fmt.Fprintf(os.Stderr, "[ResolveArticle] try %q → %v\n", c, err)
 		}
 	}
 
