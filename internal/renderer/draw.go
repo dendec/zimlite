@@ -3,6 +3,7 @@ package renderer
 import (
 	"fmt"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/svg"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -277,24 +278,76 @@ func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
 		return
 	}
 	font := r.fonts[FontBody].font
-	surf, err := font.RenderUTF8Blended(text, r.theme.TextColor)
-	if err != nil {
+	sz := int32(font.Ascent())
+	runes := []rune(text)
+
+	type seg struct {
+		tex     *sdl.Texture
+		w, h    int32
+		isEmoji bool
+	}
+	var segments []seg
+	var totalW int32
+
+	i := 0
+	for i < len(runes) {
+		if hex, consumed, ok := document.EmojiSequence(runes, i); ok {
+			le := lineEntry{isEmoji: true, emojiHex: hex, h: sz}
+			tex := r.renderEmojiTexture(le)
+			if tex != nil {
+				_, _, ew, eh, _ := tex.Query()
+				segments = append(segments, seg{tex: tex, w: ew, h: eh, isEmoji: true})
+				totalW += ew
+			}
+			i += consumed
+			continue
+		}
+		start := i
+		for i < len(runes) {
+			if _, _, ok := document.EmojiSequence(runes, i); ok {
+				break
+			}
+			i++
+		}
+		textStr := string(runes[start:i])
+		surf, err := font.RenderUTF8Blended(textStr, r.theme.TextColor)
+		if err != nil {
+			continue
+		}
+		tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
+		surf.Free()
+		if err != nil {
+			continue
+		}
+		_, _, tw, th, _ := tex.Query()
+		segments = append(segments, seg{tex: tex, w: tw, h: th})
+		totalW += tw
+	}
+
+	if len(segments) == 0 {
 		return
 	}
-	tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
-	surf.Free()
-	if err != nil {
-		return
+
+	scale := float64(1)
+	if totalW > maxW {
+		scale = float64(maxW) / float64(totalW)
 	}
-	_, _, tw, th, _ := tex.Query()
-	w, h := tw, th
-	if w > maxW {
-		ratio := float64(maxW) / float64(w)
-		w = maxW
-		h = int32(float64(h) * ratio)
+
+	curX := x
+	for _, s := range segments {
+		dw := int32(float64(s.w) * scale)
+		dh := int32(float64(s.h) * scale)
+		if dw <= 0 {
+			continue
+		}
+		dstY := r.height - statusBarHeight + (statusBarHeight-dh)/2
+		r.sdlRenderer.Copy(s.tex, nil, &sdl.Rect{X: curX, Y: dstY, W: dw, H: dh})
+		curX += dw
 	}
-	r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: x, Y: r.height - statusBarHeight + (statusBarHeight-h)/2, W: w, H: h})
-	tex.Destroy()
+
+	for _, s := range segments {
+		s.tex.Destroy()
+	}
 }
 
 func (r *Renderer) renderScrollbar() {
