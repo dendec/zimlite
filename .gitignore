@@ -1,0 +1,14 @@
+# Binaries
+/kiwix-sdl
+*.exe
+*.test
+*.out
+
+# Go
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
