@@ -124,31 +124,12 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 		if err != nil {
 			return renderErrorDoc("categories", err)
 		}
-		// Fetch a sample of entries to determine which categories have content.
-		entries, err := fetchFeed("https://browse.library.kiwix.org/catalog/v2/entries?count=50&lang=" + lang)
-		var activeCategories map[string]bool
-		if err == nil {
-			activeCategories = make(map[string]bool)
-			for _, e := range entries.Entries {
-				cat := strings.ToLower(e.Category)
-				if cat != "" {
-					activeCategories[cat] = true
-				}
-			}
-		}
 		var sb strings.Builder
 		fmt.Fprintf(&sb, "# Kiwix Online Library - Categories (%s)\n\n", lang)
-		if activeCategories != nil {
-			sb.WriteString("Select a category:\n\n")
-		} else {
-			sb.WriteString("(*Could not determine archive counts — showing all categories.*)\n\n")
-		}
+		sb.WriteString("Select a category:\n\n")
 		sb.WriteString("[← Back to Languages](virtual:library)\n\n")
 		for _, entry := range categories.Entries {
 			category := strings.ToLower(entry.Title)
-			if activeCategories != nil && !activeCategories[category] {
-				continue
-			}
 			fmt.Fprintf(&sb, "* [%s](virtual:library/entries?lang=%s&category=%s)\n", entry.Title, lang, category)
 		}
 		return markdown.Parse(strings.NewReader(sb.String()))
