@@ -496,6 +496,10 @@ func (app *App) processDocKey(sc sdl.Scancode) {
 	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
 		if app.navigator.Back() {
 			prevPath := app.navigator.Current()
+			if prevPath == "virtual:menu" {
+				_ = app.OpenFile("virtual:menu")
+				return
+			}
 			if doc, ok := app.docCache[prevPath]; ok {
 				app.viewer.SetDocument(doc)
 				app.viewer.Relayout()
@@ -535,6 +539,10 @@ func (app *App) processJoyB() {
 		app.renderTree()
 	} else if app.navigator.Back() {
 		prevPath := app.navigator.Current()
+		if prevPath == "virtual:menu" {
+			_ = app.OpenFile("virtual:menu")
+			return
+		}
 		if doc, ok := app.docCache[prevPath]; ok {
 			app.viewer.SetDocument(doc)
 			app.viewer.Relayout()
