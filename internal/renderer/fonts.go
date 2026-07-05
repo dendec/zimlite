@@ -7,11 +7,8 @@ import (
 	"github.com/veandco/go-sdl2/ttf"
 )
 
-//go:embed assets/DejaVuSans.ttf
-var DejaVuSans []byte
-
-//go:embed assets/DejaVuSansMono.ttf
-var DejaVuSansMono []byte
+//go:embed assets/unifont.otf
+var unifont []byte
 
 func loadFontFromBytes(data []byte, size int) (*ttf.Font, error) {
 	rw, err := sdl.RWFromMem(data)

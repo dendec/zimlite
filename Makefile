@@ -15,7 +15,7 @@ CGO_LDFLAGS  := -L$(shell pwd)/$(ZIM_LIB) -lzim -Wl,-rpath,\$$ORIGIN/$(ZIM_LIB) 
 
 .PHONY: build test vet lint clean run info
 .PHONY: deps build-linux-arm64 build-linux-armv8 build-linux-amd64
-.PHONY: dist-arm64 deploy deploy-full dist-portmaster deploy-portmaster
+.PHONY: dist-arm64 deploy dist-portmaster deploy-portmaster
 
 build: $(ZIM_LIB)/libzim.so
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" \
@@ -89,21 +89,13 @@ dist-arm64:
 deploy: dist-arm64
 	adb shell "mkdir -p $(DEVICE_DIR)/lib"
 	adb push dist/kiwix-sdl/kiwix-sdl $(DEVICE_DIR)/
-	adb shell "cd $(DEVICE_DIR)/lib && if [ ! -f libzim.so.9.7.0 ]; then echo 'push libs...'; fi; cp libzim.so.9.7.0 libzim.so.9 2>/dev/null; cp libzim.so.9.7.0 libzim.so 2>/dev/null; cp libzstd.so.1.4.8 libzstd.so.1 2>/dev/null; cp liblzma.so liblzma.so.5 2>/dev/null; true"
-	adb push scripts/kiwix-sdl.sh '$(PORTS_DIR)/$(PORT_SCRIPT)'
-	adb shell "chmod +x '$(PORTS_DIR)/$(PORT_SCRIPT)' && rm -f $(PORTS_DIR)/PORTS_cache7.db && killall -9 kiwix-sdl 2>/dev/null; true"
-	@echo "=== Deployed ==="
-
-deploy-full: dist-arm64
-	adb shell "mkdir -p $(DEVICE_DIR)/lib"
-	adb push dist/kiwix-sdl/kiwix-sdl $(DEVICE_DIR)/
 	adb push dist/kiwix-sdl/lib/libzim.so.9.7.0 $(DEVICE_DIR)/lib/
 	adb push dist/kiwix-sdl/lib/liblzma.so $(DEVICE_DIR)/lib/
 	adb push dist/kiwix-sdl/lib/libzstd.so.1.4.8 $(DEVICE_DIR)/lib/
 	adb shell "cd $(DEVICE_DIR)/lib && cp libzim.so.9.7.0 libzim.so.9 && cp libzim.so.9.7.0 libzim.so && cp libzstd.so.1.4.8 libzstd.so.1 && cp liblzma.so liblzma.so.5"
 	adb push scripts/kiwix-sdl.sh '$(PORTS_DIR)/$(PORT_SCRIPT)'
 	adb shell "chmod +x '$(PORTS_DIR)/$(PORT_SCRIPT)' && rm -f $(PORTS_DIR)/PORTS_cache7.db && killall -9 kiwix-sdl 2>/dev/null; true"
-	@echo "=== Full deployed ==="
+	@echo "=== Deployed ==="
 
 dist-portmaster: dist-arm64
 	@rm -rf dist/portmaster_build

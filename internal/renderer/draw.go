@@ -185,38 +185,41 @@ func (r *Renderer) Render() {
 		W: r.width, H: 1,
 	})
 
-	// Render status bar text.
 	var statusText string
-	isMenu := false
-	if r.doc != nil && len(r.doc.Blocks) > 0 {
-		if h, ok := r.doc.Blocks[0].(*document.Heading); ok {
-			isMenu = h.Level == 1 && h.Content == "Kiwix SDL Document Menu"
-		}
-	}
-
-	if sdl.NumJoysticks() > 0 {
-		if r.doc != nil {
-			if r.hasTree {
-				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Start:home  Select:tree  L2/R2:zoom  Menu:exit"
-			} else if isMenu {
-				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  L2/R2:zoom  Menu:exit"
-			} else {
-				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Select:menu  L2/R2:zoom  Menu:exit"
-			}
-		} else {
-			statusText = "↑↓:nav  L1/R1:page  A/→:enter  X/←:back  Select:doc  L2/R2:zoom  Menu:exit"
-		}
+	if r.statusOverride != "" {
+		statusText = r.statusOverride
 	} else {
-		if r.doc != nil {
-			if r.hasTree {
-				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  H:home  T:tree  F:menu  D:theme  +/-:zoom  Q:exit"
-			} else if isMenu {
-				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  D:theme  +/-:zoom  Q:exit"
+		isMenu := false
+		if r.doc != nil && len(r.doc.Blocks) > 0 {
+			if h, ok := r.doc.Blocks[0].(*document.Heading); ok {
+				isMenu = h.Level == 1 && h.Content == "Kiwix SDL Document Menu"
+			}
+		}
+
+		if sdl.NumJoysticks() > 0 {
+			if r.doc != nil {
+				if r.hasTree {
+					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Start:home  Select:tree  L2/R2:zoom  Menu:exit"
+				} else if isMenu {
+					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  L2/R2:zoom  Menu:exit"
+				} else {
+					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Select:menu  L2/R2:zoom  Menu:exit"
+				}
 			} else {
-				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  F:menu  D:theme  +/-:zoom  Q:exit"
+				statusText = "↑↓:nav  L1/R1:page  A/→:enter  X/←:back  Select:doc  L2/R2:zoom  Menu:exit"
 			}
 		} else {
-			statusText = "↑↓:nav  PgUp/PgDn:page  ↩→:enter  ←⌫:back  T:doc  D:theme  +/-:zoom  Q:exit"
+			if r.doc != nil {
+				if r.hasTree {
+					statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  H:home  T:tree  F:menu  D:theme  +/-:zoom  Q:exit"
+				} else if isMenu {
+					statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  D:theme  +/-:zoom  Q:exit"
+				} else {
+					statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  F:menu  D:theme  +/-:zoom  Q:exit"
+				}
+			} else {
+				statusText = "↑↓:nav  PgUp/PgDn:page  ↩→:enter  ←⌫:back  T:doc  D:theme  +/-:zoom  Q:exit"
+			}
 		}
 	}
 

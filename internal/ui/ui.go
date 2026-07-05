@@ -3,11 +3,14 @@ package ui
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
@@ -37,6 +40,7 @@ type DocRenderer interface {
 	HandleClick(mx, my int32) string
 	SetHasTree(has bool)
 	Zoom(delta int) error
+	SetStatusOverride(status string)
 }
 
 // DocNavigator manages document history (back/forward).
@@ -63,6 +67,7 @@ type App struct {
 	zimReader *zim.Reader
 	navState  *trie.NavState
 	gamepad   GamepadState
+	internetAvailable bool
 }
 
 // New creates the app with injected dependencies.
@@ -82,6 +87,26 @@ func (app *App) shutdown() {
 		app.zimReader = nil
 	}
 	app.navState = nil
+}
+
+func (app *App) checkInternetAsync() {
+	go func() {
+		client := http.Client{Timeout: 4 * time.Second}
+		resp, err := client.Get("https://browse.library.kiwix.org/catalog/v2/languages")
+		if err == nil {
+			resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				app.internetAvailable = true
+				if app.navigator.Current() == "virtual:menu" {
+					if doc, err := app.generateFileSelectorDoc(); err == nil {
+						app.renderer.SetDocument(doc)
+						app.renderer.Relayout()
+						sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+					}
+				}
+			}
+		}
+	}()
 }
 
 func (app *App) enterTreeMode() {
@@ -169,6 +194,14 @@ func (app *App) OpenFile(path string) error {
 			return err
 		}
 		app.docCache[absPath] = doc
+	} else if strings.HasPrefix(path, "virtual:library") {
+		absPath = path
+		app.shutdown()
+		doc, err = app.generateLibraryDoc(path)
+		if err != nil {
+			return err
+		}
+		app.docCache[absPath] = doc
 	} else {
 		absPath, err = filepath.Abs(path)
 		if err != nil {
@@ -197,6 +230,15 @@ func (app *App) OpenFile(path string) error {
 
 	app.mode = modeDoc
 	app.renderer.SetResourceLoader(func(rawURL string) ([]byte, error) {
+		if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+			client := http.Client{Timeout: 3 * time.Second}
+			resp, err := client.Get(rawURL)
+			if err != nil {
+				return nil, err
+			}
+			defer resp.Body.Close()
+			return io.ReadAll(resp.Body)
+		}
 		if app.zimReader != nil {
 			data, _, err := app.zimReader.ResolveResource(rawURL)
 			return data, err
@@ -240,6 +282,14 @@ func (app *App) generateFileSelectorDoc() (*document.Document, error) {
 	sb.WriteString("# Kiwix SDL Document Menu\n\n")
 	sb.WriteString("Select a document or ZIM archive to open:\n\n")
 
+	if app.internetAvailable {
+		sb.WriteString("## Online Library\n")
+		sb.WriteString("* [Browse and Download ZIM Archives](virtual:library)\n\n")
+	} else {
+		sb.WriteString("## Online Library\n")
+		sb.WriteString("*Online library is available when internet is connected.*\n\n")
+	}
+
 	var zims []string
 	var mds []string
 
@@ -266,7 +316,7 @@ func (app *App) generateFileSelectorDoc() (*document.Document, error) {
 	if len(zims) > 0 {
 		sb.WriteString("## ZIM Archives\n")
 		for _, f := range zims {
-			sb.WriteString(fmt.Sprintf("* [%s](%s)\n", f, f))
+			fmt.Fprintf(&sb, "* [%s](%s)\n", f, f)
 		}
 		sb.WriteString("\n")
 	}
@@ -275,7 +325,7 @@ func (app *App) generateFileSelectorDoc() (*document.Document, error) {
 		sb.WriteString("## Documents\n")
 		for _, f := range mds {
 			label := filepath.Base(f)
-			sb.WriteString(fmt.Sprintf("* [%s](%s)\n", label, f))
+			fmt.Fprintf(&sb, "* [%s](%s)\n", label, f)
 		}
 		sb.WriteString("\n")
 	}
@@ -362,6 +412,7 @@ func (app *App) navigateLink(url string) {
 // Run starts the main event loop. Blocks until quit.
 func (app *App) Run() {
 	defer app.shutdown()
+	app.checkInternetAsync()
 	app.running = true
 	for app.running {
 		event := sdl.WaitEvent()
@@ -628,4 +679,76 @@ func debugEvent(kind string, code int, val int) {
 	if os.Getenv("KIWIX_DEBUG_INPUT") != "" {
 		fmt.Fprintf(os.Stderr, "[INPUT] %s code=%d val=%d\n", kind, code, val)
 	}
+}
+
+func (app *App) startDownload(downloadURL, filename string) {
+	go func() {
+		client := http.Client{}
+		resp, err := client.Get(downloadURL)
+		if err != nil {
+			app.renderer.SetStatusOverride("Download failed: " + err.Error())
+			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+			return
+		}
+		defer resp.Body.Close()
+
+		out, err := os.Create(filename)
+		if err != nil {
+			app.renderer.SetStatusOverride("Create file failed: " + err.Error())
+			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+			return
+		}
+		defer out.Close()
+
+		totalSize := resp.ContentLength
+		var downloaded int64
+		buf := make([]byte, 32*1024)
+
+		ticker := time.NewTicker(500 * time.Millisecond)
+		defer ticker.Stop()
+
+		for {
+			n, readErr := resp.Body.Read(buf)
+			if n > 0 {
+				_, writeErr := out.Write(buf[:n])
+				if writeErr != nil {
+					app.renderer.SetStatusOverride("Write failed: " + writeErr.Error())
+					sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+					return
+				}
+				downloaded += int64(n)
+			}
+			if readErr != nil {
+				if readErr == io.EOF {
+					break
+				}
+				app.renderer.SetStatusOverride("Download read failed: " + readErr.Error())
+				sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+				return
+			}
+
+			select {
+			case <-ticker.C:
+				percent := 0.0
+				if totalSize > 0 {
+					percent = float64(downloaded) / float64(totalSize) * 100
+				}
+				app.renderer.SetStatusOverride(fmt.Sprintf("Downloading %s: %.1f%%", filename, percent))
+				sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+			default:
+			}
+		}
+
+		app.renderer.SetStatusOverride("Download finished successfully!")
+		sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+		time.Sleep(3 * time.Second)
+		app.renderer.SetStatusOverride("")
+
+		if app.navigator.Current() == "virtual:menu" {
+			if doc, err := app.generateFileSelectorDoc(); err == nil {
+				app.renderer.SetDocument(doc)
+				app.renderer.Relayout()
+			}
+		}
+	}()
 }

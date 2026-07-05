@@ -96,6 +96,7 @@ type Renderer struct {
 
 	baseFontSize int
 	fontPath     string
+	statusOverride string
 }
 
 type lineEntry struct {
@@ -198,12 +199,10 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	for i := FontKind(0); i < fontCount; i++ {
 		var font *ttf.Font
 		var err error
-		if i == FontMono {
-			font, err = loadFontFromBytes(DejaVuSansMono, sizes[i])
-		} else if fontPath != "" {
+		if fontPath != "" {
 			font, err = ttf.OpenFont(fontPath, sizes[i])
 		} else {
-			font, err = loadFontFromBytes(DejaVuSans, sizes[i])
+			font, err = loadFontFromBytes(unifont, sizes[i])
 		}
 		if err != nil {
 			r.Destroy()
@@ -506,12 +505,10 @@ func (r *Renderer) Zoom(delta int) error {
 	for i := FontKind(0); i < fontCount; i++ {
 		var font *ttf.Font
 		var err error
-		if i == FontMono {
-			font, err = loadFontFromBytes(DejaVuSansMono, sizes[i])
-		} else if r.fontPath != "" {
+		if r.fontPath != "" {
 			font, err = ttf.OpenFont(r.fontPath, sizes[i])
 		} else {
-			font, err = loadFontFromBytes(DejaVuSans, sizes[i])
+			font, err = loadFontFromBytes(unifont, sizes[i])
 		}
 		if err != nil {
 			return fmt.Errorf("zoom load font size %d: %w", sizes[i], err)
@@ -528,5 +525,10 @@ func (r *Renderer) Zoom(delta int) error {
 	// Recalculate document layout with new font sizes
 	r.relayout()
 	return nil
+}
+
+// SetStatusOverride sets a custom status bar message to override help legends.
+func (r *Renderer) SetStatusOverride(status string) {
+	r.statusOverride = status
 }
 
