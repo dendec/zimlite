@@ -464,11 +464,6 @@ func (f *sdlFont) Measure(text string, isBold, isItalic, isCode bool) (int32, in
 	return measureText(text, font, isBold, isItalic)
 }
 
-func (r *Renderer) measureHeading(text string, fidx FontKind, isBold, isItalic bool) (int32, int32) {
-	font := r.fonts[fidx].font
-	return measureText(text, font, isBold, isItalic)
-}
-
 // Zoom adjusts baseFontSize by delta and re-initializes fonts at runtime.
 func (r *Renderer) Zoom(delta int) error {
 	newSize := r.baseFontSize + delta

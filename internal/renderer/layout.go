@@ -57,26 +57,9 @@ type layoutState struct {
 
 func (s *layoutState) VisitHeading(h *document.Heading) {
 	fidx := headingFontIdx(h.Level)
-	font := s.r.fonts[fidx].font
-	charW := int32(font.Height() / 2) // monospace Unifont: char width ≈ height/2
-	if charW < 1 { charW = 1 }
-	maxChars := s.maxW / charW
-	if maxChars < 10 { maxChars = 10 }
-	lines := wrapText(h.Content, int(maxChars))
-	for _, line := range lines {
-		tw, th := s.r.measureHeading(line, fidx, true, false)
-		s.r.lines = append(s.r.lines, lineEntry{
-			text: line, fontIdx: fidx,
-			color:  s.r.headingColor,
-			x:      s.r.marginX,
-			y:      s.y,
-			w:      tw,
-			h:      th,
-			isBold: true,
-		})
-		s.y += th + 1
-	}
-	s.y -= 1
+	inlines := []document.Inline{&document.Text{Content: h.Content}}
+	s.y = s.r.layoutInlines(inlines, fidx, s.r.headingColor, s.r.headingColor, s.maxW, s.y, 0, "")
+
 	if h.Level == 1 || h.Level == 2 {
 		s.y += 4
 		s.r.lines = append(s.r.lines, lineEntry{
@@ -308,21 +291,6 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 
 	flushLine(isFirst)
 	return y
-}
-
-func wrapText(text string, maxChars int) []string {
-	if maxChars <= 0 || len([]rune(text)) <= maxChars {
-		return []string{text}
-	}
-	var lines []string
-	runes := []rune(text)
-	for len(runes) > 0 {
-		end := maxChars
-		if end > len(runes) { end = len(runes) }
-		lines = append(lines, string(runes[:end]))
-		runes = runes[end:]
-	}
-	return lines
 }
 
 
