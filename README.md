@@ -4,7 +4,18 @@
 
 Renders Wikipedia ZIM archives, Markdown, and HTML files via SDL2. Supports keyboard, mouse, and gamepad input. Designed for low-power ARM devices (TrimUI Smart Pro / PortMaster) but runs on any Linux/Windows desktop.
 
-![Logo](portmaster/screenshot.png)
+<img width="420" alt="article" src="https://github.com/user-attachments/assets/06cb4988-8b77-443f-953e-ee65e7fd6d14" />
+
+<details>
+  <summary><strong>More Screenshots</strong>
+</summary>
+  <br>
+  <img width="420" alt="menu" src="https://github.com/user-attachments/assets/816e3bb0-f05d-4ac2-9952-8df31303a4fa" />
+  <img width="420" alt="library" src="https://github.com/user-attachments/assets/83c83d73-9d1c-4344-b67c-c24fdb7ec8ec" />
+  <img width="420" alt="tree" src="https://github.com/user-attachments/assets/43edfc1a-7d73-4200-8390-776d76080c26" />
+  <img width="420" alt="cn_math" src="https://github.com/user-attachments/assets/2b09733e-3093-4ee9-a35e-f2fb63a169f4" />
+
+</details>
 
 ## Features
 
