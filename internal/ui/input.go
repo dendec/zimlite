@@ -82,6 +82,9 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 			e.Event == sdl.WINDOWEVENT_SIZE_CHANGED {
 			app.viewer.Relayout()
 		}
+		if e.Event == sdl.WINDOWEVENT_LEAVE {
+			app.viewer.HandleMouseLeave()
+		}
 
 	case *sdl.MouseMotionEvent:
 		app.viewer.HandleMouseMove(e.X, e.Y)

@@ -112,6 +112,8 @@ type Renderer struct {
 	hasActiveAnimations bool
 	hoveredLink         int
 	hoveredTreeLine     int // index of hovered tree line (-1 = none)
+	arrowCursor         *sdl.Cursor
+	handCursor          *sdl.Cursor
 }
 
 type lineEntry struct {
@@ -215,6 +217,8 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		imgManager:   NewImageManager(sdlRend),
 		baseFontSize: baseFontSize,
 		fontPath:     fontPath,
+		arrowCursor:  sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_ARROW),
+		handCursor:   sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_HAND),
 	}
 
 	fonts, err := loadFonts(baseFontSize, fontPath)
@@ -292,6 +296,12 @@ func (r *Renderer) Destroy() {
 			r.fonts[i].font.Close()
 		}
 	}
+	if r.arrowCursor != nil {
+		sdl.FreeCursor(r.arrowCursor)
+	}
+	if r.handCursor != nil {
+		sdl.FreeCursor(r.handCursor)
+	}
 	if r.sdlRenderer != nil {
 		r.sdlRenderer.Destroy()
 	}
@@ -307,6 +317,7 @@ func (r *Renderer) SetDocument(doc *document.Document) {
 	r.scrollY = 0
 	r.selectedLink = -1
 	r.hoveredLink = -1
+	sdl.SetCursor(r.arrowCursor)
 	r.docTitle = extractTitle(doc)
 	r.relayout()
 }
@@ -692,6 +703,7 @@ func (r *Renderer) HasAnimations() bool {
 
 func (r *Renderer) HandleMouseMove(mx, my int32) {
 	docY := my + r.scrollY
+	prevLink := r.hoveredLink
 	r.hoveredLink = -1
 	r.hoveredTreeLine = -1
 	for i, link := range r.layout.links {
@@ -699,8 +711,18 @@ func (r *Renderer) HandleMouseMove(mx, my int32) {
 			if mx >= rect.X && mx <= rect.X+rect.W &&
 				docY >= rect.Y && docY <= rect.Y+rect.H {
 				r.hoveredLink = i
-				return
+				break
 			}
+		}
+		if r.hoveredLink >= 0 {
+			break
+		}
+	}
+	if r.hoveredLink != prevLink {
+		if r.hoveredLink >= 0 {
+			sdl.SetCursor(r.handCursor)
+		} else {
+			sdl.SetCursor(r.arrowCursor)
 		}
 	}
 	if r.treeItems != nil {
@@ -715,4 +737,11 @@ func (r *Renderer) HandleMouseMove(mx, my int32) {
 
 func (r *Renderer) isTreeLineHovered(idx int) bool {
 	return idx >= 0 && idx < len(r.layout.lines) && r.hoveredTreeLine == idx
+}
+
+func (r *Renderer) HandleMouseLeave() {
+	if r.hoveredLink >= 0 {
+		r.hoveredLink = -1
+		sdl.SetCursor(r.arrowCursor)
+	}
 }
