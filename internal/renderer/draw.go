@@ -484,8 +484,7 @@ func (r *Renderer) renderTextTexture(line lineEntry) *sdl.Texture {
 	if tex != nil {
 		return tex
 	}
-	var font *ttf.Font
-	font = r.fonts[line.fontIdx].font
+	font := r.fonts[line.fontIdx].font
 	if font == nil {
 		return nil
 	}
