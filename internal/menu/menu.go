@@ -13,6 +13,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
 )
@@ -20,9 +21,22 @@ import (
 //go:embed assets/menu.md.tmpl
 var menuTemplate string
 
+//go:embed assets/help_keyboard.md.tmpl
+var helpKeyboardTemplate string
+
+//go:embed assets/help_gamepad.md.tmpl
+var helpGamepadTemplate string
+
+//go:embed assets/settings.md.tmpl
+var settingsTemplate string
+
 var tmpl = template.Must(template.New("menu").Funcs(template.FuncMap{
 	"urlquery": url.QueryEscape,
 }).Parse(menuTemplate))
+
+var helpKeyboardTmpl = template.Must(template.New("help_keyboard").Parse(helpKeyboardTemplate))
+var helpGamepadTmpl = template.Must(template.New("help_gamepad").Parse(helpGamepadTemplate))
+var settingsTmpl = template.Must(template.New("settings").Parse(settingsTemplate))
 
 // FileEntry represents a file in the menu with formatted details.
 type FileEntry struct {
@@ -64,6 +78,33 @@ func FileSelector(internetAvailable bool) (*document.Document, error) {
 	}
 
 	slog.Debug("Generated menu markdown", "markdown", buf.String())
+
+	return markdown.Parse(&buf)
+}
+
+// HelpPage generates the help and shortcuts document.
+func HelpPage(hasGamepad bool) (*document.Document, error) {
+	var buf bytes.Buffer
+	var err error
+	if hasGamepad {
+		err = helpGamepadTmpl.Execute(&buf, nil)
+	} else {
+		err = helpKeyboardTmpl.Execute(&buf, nil)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("execute template: %w", err)
+	}
+
+	return markdown.Parse(&buf)
+}
+
+// SettingsPage generates the settings document.
+func SettingsPage() (*document.Document, error) {
+	var buf bytes.Buffer
+	cfg := config.Get()
+	if err := settingsTmpl.Execute(&buf, cfg); err != nil {
+		return nil, fmt.Errorf("execute template: %w", err)
+	}
 
 	return markdown.Parse(&buf)
 }

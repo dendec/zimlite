@@ -97,16 +97,7 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 					idx := app.scroller.HandleTreeClick(e.X, e.Y)
 					if idx >= 0 {
 						app.navState.MoveTo(idx)
-						if app.navState.CursorIsLeaf() {
-							path := app.navState.CursorPath()
-							if path != "" {
-								app.navigator.Open("virtual:tree")
-								app.loader.NavigateLink(path)
-							}
-						} else {
-							app.navState.ActionRight()
-						}
-						app.renderTree()
+						c.handleTreeSelection()
 					}
 				}
 			case sdl.BUTTON_RIGHT, sdl.BUTTON_X1:
@@ -127,16 +118,7 @@ func (c *InputController) processTreeKey(sc sdl.Scancode) {
 		app.navState.ActionRight()
 	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
 		slog.Debug("Tree navigation enter", "label", app.navState.Cursor.Label(), "isLeaf", app.navState.CursorIsLeaf(), "path", app.navState.CursorPath())
-		if app.navState.CursorIsLeaf() {
-			// Open article.
-			path := app.navState.CursorPath()
-			if path != "" {
-				app.navigator.Open("virtual:tree")
-				app.loader.NavigateLink(path)
-			}
-		} else {
-			app.navState.ActionRight()
-		}
+		c.handleTreeSelection()
 	case sdl.SCANCODE_LEFT, sdl.SCANCODE_A, sdl.SCANCODE_KP_4:
 		app.navState.ActionLeft()
 	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
@@ -179,16 +161,7 @@ func (c *InputController) processDocKey(sc sdl.Scancode) {
 func (c *InputController) processJoyA() {
 	app := c.app
 	if app.mode == modeTree {
-		if app.navState.CursorIsLeaf() {
-			path := app.navState.CursorPath()
-			if path != "" {
-				app.navigator.Open("virtual:tree")
-				app.loader.NavigateLink(path)
-			}
-		} else {
-			app.navState.ActionRight()
-			app.renderTree()
-		}
+		c.handleTreeSelection()
 	} else {
 		url := app.links.SelectedLinkURL()
 		if url != "" {
@@ -261,4 +234,18 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 
 func debugEvent(kind string, code int, val int) {
 	slog.Debug("Input event", "kind", kind, "code", code, "val", val)
+}
+
+func (c *InputController) handleTreeSelection() {
+	app := c.app
+	if app.navState.CursorIsLeaf() {
+		path := app.navState.CursorPath()
+		if path != "" {
+			app.navigator.Open("virtual:tree")
+			app.loader.NavigateLink(path)
+		}
+	} else {
+		app.navState.ActionRight()
+	}
+	app.renderTree()
 }

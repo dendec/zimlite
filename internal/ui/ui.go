@@ -2,10 +2,14 @@
 package ui
 
 import (
+	"fmt"
+	neturl "net/url"
 	"strings"
 	"time"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/menu"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -182,6 +186,53 @@ func (app *App) renderTree() {
 // OpenFile delegates to the DocumentLoader to open a file or virtual path.
 func (app *App) OpenFile(path string) error {
 	return app.loader.OpenFile(path)
+}
+
+// ReloadCurrentDocument reloads the current document while preserving scroll and selection.
+func (app *App) ReloadCurrentDocument(doc *document.Document) {
+	app.loader.docCache[app.navigator.Current()] = doc
+	sy := app.scroller.CurrentScrollY()
+	sel := app.links.SelectedLinkIndex()
+	app.viewer.SetDocument(doc)
+	app.scroller.SetScrollY(sy)
+	app.links.SetSelectedLinkIndex(sel)
+	app.viewer.Relayout()
+	sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+}
+
+// HandleSettingsAction parses settings URL and updates config and UI.
+func (app *App) HandleSettingsAction(u *neturl.URL) {
+	cfg := config.Get()
+	changed := false
+	if theme := u.Query().Get("theme"); theme != "" && theme != cfg.Theme {
+		cfg.Theme = theme
+		changed = true
+		app.viewer.ToggleTheme() // Update UI immediately
+	}
+	if lang := u.Query().Get("lang"); lang != "" && lang != cfg.Language {
+		cfg.Language = lang
+		changed = true
+	}
+	if fs := u.Query().Get("fontsize"); fs != "" {
+		var delta int
+		fmt.Sscanf(fs, "%d", &delta)
+		cfg.FontSize += delta
+		if cfg.FontSize < 10 {
+			cfg.FontSize = 10
+		}
+		if cfg.FontSize > 32 {
+			cfg.FontSize = 32
+		}
+		changed = true
+		_ = app.viewer.Zoom(delta)
+	}
+	if changed {
+		config.Set(cfg)
+		_ = config.Save()
+		// Reload the settings page inline without pushing to history
+		doc, _ := menu.SettingsPage()
+		app.ReloadCurrentDocument(doc)
+	}
 }
 
 // Run starts the main event loop. Blocks until quit.

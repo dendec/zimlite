@@ -2,6 +2,7 @@ package ui
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -21,18 +22,39 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+type VirtualPageGenerator func(path string, loader *DocumentLoader) (*document.Document, error)
+
 type DocumentLoader struct {
 	app               *App
 	docCache          map[string]*document.Document
 	zimReader         ZimReader
 	internetAvailable bool
+	virtualPages      map[string]VirtualPageGenerator
 }
 
 func NewDocumentLoader(app *App) *DocumentLoader {
-	return &DocumentLoader{
+	l := &DocumentLoader{
 		app:               app,
 		docCache:          make(map[string]*document.Document),
 		internetAvailable: true,
+		virtualPages:      make(map[string]VirtualPageGenerator),
+	}
+	l.registerVirtualPages()
+	return l
+}
+
+func (l *DocumentLoader) registerVirtualPages() {
+	l.virtualPages["virtual:menu"] = func(path string, l *DocumentLoader) (*document.Document, error) {
+		return menu.FileSelector(l.internetAvailable)
+	}
+	l.virtualPages["virtual:help"] = func(path string, l *DocumentLoader) (*document.Document, error) {
+		return menu.HelpPage(sdl.NumJoysticks() > 0)
+	}
+	l.virtualPages["virtual:settings"] = func(path string, l *DocumentLoader) (*document.Document, error) {
+		return menu.SettingsPage()
+	}
+	l.virtualPages["virtual:library"] = func(path string, l *DocumentLoader) (*document.Document, error) {
+		return l.generateLibraryDoc(path)
 	}
 }
 
@@ -68,18 +90,23 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 	var doc *document.Document
 	var err error
 
-	if pathStr == "virtual:menu" {
-		absPath = "virtual:menu"
-		l.shutdown()
-		doc, err = menu.FileSelector(l.internetAvailable)
-		if err != nil {
-			return err
-		}
-		l.docCache[absPath] = doc
-	} else if strings.HasPrefix(pathStr, "virtual:library") {
+	if strings.HasPrefix(pathStr, "virtual:") {
 		absPath = pathStr
 		l.shutdown()
-		doc, err = l.generateLibraryDoc(pathStr)
+
+		var generator VirtualPageGenerator
+		for prefix, gen := range l.virtualPages {
+			if strings.HasPrefix(pathStr, prefix) {
+				generator = gen
+				break
+			}
+		}
+
+		if generator == nil {
+			return fmt.Errorf("unknown virtual page: %s", pathStr)
+		}
+
+		doc, err = generator(pathStr, l)
 		if err != nil {
 			return err
 		}
@@ -186,6 +213,13 @@ func (l *DocumentLoader) NavigateLink(url string) {
 					sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 				}
 			}
+		}
+		return
+	}
+	if strings.HasPrefix(url, "virtual:settings?") {
+		u, err := neturl.Parse(url)
+		if err == nil {
+			app.HandleSettingsAction(u)
 		}
 		return
 	}

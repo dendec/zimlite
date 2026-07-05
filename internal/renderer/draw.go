@@ -1,7 +1,6 @@
 package renderer
 
 import (
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -209,38 +208,6 @@ func (r *Renderer) renderStatusBar() {
 	var statusText string
 	if r.statusOverride != "" {
 		statusText = r.statusOverride
-	} else {
-		isMenu := false
-		if r.doc != nil && len(r.doc.Blocks) > 0 {
-			if h, ok := r.doc.Blocks[0].(*document.Heading); ok {
-				isMenu = h.Level == 1 && h.Content == "Kiwix SDL Document Menu"
-			}
-		}
-		if sdl.NumJoysticks() > 0 {
-			if r.doc != nil {
-				if r.hasTree {
-					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  B:back  Y:home  X:tree  Select:theme  L2/R2:zoom  Start:exit"
-				} else if isMenu {
-					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  B:back  Select:theme  L2/R2:zoom  Start:exit"
-				} else {
-					statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  B:back  Y:menu  Select:theme  L2/R2:zoom  Start:exit"
-				}
-			} else {
-				statusText = "↑↓:nav  L1/R1:page  A/→:enter  B/←:back  X:doc  Select:theme  L2/R2:zoom  Start:exit"
-			}
-		} else {
-			if r.doc != nil {
-				if r.hasTree {
-					statusText = "WASD/Arrows:nav  Space:page  Enter/LMB:open  Back/RMB:back  M:menu  T:tree  C:theme  +/-:zoom  Q:exit"
-				} else if isMenu {
-					statusText = "WASD/Arrows:nav  Space:page  Enter/LMB:open  Back/RMB:back  C:theme  +/-:zoom  Q:exit"
-				} else {
-					statusText = "WASD/Arrows:nav  Space:page  Enter/LMB:open  Back/RMB:back  M:menu  C:theme  +/-:zoom  Q:exit"
-				}
-			} else {
-				statusText = "WS/Up/Dn:nav  Space:page  Enter/LMB:open  Back/RMB:back  T:doc  C:theme  +/-:zoom  Q:exit"
-			}
-		}
 	}
 
 	font := r.fonts[FontBody].font

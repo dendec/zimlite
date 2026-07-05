@@ -1,5 +1,8 @@
 # Kiwix SDL Document Menu
 
+* [Help & Shortcuts](virtual:help)
+* [Settings](virtual:settings)
+
 Select a document or ZIM archive to open:
 
 {{if .InternetAvailable}}
@@ -10,7 +13,7 @@ Select a document or ZIM archive to open:
 {{if .ZIMs}}
 ## ZIM Archives
 
-| Name | Size | Action |
+| | | |
 |------|------|--------|
 {{range .ZIMs}}| [{{.DisplayName}}]( {{.Name}} ) | {{.Size}} | [Delete](virtual:delete?file={{urlquery .Name}}) |
 {{end}}
@@ -19,7 +22,7 @@ Select a document or ZIM archive to open:
 {{if .Docs}}
 ## Documents
 
-| Name | Size | Action |
+| | | |
 |------|------|--------|
 {{range .Docs}}| [{{.DisplayName}}]( {{.Name}} ) | {{.Size}} | [Delete](virtual:delete?file={{urlquery .Name}}) |
 {{end}}

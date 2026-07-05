@@ -18,3 +18,4 @@ vendor/
 /scratch/
 
 *.zim
+config.json

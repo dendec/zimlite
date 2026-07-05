@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/navigation"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/renderer"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/ui"
@@ -30,6 +31,9 @@ func main() {
 		filePath = "virtual:menu"
 	}
 
+	config.Load()
+	cfg := config.Get()
+
 	slog.Info("Starting Kiwix-SDL", "filePath", filePath)
 
 	fontPath := findFont()
@@ -37,13 +41,19 @@ func main() {
 		slog.Info("No external TTF font found. Using embedded fonts.")
 	}
 
-	r, err := renderer.New("Kiwix-SDL", 640, 480, fontPath, 18)
+	r, err := renderer.New("Kiwix-SDL", 640, 480, fontPath, cfg.FontSize)
 	if err != nil {
 		slog.Error("Error creating renderer", "error", err)
 		os.Exit(1)
 	}
 	defer r.Destroy()
 	slog.Info("Renderer initialized successfully", "font", fontPath)
+
+	if cfg.Theme == "light" && !r.IsLight() {
+		r.ToggleTheme()
+	} else if cfg.Theme == "dark" && r.IsLight() {
+		r.ToggleTheme()
+	}
 
 	app := ui.New(r, r, r, navigation.NewSimpleNavigator())
 

@@ -258,11 +258,39 @@ func (s *layoutState) VisitImage(i *document.Image) {
 	s.y += th + s.r.lineSpacing
 }
 
+func rowHasContent(row document.TableRow) bool {
+	for _, cell := range row.Cells {
+		for _, inline := range cell.Inlines {
+			if t, ok := inline.(*document.Text); ok {
+				if strings.TrimSpace(t.Content) != "" {
+					return true
+				}
+			} else {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (s *layoutState) VisitTable(t *document.Table) {
 	if len(t.Rows) == 0 {
 		return
 	}
-	colCount := len(t.Rows[0].Cells)
+
+	var activeRows []document.TableRow
+	for _, row := range t.Rows {
+		if row.IsHeader && !rowHasContent(row) {
+			continue
+		}
+		activeRows = append(activeRows, row)
+	}
+
+	if len(activeRows) == 0 {
+		return
+	}
+
+	colCount := len(activeRows[0].Cells)
 	if colCount == 0 {
 		return
 	}
@@ -271,7 +299,7 @@ func (s *layoutState) VisitTable(t *document.Table) {
 	padding := int32(8)
 
 	// Pass 1: measure natural column widths
-	for _, row := range t.Rows {
+	for _, row := range activeRows {
 		for cIdx, cell := range row.Cells {
 			if int(cIdx) >= colCount {
 				continue
@@ -298,7 +326,7 @@ func (s *layoutState) VisitTable(t *document.Table) {
 
 	var tableGrid tableGridEntry
 
-	for _, row := range t.Rows {
+	for _, row := range activeRows {
 		maxH := int32(0)
 		yStart := s.y
 

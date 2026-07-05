@@ -116,7 +116,7 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 			return ActionPageDown, true
 		case sdl.CONTROLLER_BUTTON_BACK: // Select
 			return ActionToggleTheme, true
-		case sdl.CONTROLLER_BUTTON_START:
+		case sdl.CONTROLLER_BUTTON_GUIDE:
 			return ActionQuit, true
 		case sdl.CONTROLLER_BUTTON_DPAD_UP:
 			return ActionScrollUp, true

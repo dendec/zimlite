@@ -227,3 +227,56 @@ func TestParseRawHTML(t *testing.T) {
 		t.Errorf("missing >50 in output: %q", joined)
 	}
 }
+
+func TestParseImageInLink(t *testing.T) {
+	md := "[![](./_assets_/img.jpg) \\n List of presidents](List_of_presidents)"
+	doc, err := Parse(strings.NewReader(md))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if len(doc.Blocks) != 1 {
+		t.Fatalf("got %d blocks, want 1", len(doc.Blocks))
+	}
+
+	p, ok := doc.Blocks[0].(*document.Paragraph)
+	if !ok {
+		t.Fatalf("expected paragraph, got %T", doc.Blocks[0])
+	}
+
+	if len(p.Inlines) != 1 {
+		t.Fatalf("got %d inlines, want 1", len(p.Inlines))
+	}
+
+	link, ok := p.Inlines[0].(*document.LinkInline)
+	if !ok {
+		t.Fatalf("expected link, got %T", p.Inlines[0])
+	}
+	if link.URL != "List_of_presidents" {
+		t.Errorf("link URL: got %q, want %q", link.URL, "List_of_presidents")
+	}
+
+	hasImage := false
+	hasText := false
+	for _, inl := range link.Content {
+		switch i := inl.(type) {
+		case *document.ImageInline:
+			hasImage = true
+			if i.URL != "./_assets_/img.jpg" {
+				t.Errorf("image URL: got %q, want %q", i.URL, "./_assets_/img.jpg")
+			}
+		case *document.Text:
+			hasText = true
+			if !strings.Contains(i.Content, "List of presidents") {
+				t.Errorf("text content missing expected string: %q", i.Content)
+			}
+		}
+	}
+
+	if !hasImage {
+		t.Error("expected image inside link")
+	}
+	if !hasText {
+		t.Error("expected text inside link")
+	}
+}

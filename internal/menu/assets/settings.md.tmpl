@@ -1,0 +1,15 @@
+# Settings
+
+| | |
+| :--- | :--- |
+| **Theme** | {{if eq .Theme "light"}}**[Light]**{{else}}[Light](virtual:settings?theme=light){{end}} / {{if eq .Theme "dark"}}**[Dark]**{{else}}[Dark](virtual:settings?theme=dark){{end}} |
+| **Font Size** | [Decrease](virtual:settings?fontsize=-2) / Current: **{{.FontSize}}** / [Increase](virtual:settings?fontsize=2) |
+| **Language** | {{if eq .Language "en"}}**[English]**{{else}}[English](virtual:settings?lang=en){{end}} / {{if eq .Language "ru"}}**[Русский]**{{else}}[Русский](virtual:settings?lang=ru){{end}} |
+
+---
+
+<br>
+<br>
+
+> [!NOTE]
+> Settings are saved automatically and will be applied on the next startup.

@@ -252,6 +252,11 @@ func (r *Renderer) ToggleTheme() {
 	r.relayoutTextLines()
 }
 
+// IsLight returns whether the current theme is light.
+func (r *Renderer) IsLight() bool {
+	return r.light
+}
+
 func (r *Renderer) Relayout() {
 	r.width, r.height = r.window.GetSize()
 	r.relayout()
