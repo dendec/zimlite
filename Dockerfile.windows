@@ -30,8 +30,12 @@ RUN mkdir -p /tmp/sdl2-ttf \
     && cp -r /tmp/sdl2-ttf/SDL2_ttf-2.24.0/x86_64-w64-mingw32/* ${WIN_SYSROOT}/ \
     && rm -rf /tmp/sdl2-ttf /tmp/sdl2-ttf.tar.gz
 
-# Meson cross-file for Windows x86_64 via zig
-RUN printf "[host_machine]\nsystem = 'windows'\ncpu_family = 'x86_64'\ncpu = 'x86_64'\nendian = 'little'\n\n[binaries]\nc = ['zig', 'cc', '-target', 'x86_64-windows-gnu']\ncpp = ['zig', 'c++', '-target', 'x86_64-windows-gnu']\nar = ['zig', 'ar']\nstrip = ['zig', 'strip']\n" > /cross-windows.txt
+# Meson cross-file for Windows x86_64 via zig.
+# -fno-sanitize=undefined: zig cc enables a trapping UBSan runtime by default.
+# libzim reads unaligned little-endian integers directly from its mmap'd
+# buffers (legal on x86_64), which otherwise trips the alignment check and
+# aborts with "reference binding to misaligned address" when opening a ZIM.
+RUN printf "[host_machine]\nsystem = 'windows'\ncpu_family = 'x86_64'\ncpu = 'x86_64'\nendian = 'little'\n\n[binaries]\nc = ['zig', 'cc', '-target', 'x86_64-windows-gnu', '-fno-sanitize=undefined']\ncpp = ['zig', 'c++', '-target', 'x86_64-windows-gnu', '-fno-sanitize=undefined']\nar = ['zig', 'ar']\nstrip = ['zig', 'strip']\n" > /cross-windows.txt
 
 # Build libzim from source using zig (clang-based, modern mingw headers)
 ARG ZIM_VER=9.7.0
@@ -67,9 +71,9 @@ COPY . .
 RUN CGO_ENABLED=1 GOOS=windows GOARCH=amd64 \
     CC="zig cc -target x86_64-windows-gnu" \
     CXX="zig c++ -target x86_64-windows-gnu" \
-    CGO_CFLAGS="-I${WIN_SYSROOT}/include" \
-    CGO_CXXFLAGS="-std=c++17 -I${WIN_SYSROOT}/include" \
+    CGO_CFLAGS="-fno-sanitize=undefined -Wno-error=unused-command-line-argument -I${WIN_SYSROOT}/include" \
+    CGO_CXXFLAGS="-std=c++17 -fno-sanitize=undefined -Wno-error=unused-command-line-argument -I${WIN_SYSROOT}/include" \
     CGO_LDFLAGS="-L${WIN_SYSROOT}/lib -lzim -lzstd -llzma -lSDL2_ttf -lSDL2 -lgdi32 -lwinmm -lsetupapi -lole32 -loleaut32 -limm32 -lversion -lws2_32 -lshlwapi -ldinput8 -ldxguid -luser32 -lshell32 -luuid -lrpcrt4" \
-    go build -ldflags="-s -w -H windowsgui" -o /dist/kiwix-sdl/kiwix-sdl.exe ./cmd/kiwix-sdl
+    go build -ldflags="-s -w -H windowsgui -extldflags=-Wl,--stack,0x4000000" -o /dist/kiwix-sdl/kiwix-sdl.exe ./cmd/kiwix-sdl
 
 RUN echo "=== Dist ===" && ls -lh /dist/kiwix-sdl/

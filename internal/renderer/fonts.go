@@ -2,6 +2,7 @@ package renderer
 
 import (
 	_ "embed"
+	"log/slog"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/veandco/go-sdl2/ttf"
@@ -68,6 +69,7 @@ func loadFonts(baseSize int, fontPath string) ([fontCount]fontSlot, error) {
 	for i := FontKind(0); i < fontCount; i++ {
 		var font *ttf.Font
 		var err error
+		slog.Info("loadFonts: loading", "index", int(i), "size", sizes[i], "fromMem", fontPath == "")
 		if fontPath != "" {
 			font, err = openFontSafe(fontPath, sizes[i])
 		} else {
@@ -81,8 +83,10 @@ func loadFonts(baseSize int, fontPath string) ([fontCount]fontSlot, error) {
 			}
 			return fonts, err
 		}
+		slog.Info("loadFonts: loaded ok", "index", int(i))
 		fonts[i] = fontSlot{font: font, size: sizes[i]}
 	}
 
+	slog.Info("loadFonts: all fonts loaded")
 	return fonts, nil
 }
