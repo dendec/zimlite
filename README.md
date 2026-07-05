@@ -82,4 +82,4 @@ Set via `KIWIX_FONT` env var for a custom TTF font path. `KIWIX_DEBUG=1` for deb
 
 ## License
 
-MIT
+GPL-3.0
