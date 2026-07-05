@@ -3,8 +3,6 @@ SRC      := ./cmd/kiwix-sdl
 GO       := go
 GOFLAGS  := CGO_ENABLED=1
 
-LINTER_IMAGE := golangci/golangci-lint:latest-alpine
-
 ZIM_VER      := 9.7.0
 ZIM_TAG      := x86_64
 ZIM_LIBDIR   := lib/libzim_linux-$(ZIM_TAG)-$(ZIM_VER)
@@ -57,14 +55,13 @@ vet:
 	$(GOFLAGS) $(GO) vet ./...
 
 lint:
-	@echo "Running linter..."
-	docker run -t --rm -v $(PWD):/app -w /app --entrypoint /bin/sh $(LINTER_IMAGE) -c "apk add --no-cache gcc g++ musl-dev sdl2-dev sdl2_ttf-dev pkgconfig && golangci-lint run"
+	@which golangci-lint >/dev/null 2>&1 || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	golangci-lint run
 
 clean:
 	rm -f $(APP) $(APP)-*
 
 run: build
-	LD_LIBRARY_PATH=$(ZIM_LIB):$$LD_LIBRARY_PATH ./$(APP) /tmp/test.md
 	LD_LIBRARY_PATH=$(ZIM_LIB):$$LD_LIBRARY_PATH ./$(APP) /tmp/test.md
 
 info:
