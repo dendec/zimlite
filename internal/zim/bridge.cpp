@@ -6,6 +6,7 @@
 #include <zim/blob.h>
 #include <string>
 #include <cstring>
+#include <cstdlib>
 
 extern "C" {
 
@@ -111,6 +112,34 @@ void zim_entry_free(zim_entry_t entry) {
 
 void zim_item_free(zim_item_t item) {
     delete static_cast<zim::Item*>(item);
+}
+
+zim_article_entry_t* zim_list_articles(zim_archive_t archive, int* count_out) {
+    auto* a = static_cast<zim::Archive*>(archive);
+    auto range = a->iterByTitle();
+    int count = static_cast<int>(a->getArticleCount());
+    if (count <= 0) {
+        *count_out = 0;
+        return nullptr;
+    }
+    auto* buf = new zim_article_entry_t[count];
+    int i = 0;
+    for (auto& entry : range) {
+        buf[i].title = strdup(entry.getTitle().c_str());
+        buf[i].path = strdup(entry.getPath().c_str());
+        if (++i >= count) break;
+    }
+    *count_out = i;
+    return buf;
+}
+
+void zim_free_article_list(zim_article_entry_t* buf, int count) {
+    if (buf == nullptr) return;
+    for (int i = 0; i < count; i++) {
+        free((void*)buf[i].title);
+        free((void*)buf[i].path);
+    }
+    delete[] buf;
 }
 
 } // extern "C"

@@ -79,11 +79,11 @@ func (app *App) enterTreeMode() {
 	if app.zimReader == nil {
 		return
 	}
-	count := app.zimReader.ArticleCount()
-	if count == 0 {
+	articles := app.zimReader.ListArticles()
+	if len(articles) == 0 {
 		return
 	}
-	root := trie.Root(app.zimReader, count)
+	root := trie.NewTree(articles)
 	app.navState = trie.NewNavState(root)
 	app.mode = modeTree
 	app.renderTree()

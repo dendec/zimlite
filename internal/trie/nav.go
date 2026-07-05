@@ -4,7 +4,6 @@ package trie
 type NavState struct {
 	Root   *RadixNode
 	Cursor *RadixNode
-	scroll int // line offset for rendering
 }
 
 // NewNavState creates navigation state rooted at the given node.
@@ -18,7 +17,7 @@ func NewNavState(root *RadixNode) *NavState {
 	return ns
 }
 
-// CursorLabel returns the display label of the current cursor.
+// CursorLabel returns the display label of the cursor.
 func (ns *NavState) CursorLabel() string {
 	if ns.Cursor == nil {
 		return ""
@@ -26,15 +25,7 @@ func (ns *NavState) CursorLabel() string {
 	return ns.Cursor.Label()
 }
 
-// CursorSuffix returns the article count suffix.
-func (ns *NavState) CursorSuffix() string {
-	if ns.Cursor == nil {
-		return ""
-	}
-	return ns.Cursor.Suffix()
-}
-
-// CursorIsLeaf returns true if cursor is on an article.
+// CursorIsLeaf returns true if cursor is on a leaf article.
 func (ns *NavState) CursorIsLeaf() bool {
 	return ns.Cursor != nil && ns.Cursor.IsLeaf()
 }
@@ -54,7 +45,7 @@ func (ns *NavState) MoveDown() {
 	}
 	parent := ns.Cursor.parent
 	if parent == nil {
-		return // at root
+		return
 	}
 	for i, c := range parent.children {
 		if c == ns.Cursor && i+1 < len(parent.children) {
@@ -62,7 +53,6 @@ func (ns *NavState) MoveDown() {
 			return
 		}
 	}
-	// Wrap: stay at last.
 }
 
 // MoveUp moves cursor to previous visible sibling.
@@ -82,16 +72,12 @@ func (ns *NavState) MoveUp() {
 	}
 }
 
-// ExpandCurrent expands the cursor node, building children if needed.
+// ExpandCurrent expands the cursor node, moving into first child if available.
 func (ns *NavState) ExpandCurrent() {
-	if ns.Cursor == nil {
-		return
-	}
-	if ns.Cursor.IsLeaf() {
+	if ns.Cursor == nil || ns.Cursor.IsLeaf() {
 		return
 	}
 	ns.Cursor.Expand()
-	// Move cursor into first child if available.
 	if len(ns.Cursor.children) > 0 {
 		ns.Cursor = ns.Cursor.children[0]
 	}
@@ -110,8 +96,7 @@ func (ns *NavState) CollapseCurrent() {
 	ns.Cursor = parent
 }
 
-// VisibleNodes flattens the currently visible tree into a displayable list.
-// Returns a slice of (indent, label, suffix, isLeaf, isExpanded, isCursor) tuples.
+// VisLine describes one line in the tree display.
 type VisLine struct {
 	Indent     int
 	Label      string
@@ -121,6 +106,7 @@ type VisLine struct {
 	IsCursor   bool
 }
 
+// VisibleNodes flattens the currently visible tree for display.
 func (ns *NavState) VisibleNodes() []VisLine {
 	var lines []VisLine
 	ns.walk(ns.Root, 0, &lines)
@@ -131,7 +117,6 @@ func (ns *NavState) walk(node *RadixNode, depth int, lines *[]VisLine) {
 	if node == nil {
 		return
 	}
-	// Skip root.
 	if node.parent != nil {
 		*lines = append(*lines, VisLine{
 			Indent:     depth - 1,

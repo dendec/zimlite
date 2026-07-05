@@ -38,6 +38,12 @@ func Open(path string) (*Reader, error) {
 	return &Reader{handle: h}, nil
 }
 
+// ArticleEntry holds the title and internal path of an article.
+type ArticleEntry struct {
+	Title string
+	Path  string
+}
+
 // Close releases the archive.
 func (r *Reader) Close() {
 	if r.handle != nil {
@@ -46,21 +52,32 @@ func (r *Reader) Close() {
 	}
 }
 
-// ArticleCount returns the number of articles in the archive.
+// ArticleCount returns the number of articles.
 func (r *Reader) ArticleCount() int {
 	return int(C.zim_get_article_count(r.handle))
 }
 
-// TitleByIndex returns the title and path of the article at the given title-order index.
-func (r *Reader) TitleByIndex(idx int) (title string, path string, err error) {
-	entry := C.zim_get_entry_by_title_index(r.handle, C.int(idx))
-	if entry == nil {
-		return "", "", fmt.Errorf("no entry at index %d", idx)
+// ListArticles returns all article titles and paths in title order.
+// Uses libzim's iterByTitle() — only FRONT_ARTICLE entries, no JS/CSS/images.
+func (r *Reader) ListArticles() []ArticleEntry {
+	var count C.int
+	entries := C.zim_list_articles(r.handle, &count)
+	if entries == nil || count == 0 {
+		return nil
 	}
-	defer C.zim_entry_free(entry)
-	title = C.GoString(C.zim_entry_get_title(entry))
-	path = C.GoString(C.zim_entry_get_path(entry))
-	return title, path, nil
+	defer C.zim_free_article_list(entries, count)
+
+	result := make([]ArticleEntry, int(count))
+	base := unsafe.Pointer(entries)
+	size := unsafe.Sizeof(*entries)
+	for i := 0; i < int(count); i++ {
+		p := (*C.zim_article_entry_t)(unsafe.Add(base, uintptr(i)*size))
+		result[i] = ArticleEntry{
+			Title: C.GoString(p.title),
+			Path:  C.GoString(p.path),
+		}
+	}
+	return result
 }
 
 // MainPage returns the main article as a Document.
