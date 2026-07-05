@@ -110,11 +110,11 @@ func (app *App) renderTree() {
 		indent := strings.Repeat("  ", l.Indent)
 		prefix := "  "
 		if l.IsLeaf {
-			prefix = "• "
+			prefix = "* "
 		} else if l.IsExpanded {
-			prefix = "▾ "
+			prefix = "- "
 		} else {
-			prefix = "▸ "
+			prefix = "+ "
 		}
 		entry := indent + prefix + l.Label
 		if l.Suffix != "" {
