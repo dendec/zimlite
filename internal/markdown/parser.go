@@ -4,6 +4,7 @@ package markdown
 
 import (
 	"io"
+	"strings"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/yuin/goldmark"
@@ -48,7 +49,13 @@ func (c *converter) text(node *ast.Text) string {
 	if node.Segment.IsEmpty() {
 		return ""
 	}
-	return string(node.Value(c.source))
+	val := string(node.Value(c.source))
+	val = strings.ReplaceAll(val, "\\[", "[")
+	val = strings.ReplaceAll(val, "\\]", "]")
+	val = strings.ReplaceAll(val, "\\*", "*")
+	val = strings.ReplaceAll(val, "\\_", "_")
+	val = strings.ReplaceAll(val, "\\`", "`")
+	return val
 }
 
 func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {

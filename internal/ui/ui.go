@@ -31,6 +31,7 @@ type DocViewer interface {
 	Zoom(delta int) error
 	SetStatusOverride(status string)
 	SetHasTree(has bool)
+	FindAnchorY(anchor string) (int32, bool)
 }
 
 // LinkBrowser is the interface for navigating hyperlinks in a document.
@@ -47,6 +48,7 @@ type Scroller interface {
 	ScrollBy(delta int32)
 	ScrollPageUp()
 	ScrollPageDown()
+	ScrollToY(y int32)
 	SetTextLines(lines []string)
 	ScrollToLine(lineIdx int)
 }
@@ -292,7 +294,12 @@ func (app *App) navigateLink(url string) {
 		return
 	}
 	if strings.HasPrefix(url, "#") {
-		fmt.Fprintf(os.Stderr, "Anchor link clicked: %s\n", url)
+		anchor := url[1:]
+		if y, ok := app.viewer.FindAnchorY(anchor); ok {
+			app.scroller.ScrollToY(y)
+		} else {
+			fmt.Fprintf(os.Stderr, "Anchor not found: %s\n", url)
+		}
 		return
 	}
 

@@ -44,6 +44,7 @@ func (r *Renderer) renderImages() {
 					draw.Draw(rgba, rgba.Bounds(), m, bounds.Min, draw.Src)
 					t, errTex := r.sdlRenderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STREAMING, int32(w), int32(h))
 					if errTex == nil && len(rgba.Pix) > 0 {
+						t.SetBlendMode(sdl.BLENDMODE_BLEND)
 						t.Update(nil, unsafe.Pointer(&rgba.Pix[0]), rgba.Stride)
 						r.imageTextures[img.url] = t
 						tex = t

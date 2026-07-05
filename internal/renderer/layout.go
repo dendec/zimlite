@@ -189,8 +189,19 @@ func (s *layoutState) VisitImage(i *document.Image) {
 				imgW := int32(config.Width)
 				imgH := int32(config.Height)
 
-				// Aspect ratio scale down
-				scale := float64(s.maxW) / float64(imgW)
+				// Restrict image to half the screen width/height, but respect maxW
+				maxImgW := float64(s.r.width) / 2.0
+				if float64(s.maxW) < maxImgW {
+					maxImgW = float64(s.maxW)
+				}
+				maxImgH := float64(s.r.height) / 2.0
+
+				scaleW := maxImgW / float64(imgW)
+				scaleH := maxImgH / float64(imgH)
+				scale := scaleW
+				if scaleH < scale {
+					scale = scaleH
+				}
 				if scale > 1.0 {
 					scale = 1.0 // don't upscale
 				}
@@ -235,7 +246,19 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 				if errConfig == nil && config.Width > 0 && config.Height > 0 {
 					w := int32(config.Width)
 					h := int32(config.Height)
-					scale := float64(maxW) / float64(w)
+
+					maxImgW := float64(r.width) / 2.0
+					if float64(maxW) < maxImgW {
+						maxImgW = float64(maxW)
+					}
+					maxImgH := float64(r.height) / 2.0
+
+					scaleW := maxImgW / float64(w)
+					scaleH := maxImgH / float64(h)
+					scale := scaleW
+					if scaleH < scale {
+						scale = scaleH
+					}
 					if scale > 1.0 {
 						scale = 1.0
 					}

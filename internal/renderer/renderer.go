@@ -438,6 +438,56 @@ func (r *Renderer) ScrollToBottom() {
 	r.clampScroll()
 }
 
+func (r *Renderer) ScrollToY(y int32) {
+	r.scrollY = y - r.marginY
+	r.clampScroll()
+}
+
+func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
+	// 1. Try to find a heading
+	headingText := strings.ReplaceAll(strings.ToLower(anchor), "_", " ")
+	for _, line := range r.lines {
+		if line.fontIdx == FontH1 || line.fontIdx == FontH2 || line.fontIdx == FontH3 || line.fontIdx == FontH4 {
+			if strings.ToLower(line.text) == headingText {
+				return line.y, true
+			}
+		}
+	}
+
+	// 2. Try to find a matching back-link for footnotes
+	var targetRef string
+	if strings.HasPrefix(anchor, "cite_note-") {
+		targetRef = "cite_ref-" + anchor[len("cite_note-"):]
+	} else if strings.HasPrefix(anchor, "cite_ref-") {
+		targetRef = "cite_note-" + anchor[len("cite_ref-"):]
+		if idx := strings.LastIndex(targetRef, "-"); idx > len("cite_note-") {
+			targetRef = targetRef[:idx]
+		}
+	}
+
+	if targetRef != "" {
+		norm := func(s string) string {
+			return strings.ReplaceAll(strings.ToLower(s), "_", "-")
+		}
+		expected := norm("#" + targetRef)
+		expectedPrefix := expected
+		if strings.HasPrefix(anchor, "cite_note-") {
+			expectedPrefix += "-"
+		}
+
+		for _, l := range r.links {
+			nURL := norm(l.url)
+			if nURL == expected || strings.HasPrefix(nURL, expectedPrefix) {
+				if len(l.rects) > 0 {
+					return l.rects[0].Y, true
+				}
+			}
+		}
+	}
+
+	return 0, false
+}
+
 func (r *Renderer) clampScroll() {
 	maxScroll := r.totalHeight - (r.height - statusBarHeight)
 	if maxScroll < 0 {
