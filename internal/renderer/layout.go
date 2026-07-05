@@ -10,9 +10,11 @@ import (
 // --- Layout engine ---
 
 func (r *Renderer) relayout() {
+	r.ClearCache()
 	r.lines = nil
 	r.links = nil
 	r.codeRanges = nil
+	r.codeSpans = nil
 	r.totalHeight = 0
 
 	if r.doc == nil {
@@ -34,8 +36,8 @@ func (r *Renderer) relayout() {
 
 	document.VisitBlocks(r.doc.Blocks, ls)
 
-	if ls.y < r.height {
-		ls.y = r.height
+	if ls.y < r.height - statusBarHeight {
+		ls.y = r.height - statusBarHeight
 	}
 	r.totalHeight = ls.y
 	r.clampScroll()
@@ -50,8 +52,7 @@ type layoutState struct {
 
 func (s *layoutState) VisitHeading(h *document.Heading) {
 	fidx := headingFontIdx(h.Level)
-	font := s.r.fonts[fidx].font
-	tw, th := s.r.measure(h.Content, font)
+	tw, th := s.r.measureHeading(h.Content, fidx, true, false)
 	s.r.lines = append(s.r.lines, lineEntry{
 		text:    h.Content,
 		fontIdx: fidx,
@@ -60,24 +61,39 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 		y:       s.y,
 		w:       tw,
 		h:       th,
+		isBold:  true,
 	})
-	s.y += th + s.r.lineSpacing
+	s.y += th
+
+	if h.Level == 1 || h.Level == 2 {
+		s.y += 4
+		s.r.lines = append(s.r.lines, lineEntry{
+			fontIdx: FontBody, color: s.r.ruleColor,
+			x: s.r.marginX, y: s.y, w: s.maxW, h: 1,
+		})
+		s.y += 1 + s.r.blockSpacing
+	} else {
+		s.y += s.r.lineSpacing
+	}
 }
 
 func (s *layoutState) VisitParagraph(p *document.Paragraph) {
-	s.y = s.r.layoutInlines(p.Inlines, s.r.fonts[FontBody].font, FontBody,
-		s.r.textColor, s.r.linkColor, s.maxW, s.y)
+	s.y = s.r.layoutInlines(p.Inlines, FontBody, s.r.textColor, s.r.linkColor, s.maxW, s.y, 0, "")
+	s.y += s.r.blockSpacing
 }
 
 func (s *layoutState) VisitList(l *document.List) {
-	font := s.r.fonts[FontBody].font
 	for idx, item := range l.Items {
 		prefix := "• "
 		if l.Ordered {
 			prefix = fmt.Sprintf("%d. ", l.Start+idx)
+		} else {
+			bullets := []string{"• ", "o ", "▪ ", "▫ "}
+			prefix = bullets[l.Indent%len(bullets)]
 		}
-		pw, _ := s.r.measure(prefix, font)
-		itemW := s.maxW - s.r.listIndent
+		
+		indentX := s.r.listIndent * int32(l.Indent)
+		itemW := s.maxW - indentX - s.r.listIndent
 		if itemW < 50 {
 			itemW = 50
 		}
@@ -85,48 +101,20 @@ func (s *layoutState) VisitList(l *document.List) {
 			s.y += s.r.lineSpacing / 2
 		}
 
-		startY := s.y
-		newY := s.r.layoutInlines(item, font, FontBody, s.r.textColor, s.r.linkColor, itemW, s.y)
-
-		// Adjust first line of item: prepend prefix, shift subsequent lines.
-		for i := len(s.r.lines) - 1; i >= 0; i-- {
-			if s.r.lines[i].y >= startY && s.r.lines[i].y < newY {
-				if s.r.lines[i].y == startY {
-					s.r.lines[i].text = prefix + s.r.lines[i].text
-					s.r.lines[i].x = s.r.marginX
-					tw, th := s.r.measure(s.r.lines[i].text, font)
-					s.r.lines[i].w = tw
-					if th > s.r.lines[i].h {
-						s.r.lines[i].h = th
-					}
-				} else {
-					s.r.lines[i].x = s.r.marginX + s.r.listIndent
-				}
-			}
-		}
-		// Shift link rects for this item.
-		for li := range s.r.links {
-			lr := &s.r.links[li]
-			if lr.rect.Y >= startY && lr.rect.Y < newY {
-				if lr.rect.Y == startY {
-					lr.rect.X += pw
-				} else {
-					lr.rect.X += s.r.listIndent
-				}
-			}
-		}
-		s.y = newY
+		s.y = s.r.layoutInlines(item, FontBody, s.r.textColor, s.r.linkColor, itemW, s.y, indentX, prefix)
 	}
+	s.y += s.r.blockSpacing
 }
 
 func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	startCodeY := s.y
 	fontMono := s.r.fonts[FontMono].font
 	for _, cl := range strings.Split(c.Code, "\n") {
-		tw, th := s.r.measure(cl, fontMono)
+		tw, th := measureText(cl, fontMono, false, false)
 		s.r.lines = append(s.r.lines, lineEntry{
 			text: cl, fontIdx: FontMono, color: s.r.textColor,
 			x: s.r.marginX + 8, y: s.y, w: tw, h: th,
+			isCode: true,
 		})
 		s.y += th + 1
 	}
@@ -143,16 +131,8 @@ func (s *layoutState) VisitThematicBreak(_ *document.ThematicBreak) {
 }
 
 func (s *layoutState) VisitLink(l *document.Link) {
-	font := s.r.fonts[FontBody].font
-	pw, ph := s.r.measure(l.Label, font)
-	s.r.links = append(s.r.links, linkEntry{
-		rect: sdlRect{X: s.r.marginX, Y: s.y, W: pw, H: ph}, url: l.URL, label: l.Label,
-	})
-	s.r.lines = append(s.r.lines, lineEntry{
-		text: l.Label, fontIdx: FontBody, color: s.r.linkColor,
-		x: s.r.marginX, y: s.y, w: pw, h: ph,
-	})
-	s.y += ph + s.r.lineSpacing
+	inlines := []document.Inline{&document.LinkInline{URL: l.URL, Label: l.Label}}
+	s.y = s.r.layoutInlines(inlines, FontBody, s.r.textColor, s.r.linkColor, s.maxW, s.y, 0, "")
 }
 
 func (s *layoutState) VisitImage(i *document.Image) {
@@ -161,7 +141,7 @@ func (s *layoutState) VisitImage(i *document.Image) {
 		alt = "[image]"
 	}
 	font := s.r.fonts[FontBody].font
-	tw, th := s.r.measure(alt, font)
+	tw, th := measureText(alt, font, false, false)
 	s.r.lines = append(s.r.lines, lineEntry{
 		text: alt, fontIdx: FontBody, color: sdlColor{R: 150, G: 150, B: 150, A: 255},
 		x: s.r.marginX, y: s.y, w: tw, h: th,
@@ -169,41 +149,89 @@ func (s *layoutState) VisitImage(i *document.Image) {
 	s.y += th + s.r.lineSpacing
 }
 
-// --- Inline layout (word wrapping) ---
-
-func (r *Renderer) layoutInlines(inlines []document.Inline, font *ttfFont, fidx FontKind,
-	textColor, linkColor sdlColor, maxW int32, startY int32) int32 {
+func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
+	textColor, linkColor sdlColor, maxW int32, startY int32, indentX int32, prefix string) int32 {
 
 	linkMap := make(map[string]string)
-	v := document.NewInlineWordVisitor(&sdlFont{font}, linkMap)
+	v := document.NewInlineWordVisitor(&sdlFont{r: r, baseIdx: fidx}, linkMap)
 	document.VisitInlines(inlines, v)
 
 	y := startY
 	var lineWords []document.Word
 	var lineWidth int32
 
-	flushLine := func() {
-		if len(lineWords) == 0 {
+	flushLine := func(isFirstLine bool) {
+		if len(lineWords) == 0 && prefix == "" {
 			return
 		}
-		var sb strings.Builder
-		for _, w := range lineWords {
-			sb.WriteString(w.Text)
+		
+		currX := r.marginX + indentX
+		
+		if isFirstLine && prefix != "" {
+			pFont := r.fonts[fidx].font
+			pw, ph := measureText(prefix, pFont, false, false)
+			r.lines = append(r.lines, lineEntry{
+				text: prefix, fontIdx: fidx, color: textColor,
+				x: currX, y: y, w: pw, h: ph,
+			})
+			currX += pw
+			prefix = "" // clear so it only draws on first line
 		}
-		text := sb.String()
-		tw, th := r.measure(text, font)
-		r.lines = append(r.lines, lineEntry{
-			text: text, fontIdx: fidx, color: textColor,
-			x: r.marginX, y: y, w: tw, h: th,
-		})
-		y += th + r.lineSpacing
+
+		var maxH int32
+		for _, w := range lineWords {
+			if w.PixH > maxH {
+				maxH = w.PixH
+			}
+		}
+		if maxH == 0 {
+			maxH = v.SpaceH
+		}
+
+		for _, w := range lineWords {
+			if w.Text == "" {
+				continue
+			}
+			wColor := textColor
+			if w.IsLink {
+				wColor = linkColor
+			}
+			
+			wordY := y + (maxH - w.PixH)
+			
+			r.lines = append(r.lines, lineEntry{
+				text: w.Text, fontIdx: fidx, color: wColor,
+				x: currX, y: wordY, w: w.PixW, h: w.PixH,
+				isBold: w.IsBold, isItalic: w.IsItalic, isCode: w.IsCode,
+			})
+			
+			if w.IsCode {
+				r.codeSpans = append(r.codeSpans, codeSpanRange{
+					x: currX - 2, y: wordY - 2,
+					w: w.PixW + 4, h: w.PixH + 4,
+				})
+			}
+			
+			if w.IsLink {
+				r.links = append(r.links, linkEntry{
+					rect: sdlRect{X: currX, Y: wordY, W: w.PixW, H: w.PixH},
+					url:  linkMap[w.Text], label: w.Text,
+				})
+			}
+
+			currX += w.PixW
+		}
+		
+		y += maxH + r.lineSpacing
 		lineWords = nil
 		lineWidth = 0
 	}
 
+	isFirst := true
 	for _, w := range v.Words {
 		if w.IsHardBreak {
-			flushLine()
+			flushLine(isFirst)
+			isFirst = false
 			continue
 		}
 		if w.IsSpace && len(lineWords) == 0 {
@@ -216,38 +244,26 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, font *ttfFont, fidx 
 		}
 
 		if lineWidth+needSpace+w.PixW > maxW && len(lineWords) > 0 {
-			flushLine()
+			flushLine(isFirst)
+			isFirst = false
 			if w.IsSpace {
 				continue
 			}
 		}
 
 		if len(lineWords) > 0 && !lineWords[len(lineWords)-1].IsSpace && !w.IsSpace {
-			lineWords = append(lineWords, document.Word{Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH})
+			lineWords = append(lineWords, document.Word{
+				Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH,
+				IsBold: w.IsBold, IsItalic: w.IsItalic, IsCode: w.IsCode,
+			})
 			lineWidth += v.SpaceW
 		}
 
 		lineWords = append(lineWords, w)
 		lineWidth += w.PixW
-
-		if w.IsLink {
-			cum := int32(0)
-			for i := 0; i < len(lineWords)-1; i++ {
-				cum += lineWords[i].PixW
-			}
-			lx := r.marginX + cum
-			ly := y + int32(font.Height()) - w.PixH
-			if ly < y {
-				ly = y
-			}
-			r.links = append(r.links, linkEntry{
-				rect: sdlRect{X: lx, Y: ly, W: w.PixW, H: w.PixH},
-				url:  linkMap[w.Text], label: w.Text,
-			})
-		}
 	}
 
-	flushLine()
+	flushLine(isFirst)
 	return y
 }
 

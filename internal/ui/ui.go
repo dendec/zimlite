@@ -30,6 +30,8 @@ type DocRenderer interface {
 	SetTextLines(lines []string)
 	ScrollToLine(lineIdx int)
 	ToggleTheme()
+	HandleClick(mx, my int32) string
+	SetHasTree(has bool)
 }
 
 // DocNavigator manages document history (back/forward).
@@ -140,13 +142,16 @@ func (app *App) OpenFile(path string) error {
 		absPath = path
 	}
 
+	isZIM := strings.ToLower(filepath.Ext(absPath)) == ".zim"
+	if !isZIM {
+		app.shutdown()
+	}
+
 	doc, ok := app.docCache[absPath]
 	if !ok {
-		ext := strings.ToLower(filepath.Ext(absPath))
-		switch ext {
-		case ".zim":
+		if isZIM {
 			doc, err = app.openZIM(absPath)
-		default:
+		} else {
 			doc, err = app.openFile(absPath)
 		}
 		if err != nil {
@@ -158,6 +163,10 @@ func (app *App) OpenFile(path string) error {
 	app.mode = modeDoc
 	app.renderer.SetDocument(doc)
 	app.navigator.Open(absPath)
+	
+	hasTree := app.zimReader != nil && app.zimReader.ArticleCount() > 1
+	app.renderer.SetHasTree(hasTree)
+	
 	app.renderer.Relayout()
 	return nil
 }
@@ -263,6 +272,17 @@ func (app *App) processEvent(event sdl.Event) {
 		if e.Event == sdl.WINDOWEVENT_RESIZED ||
 			e.Event == sdl.WINDOWEVENT_SIZE_CHANGED {
 			app.renderer.Relayout()
+		}
+
+	case *sdl.MouseWheelEvent:
+		app.renderer.ScrollBy(-scrollStep * e.Y)
+
+	case *sdl.MouseButtonEvent:
+		if e.Type == sdl.MOUSEBUTTONDOWN && e.Button == sdl.BUTTON_LEFT && app.mode == modeDoc {
+			url := app.renderer.HandleClick(e.X, e.Y)
+			if url != "" {
+				app.navigateLink(url)
+			}
 		}
 	}
 }

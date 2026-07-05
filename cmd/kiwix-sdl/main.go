@@ -24,8 +24,7 @@ func main() {
 
 	fontPath := findFont()
 	if fontPath == "" {
-		fmt.Fprintln(os.Stderr, "Error: no TTF font found. Install fonts-dejavu-core or set KIWIX_FONT env var.")
-		os.Exit(1)
+		fmt.Fprintln(os.Stdout, "Notice: No external TTF font found. Using embedded fonts.")
 	}
 
 	r, err := renderer.New("Kiwix-SDL", 640, 480, fontPath, 18)
@@ -49,18 +48,6 @@ func findFont() string {
 	if p := os.Getenv("KIWIX_FONT"); p != "" {
 		if _, err := os.Stat(p); err == nil {
 			return p
-		}
-	}
-	candidates := []string{
-		"/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-		"/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-		"/usr/share/fonts/TTF/DejaVuSans.ttf",
-		"/usr/share/fonts/truetype/ubuntu/Ubuntu-R.ttf",
-		"/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c); err == nil {
-			return c
 		}
 	}
 	return ""

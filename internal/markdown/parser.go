@@ -77,17 +77,8 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		return ast.WalkSkipChildren, nil
 
 	case *ast.List:
-		list := &document.List{
-			Ordered: node.IsOrdered(),
-			Start:   node.Start,
-		}
-		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
-			if li, ok := child.(*ast.ListItem); ok {
-				itemInlines := c.collectItemInlines(li)
-				list.Items = append(list.Items, itemInlines)
-			}
-		}
-		c.document.Blocks = append(c.document.Blocks, list)
+		blocks := c.convertList(node)
+		c.document.Blocks = append(c.document.Blocks, blocks...)
 		return ast.WalkSkipChildren, nil
 
 	case *ast.FencedCodeBlock:
@@ -152,11 +143,17 @@ func (c *converter) collectInlines(n ast.Node) []document.Inline {
 // collectItemInlines walks a list item and collects inline content from its children.
 func (c *converter) collectItemInlines(li *ast.ListItem) []document.Inline {
 	// List items in goldmark: the item node contains block children (paragraphs, etc.).
-	// For each child paragraph, collect its inlines.
+	// For each child paragraph/textblock, collect its inlines.
 	var allInlines []document.Inline
 	for child := li.FirstChild(); child != nil; child = child.NextSibling() {
 		if p, ok := child.(*ast.Paragraph); ok {
 			itemInlines := c.collectInlines(p)
+			if len(allInlines) > 0 && len(itemInlines) > 0 {
+				allInlines = append(allInlines, &document.SoftBreak{})
+			}
+			allInlines = append(allInlines, itemInlines...)
+		} else if tb, ok := child.(*ast.TextBlock); ok {
+			itemInlines := c.collectInlines(tb)
 			if len(allInlines) > 0 && len(itemInlines) > 0 {
 				allInlines = append(allInlines, &document.SoftBreak{})
 			}
@@ -222,3 +219,37 @@ func (c *converter) convertInline(n ast.Node) []document.Inline {
 
 // Ensure text package is used (needed for Parse call).
 var _ = text.NewReader
+
+func listDepth(n ast.Node) int {
+	depth := 0
+	for p := n.Parent(); p != nil; p = p.Parent() {
+		if _, ok := p.(*ast.List); ok {
+			depth++
+		}
+	}
+	return depth
+}
+
+func (c *converter) convertList(node *ast.List) []document.Block {
+	var blocks []document.Block
+	list := &document.List{
+		Ordered: node.IsOrdered(),
+		Start:   node.Start,
+		Indent:  listDepth(node),
+	}
+	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+		if li, ok := child.(*ast.ListItem); ok {
+			itemInlines := c.collectItemInlines(li)
+			list.Items = append(list.Items, itemInlines)
+
+			// Find nested lists inside this list item
+			for sub := li.FirstChild(); sub != nil; sub = sub.NextSibling() {
+				if subList, ok := sub.(*ast.List); ok {
+					nested := c.convertList(subList)
+					blocks = append(blocks, nested...)
+				}
+			}
+		}
+	}
+	return append([]document.Block{list}, blocks...)
+}

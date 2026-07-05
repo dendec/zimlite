@@ -117,6 +117,11 @@ func TestParseList(t *testing.T) {
 	if len(l.Items) != 3 {
 		t.Fatalf("got %d items, want 3", len(l.Items))
 	}
+	for i, item := range l.Items {
+		if len(item) == 0 {
+			t.Errorf("item %d has no inline content", i)
+		}
+	}
 }
 
 func TestParseOrderedList(t *testing.T) {

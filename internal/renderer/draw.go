@@ -1,6 +1,8 @@
 package renderer
 
 import (
+	"fmt"
+
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -15,7 +17,7 @@ func (r *Renderer) Render() {
 	for _, cr := range r.codeRanges {
 		screenY := cr.startY - r.scrollY
 		screenH := cr.endY - cr.startY
-		if screenY > -screenH && screenY < r.height {
+		if screenY > -screenH && screenY < r.height-statusBarHeight {
 			r.sdlRenderer.SetDrawColor(r.codeBgColor.R, r.codeBgColor.G, r.codeBgColor.B, r.codeBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{
 				X: r.marginX - 4, Y: screenY - 4,
@@ -24,10 +26,22 @@ func (r *Renderer) Render() {
 		}
 	}
 
+	// Draw inline code backgrounds.
+	for _, cs := range r.codeSpans {
+		screenY := cs.y - r.scrollY
+		if screenY > -cs.h && screenY < r.height-statusBarHeight {
+			r.sdlRenderer.SetDrawColor(r.codeBgColor.R, r.codeBgColor.G, r.codeBgColor.B, r.codeBgColor.A)
+			r.sdlRenderer.FillRect(&sdl.Rect{
+				X: cs.x, Y: screenY,
+				W: cs.w, H: cs.h,
+			})
+		}
+	}
+
 	// Draw lines.
 	for _, line := range r.lines {
 		screenY := line.y - r.scrollY
-		if screenY < -line.h || screenY > r.height {
+		if screenY < -line.h || screenY > r.height-statusBarHeight {
 			continue
 		}
 		if line.text == "" {
@@ -37,44 +51,131 @@ func (r *Renderer) Render() {
 			}
 			continue
 		}
-		font := r.fonts[line.fontIdx].font
-		if font == nil {
-			continue
+
+		key := textureKey{
+			text: line.text, fontIdx: line.fontIdx, color: line.color,
+			isBold: line.isBold, isItalic: line.isItalic, isCode: line.isCode,
 		}
-		surf, err := font.RenderUTF8Blended(line.text, line.color)
-		if err != nil {
-			continue
-		}
-		tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
-		surf.Free()
-		if err != nil {
-			continue
+		tex, ok := r.textureCache[key]
+		if !ok {
+			var font *ttf.Font
+			if line.isCode {
+				font = r.fonts[FontMono].font
+			} else {
+				font = r.fonts[line.fontIdx].font
+			}
+			if font == nil {
+				continue
+			}
+
+			// Apply style dynamically
+			style := ttf.STYLE_NORMAL
+			if line.isBold && line.isItalic {
+				style = ttf.STYLE_BOLD | ttf.STYLE_ITALIC
+			} else if line.isBold {
+				style = ttf.STYLE_BOLD
+			} else if line.isItalic {
+				style = ttf.STYLE_ITALIC
+			}
+
+			oldStyle := font.GetStyle()
+			font.SetStyle(style)
+			surf, err := font.RenderUTF8Blended(line.text, line.color)
+			font.SetStyle(oldStyle) // restore
+
+			if err != nil {
+				continue
+			}
+			tex, err = r.sdlRenderer.CreateTextureFromSurface(surf)
+			surf.Free()
+			if err != nil {
+				continue
+			}
+			r.textureCache[key] = tex
 		}
 		_, _, tw, th, _ := tex.Query()
 		r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: line.x, Y: screenY, W: tw, H: th})
-		tex.Destroy()
 	}
 
 	// Highlight selected link.
 	if r.selectedLink >= 0 && r.selectedLink < len(r.links) {
 		link := r.links[r.selectedLink]
 		sy := link.rect.Y - r.scrollY
-		if sy >= -link.rect.H && sy <= r.height {
+		if sy >= -link.rect.H && sy <= r.height-statusBarHeight {
 			r.sdlRenderer.SetDrawColor(r.selBgColor.R, r.selBgColor.G, r.selBgColor.B, r.selBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{
 				X: link.rect.X - 2, Y: sy - 1,
 				W: link.rect.W + 4, H: link.rect.H + 2,
 			})
-			font := r.fonts[FontBody].font
-			surf, err := font.RenderUTF8Blended(link.label, r.linkColor)
-			if err == nil {
-				tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
-				surf.Free()
-				if err == nil {
-					_, _, tw, th, _ := tex.Query()
-					r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: link.rect.X, Y: sy, W: tw, H: th})
-					tex.Destroy()
+			key := textureKey{text: link.label, fontIdx: FontBody, color: r.linkColor, isBold: false, isItalic: false, isCode: false}
+			tex, ok := r.textureCache[key]
+			if !ok {
+				font := r.fonts[FontBody].font
+				if font != nil {
+					surf, err := font.RenderUTF8Blended(link.label, r.linkColor)
+					if err == nil {
+						tex, err = r.sdlRenderer.CreateTextureFromSurface(surf)
+						surf.Free()
+						if err == nil {
+							r.textureCache[key] = tex
+						}
+					}
 				}
+			}
+			if tex != nil {
+				_, _, tw, th, _ := tex.Query()
+				r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: link.rect.X, Y: sy, W: tw, H: th})
+			}
+		}
+	}
+
+	// Render status bar background.
+	r.sdlRenderer.SetDrawColor(r.codeBgColor.R, r.codeBgColor.G, r.codeBgColor.B, r.codeBgColor.A)
+	r.sdlRenderer.FillRect(&sdl.Rect{
+		X: 0, Y: r.height - statusBarHeight,
+		W: r.width, H: statusBarHeight,
+	})
+
+	// Render status bar border/separator.
+	r.sdlRenderer.SetDrawColor(r.ruleColor.R, r.ruleColor.G, r.ruleColor.B, r.ruleColor.A)
+	r.sdlRenderer.FillRect(&sdl.Rect{
+		X: 0, Y: r.height - statusBarHeight,
+		W: r.width, H: 1,
+	})
+
+	// Render status bar text.
+	percent := int32(0)
+	if r.totalHeight > r.height-statusBarHeight {
+		denom := r.totalHeight - (r.height - statusBarHeight)
+		if denom > 0 {
+			percent = (r.scrollY * 100) / denom
+		}
+	}
+
+	var statusText string
+	if r.doc != nil {
+		if r.hasTree {
+			statusText = fmt.Sprintf("Scroll: %d%%  |  [T] Tree  [D] Theme  [Q] Quit", percent)
+		} else {
+			statusText = fmt.Sprintf("Scroll: %d%%  |  [D] Theme  [Q] Quit", percent)
+		}
+	} else {
+		statusText = "Tree Mode  |  [T] Document  [D] Theme  [Q] Quit"
+	}
+
+	font := r.fonts[FontBody].font
+	if font != nil {
+		surf, err := font.RenderUTF8Blended(statusText, r.textColor)
+		if err == nil {
+			tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
+			surf.Free()
+			if err == nil {
+				_, _, tw, th, _ := tex.Query()
+				r.sdlRenderer.Copy(tex, nil, &sdl.Rect{
+					X: 12, Y: r.height - statusBarHeight + (statusBarHeight-th)/2,
+					W: tw, H: th,
+				})
+				tex.Destroy() // Destroy temporary status text texture to avoid cache bloat
 			}
 		}
 	}

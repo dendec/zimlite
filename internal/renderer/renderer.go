@@ -24,6 +24,21 @@ const (
 	fontCount
 )
 
+type textureKey struct {
+	text     string
+	fontIdx  FontKind
+	color    sdl.Color
+	isBold   bool
+	isItalic bool
+	isCode   bool
+}
+
+type codeSpanRange struct {
+	x, y, w, h int32
+}
+
+const statusBarHeight = 24
+
 type fontSlot struct {
 	font *ttf.Font
 	size int
@@ -38,6 +53,7 @@ type Renderer struct {
 	lines        []lineEntry
 	links        []linkEntry
 	codeRanges   []codeBlockRange
+	codeSpans    []codeSpanRange
 	totalHeight  int32
 	contentWidth int32
 	textLines    []string // cached for theme toggle
@@ -63,16 +79,22 @@ type Renderer struct {
 	codeBgColor  sdl.Color
 	ruleColor    sdl.Color
 	light        bool
+	hasTree      bool
+
+	textureCache map[textureKey]*sdl.Texture
 }
 
 type lineEntry struct {
-	text    string
-	fontIdx FontKind
-	color   sdl.Color
-	x       int32
-	y       int32
-	w       int32
-	h       int32
+	text     string
+	fontIdx  FontKind
+	color    sdl.Color
+	x        int32
+	y        int32
+	w        int32
+	h        int32
+	isBold   bool
+	isItalic bool
+	isCode   bool
 }
 
 type linkEntry struct {
@@ -136,6 +158,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		codeBgColor:  sdl.Color{R: 235, G: 235, B: 230, A: 255},
 		ruleColor:    sdl.Color{R: 180, G: 180, B: 170, A: 255},
 		light:        true,
+		textureCache: make(map[textureKey]*sdl.Texture),
 	}
 
 	sizes := [fontCount]int{
@@ -148,8 +171,17 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		FontH6:   baseFontSize - 1,
 		FontMono: baseFontSize,
 	}
+
 	for i := FontKind(0); i < fontCount; i++ {
-		font, err := ttf.OpenFont(fontPath, sizes[i])
+		var font *ttf.Font
+		var err error
+		if i == FontMono {
+			font, err = loadFontFromBytes(DejaVuSansMono, sizes[i])
+		} else if fontPath != "" {
+			font, err = ttf.OpenFont(fontPath, sizes[i])
+		} else {
+			font, err = loadFontFromBytes(DejaVuSans, sizes[i])
+		}
 		if err != nil {
 			r.Destroy()
 			return nil, fmt.Errorf("open font size %d: %w", sizes[i], err)
@@ -160,7 +192,20 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	return r, nil
 }
 
+func (r *Renderer) ClearCache() {
+	if r.textureCache == nil {
+		return
+	}
+	for k, tex := range r.textureCache {
+		if tex != nil {
+			tex.Destroy()
+		}
+		delete(r.textureCache, k)
+	}
+}
+
 func (r *Renderer) Destroy() {
+	r.ClearCache()
 	for i := range r.fonts {
 		if r.fonts[i].font != nil {
 			r.fonts[i].font.Close()
@@ -181,6 +226,10 @@ func (r *Renderer) SetDocument(doc *document.Document) {
 	r.scrollY = 0
 	r.selectedLink = -1
 	r.relayout()
+}
+
+func (r *Renderer) SetHasTree(has bool) {
+	r.hasTree = has
 }
 
 // ToggleTheme switches between light and dark color schemes.
@@ -226,15 +275,15 @@ func (r *Renderer) SetTextLines(lines []string) {
 	font := r.fonts[FontBody].font
 	y := r.marginY
 	for _, text := range lines {
-		tw, th := r.measure(text, font)
+		tw, th := measureText(text, font, false, false)
 		r.lines = append(r.lines, lineEntry{
 			text: text, fontIdx: FontBody, color: r.textColor,
 			x: r.marginX, y: y, w: tw, h: th,
 		})
 		y += th + r.lineSpacing
 	}
-	if y < r.height {
-		y = r.height
+	if y < r.height-statusBarHeight {
+		y = r.height - statusBarHeight
 	}
 	r.totalHeight = y
 	r.clampScroll()
@@ -288,11 +337,11 @@ func (r *Renderer) moveLink(delta int) {
 	if r.selectedLink >= 0 && r.selectedLink < len(r.links) {
 		link := r.links[r.selectedLink]
 		visibleTop := r.scrollY + r.marginY
-		visibleBottom := r.scrollY + r.height - r.marginY
+		visibleBottom := r.scrollY + r.height - r.marginY - statusBarHeight
 		if link.rect.Y < visibleTop {
 			r.scrollY = link.rect.Y - r.marginY
 		} else if link.rect.Y+link.rect.H > visibleBottom {
-			r.scrollY = link.rect.Y + link.rect.H - r.height + r.marginY
+			r.scrollY = link.rect.Y + link.rect.H - r.height + r.marginY + statusBarHeight
 		}
 		r.clampScroll()
 	}
@@ -319,20 +368,20 @@ func (r *Renderer) ScrollBy(delta int32) {
 }
 
 func (r *Renderer) ScrollPageUp() {
-	r.scrollY -= r.height * 3 / 4
+	r.scrollY -= (r.height - statusBarHeight) * 3 / 4
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollPageDown() {
-	r.scrollY += r.height * 3 / 4
+	r.scrollY += (r.height - statusBarHeight) * 3 / 4
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollToTop()    { r.scrollY = 0 }
-func (r *Renderer) ScrollToBottom() { r.scrollY = r.totalHeight - r.height; r.clampScroll() }
+func (r *Renderer) ScrollToBottom() { r.scrollY = r.totalHeight - (r.height - statusBarHeight); r.clampScroll() }
 
 func (r *Renderer) clampScroll() {
-	maxScroll := r.totalHeight - r.height
+	maxScroll := r.totalHeight - (r.height - statusBarHeight)
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -344,30 +393,38 @@ func (r *Renderer) clampScroll() {
 	}
 }
 
-// --- Font helpers ---
-
-func headingFontIdx(level int) FontKind {
-	fonts := [7]FontKind{FontBody, FontH1, FontH2, FontH3, FontH4, FontH5, FontH6}
-	if level >= 1 && level <= 6 {
-		return fonts[level]
+func (r *Renderer) HandleClick(mx, my int32) string {
+	docY := my + r.scrollY
+	for i, link := range r.links {
+		if mx >= link.rect.X && mx <= link.rect.X+link.rect.W &&
+			docY >= link.rect.Y && docY <= link.rect.Y+link.rect.H {
+			r.selectedLink = i
+			return link.url
+		}
 	}
-	return FontBody
+	return ""
 }
 
 // sdlFont adapts *ttf.Font to document.Font for measurement.
-type sdlFont struct{ font *ttf.Font }
-
-func (f *sdlFont) Measure(text string) (int32, int32) {
-	if text == "" {
-		return 0, int32(f.font.Height())
-	}
-	w, h, err := f.font.SizeUTF8(text)
-	if err != nil {
-		return 0, int32(f.font.Height())
-	}
-	return int32(w), int32(h)
+type sdlFont struct {
+	r       *Renderer
+	baseIdx FontKind
 }
 
-func (r *Renderer) measure(text string, font *ttf.Font) (int32, int32) {
-	return (&sdlFont{font}).Measure(text)
+func (f *sdlFont) Measure(text string, isBold, isItalic, isCode bool) (int32, int32) {
+	var font *ttf.Font
+	if isCode {
+		font = f.r.fonts[FontMono].font
+	} else {
+		font = f.r.fonts[f.baseIdx].font
+	}
+	if font == nil {
+		return 0, 0
+	}
+	return measureText(text, font, isBold, isItalic)
+}
+
+func (r *Renderer) measureHeading(text string, fidx FontKind, isBold, isItalic bool) (int32, int32) {
+	font := r.fonts[fidx].font
+	return measureText(text, font, isBold, isItalic)
 }

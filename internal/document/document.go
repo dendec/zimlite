@@ -28,6 +28,7 @@ type List struct {
 	Items   [][]Inline
 	Ordered bool
 	Start   int
+	Indent  int
 }
 
 func (*List) blockMarker() {}
@@ -146,7 +147,7 @@ type InlineWordVisitor struct {
 
 // Font abstracts font measurement needed by the inline visitor.
 type Font interface {
-	Measure(text string) (w, h int32)
+	Measure(text string, isBold, isItalic, isCode bool) (w, h int32)
 }
 
 // Word is a unit produced from inlines for line-breaking.
@@ -157,10 +158,13 @@ type Word struct {
 	PixH        int32
 	IsLink      bool
 	IsHardBreak bool
+	IsBold      bool
+	IsItalic    bool
+	IsCode      bool
 }
 
 func NewInlineWordVisitor(f Font, linkMap map[string]string) *InlineWordVisitor {
-	sw, sh := f.Measure(" ")
+	sw, sh := f.Measure(" ", false, false, false)
 	return &InlineWordVisitor{
 		Font:    f,
 		LinkMap: linkMap,
@@ -171,34 +175,56 @@ func NewInlineWordVisitor(f Font, linkMap map[string]string) *InlineWordVisitor 
 
 // VisitInlines flattens all inlines into Words.
 func VisitInlines(inlines []Inline, v *InlineWordVisitor) {
+	visitInlinesStyled(inlines, v, false, false, false)
+}
+
+func visitInlinesStyled(inlines []Inline, v *InlineWordVisitor, isBold, isItalic, isCode bool) {
 	for _, inl := range inlines {
 		switch i := inl.(type) {
 		case *Text:
 			parts := splitWords(i.Content)
 			for n, p := range parts {
-				w, h := v.Font.Measure(p)
-				v.Words = append(v.Words, Word{Text: p, PixW: w, PixH: h})
+				w, h := v.Font.Measure(p, isBold, isItalic, isCode)
+				v.Words = append(v.Words, Word{
+					Text: p, PixW: w, PixH: h,
+					IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
+				})
 				if n < len(parts)-1 {
-					v.Words = append(v.Words, Word{Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH})
+					v.Words = append(v.Words, Word{
+						Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH,
+						IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
+					})
 				}
 			}
 		case *LinkInline:
-			w, h := v.Font.Measure(i.Label)
-			v.Words = append(v.Words, Word{Text: i.Label, PixW: w, PixH: h, IsLink: true})
+			w, h := v.Font.Measure(i.Label, isBold, isItalic, isCode)
+			v.Words = append(v.Words, Word{
+				Text: i.Label, PixW: w, PixH: h, IsLink: true,
+				IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
+			})
 			if v.LinkMap != nil {
 				v.LinkMap[i.Label] = i.URL
 			}
 		case *Emphasis:
-			VisitInlines(i.Content, v)
+			visitInlinesStyled(i.Content, v, isBold, true, isCode)
 		case *Strong:
-			VisitInlines(i.Content, v)
+			visitInlinesStyled(i.Content, v, true, isItalic, isCode)
 		case *Code:
-			w, h := v.Font.Measure(i.Content)
-			v.Words = append(v.Words, Word{Text: i.Content, PixW: w, PixH: h})
+			w, h := v.Font.Measure(i.Content, isBold, isItalic, true)
+			v.Words = append(v.Words, Word{
+				Text: i.Content, PixW: w, PixH: h,
+				IsBold: isBold, IsItalic: isItalic, IsCode: true,
+			})
 		case *SoftBreak:
-			v.Words = append(v.Words, Word{Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH})
+			v.Words = append(v.Words, Word{
+				Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH,
+				IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
+			})
 		case *HardBreak:
-			v.Words = append(v.Words, Word{IsHardBreak: true})
+			v.Words = append(v.Words, Word{
+				IsHardBreak: true,
+				IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
+			})
 		}
 	}
 }
