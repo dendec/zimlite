@@ -4,6 +4,7 @@ package ui
 import (
 	"strings"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -49,6 +50,32 @@ func (app *App) shutdown() {
 	app.loader.shutdown()
 }
 
+func (app *App) goBack() {
+	app.navigator.UpdateCurrentState(document.ViewState{
+		ScrollY:      app.scroller.CurrentScrollY(),
+		SelectedLink: app.links.SelectedLinkIndex(),
+	})
+	if ok, state := app.navigator.Back(); ok {
+		prevPath := app.navigator.Current()
+		if prevPath == "virtual:menu" {
+			_ = app.loader.OpenFile("virtual:menu")
+			return
+		}
+		if doc, ok := app.loader.docCache[prevPath]; ok {
+			app.viewer.SetDocument(doc)
+			app.viewer.Relayout()
+			app.scroller.SetScrollY(state.ScrollY)
+			app.links.SetSelectedLinkIndex(state.SelectedLink)
+		}
+	} else if app.loader.zimReader != nil && app.mode == modeDoc {
+		app.enterTreeMode()
+	} else {
+		if app.navigator.Current() != "virtual:menu" {
+			_ = app.loader.OpenFile("virtual:menu")
+		}
+	}
+}
+
 func (app *App) enterTreeMode() {
 	if app.loader.zimReader == nil {
 		return
@@ -57,7 +84,10 @@ func (app *App) enterTreeMode() {
 	if len(articles) == 0 {
 		return
 	}
-	app.navigator.UpdateCurrentState(app.scroller.CurrentScrollY(), app.links.SelectedLinkIndex())
+	app.navigator.UpdateCurrentState(document.ViewState{
+		ScrollY:      app.scroller.CurrentScrollY(),
+		SelectedLink: app.links.SelectedLinkIndex(),
+	})
 	root := trie.NewTree(articles)
 	app.navState = trie.NewNavState(root)
 	app.mode = modeTree
@@ -71,9 +101,9 @@ func (app *App) exitTreeMode() {
 	if doc, ok := app.loader.docCache[prevPath]; ok {
 		app.viewer.SetDocument(doc)
 		app.viewer.Relayout()
-		scrollY, linkIdx := app.navigator.CurrentState()
-		app.scroller.SetScrollY(scrollY)
-		app.links.SetSelectedLinkIndex(linkIdx)
+		state := app.navigator.CurrentState()
+		app.scroller.SetScrollY(state.ScrollY)
+		app.links.SetSelectedLinkIndex(state.SelectedLink)
 	}
 }
 
@@ -82,7 +112,10 @@ func (app *App) goHome() {
 		mainPath := app.loader.zimReader.MainPagePath()
 		navKey := "zim:" + mainPath
 		if doc, ok := app.loader.docCache[navKey]; ok {
-			app.navigator.UpdateCurrentState(app.scroller.CurrentScrollY(), app.links.SelectedLinkIndex())
+			app.navigator.UpdateCurrentState(document.ViewState{
+				ScrollY:      app.scroller.CurrentScrollY(),
+				SelectedLink: app.links.SelectedLinkIndex(),
+			})
 			app.mode = modeDoc
 			app.viewer.SetDocument(doc)
 			app.navigator.Open(navKey)

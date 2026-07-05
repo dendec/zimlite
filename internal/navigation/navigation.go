@@ -2,22 +2,25 @@
 // history-stack implementation suitable for Stage 1 MVP.
 package navigation
 
+import (
+	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+)
+
 // Navigator is the abstract navigation interface.
 // Implementations manage history, back/forward, and document opening.
 type Navigator interface {
 	Open(id string)
-	UpdateCurrentState(scrollY int32, linkIdx int)
-	Back() (bool, int32, int)    // returns ok, scrollY, linkIdx
-	Forward() (bool, int32, int) // returns ok, scrollY, linkIdx
-	Current() string             // returns current document ID
-	CurrentState() (int32, int)  // returns scrollY, linkIdx
+	UpdateCurrentState(state document.ViewState)
+	Back() (bool, document.ViewState)
+	Forward() (bool, document.ViewState)
+	Current() string
+	CurrentState() document.ViewState
 }
 
-// HistoryItem stores the document ID, its scroll position, and selected link.
+// HistoryItem stores the document ID and its view state.
 type HistoryItem struct {
-	ID           string
-	ScrollY      int32
-	SelectedLink int
+	ID    string
+	State document.ViewState
 }
 
 // SimpleNavigator is a basic stack-based navigator for MVP.
@@ -41,11 +44,11 @@ func (n *SimpleNavigator) Current() string {
 	return n.history[n.index].ID
 }
 
-func (n *SimpleNavigator) CurrentState() (int32, int) {
+func (n *SimpleNavigator) CurrentState() document.ViewState {
 	if n.index < 0 || n.index >= len(n.history) {
-		return 0, -1
+		return document.ViewState{ScrollY: 0, SelectedLink: -1}
 	}
-	return n.history[n.index].ScrollY, n.history[n.index].SelectedLink
+	return n.history[n.index].State
 }
 
 func (n *SimpleNavigator) Open(id string) {
@@ -53,29 +56,28 @@ func (n *SimpleNavigator) Open(id string) {
 	if n.index+1 < len(n.history) {
 		n.history = n.history[:n.index+1]
 	}
-	n.history = append(n.history, HistoryItem{ID: id, ScrollY: 0, SelectedLink: -1})
+	n.history = append(n.history, HistoryItem{ID: id, State: document.ViewState{ScrollY: 0, SelectedLink: -1}})
 	n.index = len(n.history) - 1
 }
 
-func (n *SimpleNavigator) UpdateCurrentState(scrollY int32, linkIdx int) {
+func (n *SimpleNavigator) UpdateCurrentState(state document.ViewState) {
 	if n.index >= 0 && n.index < len(n.history) {
-		n.history[n.index].ScrollY = scrollY
-		n.history[n.index].SelectedLink = linkIdx
+		n.history[n.index].State = state
 	}
 }
 
-func (n *SimpleNavigator) Back() (bool, int32, int) {
+func (n *SimpleNavigator) Back() (bool, document.ViewState) {
 	if n.index <= 0 {
-		return false, 0, -1
+		return false, document.ViewState{ScrollY: 0, SelectedLink: -1}
 	}
 	n.index--
-	return true, n.history[n.index].ScrollY, n.history[n.index].SelectedLink
+	return true, n.history[n.index].State
 }
 
-func (n *SimpleNavigator) Forward() (bool, int32, int) {
+func (n *SimpleNavigator) Forward() (bool, document.ViewState) {
 	if n.index+1 >= len(n.history) {
-		return false, 0, -1
+		return false, document.ViewState{ScrollY: 0, SelectedLink: -1}
 	}
 	n.index++
-	return true, n.history[n.index].ScrollY, n.history[n.index].SelectedLink
+	return true, n.history[n.index].State
 }

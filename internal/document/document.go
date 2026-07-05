@@ -13,6 +13,12 @@ type ArticleEntry struct {
 	Path  string
 }
 
+// ViewState captures the user's reading position and interactions within a document.
+type ViewState struct {
+	ScrollY      int32
+	SelectedLink int
+}
+
 // --- Block types ---
 
 type Block interface{ blockMarker() }

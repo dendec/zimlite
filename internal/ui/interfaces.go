@@ -57,8 +57,9 @@ type Scroller interface {
 // DocNavigator manages document history (back/forward).
 type DocNavigator interface {
 	Open(id string)
-	UpdateCurrentState(scrollY int32, linkIdx int)
-	Back() (bool, int32, int)
+	UpdateCurrentState(state document.ViewState)
+	Back() (bool, document.ViewState)
+	Forward() (bool, document.ViewState)
 	Current() string
-	CurrentState() (int32, int)
+	CurrentState() document.ViewState
 }
