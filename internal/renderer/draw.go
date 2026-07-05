@@ -1,14 +1,6 @@
 package renderer
 
 import (
-	"bytes"
-	_ "golang.org/x/image/webp"
-	"image"
-	"image/draw"
-	_ "image/jpeg"
-	_ "image/png"
-	"unsafe"
-
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -32,26 +24,7 @@ func (r *Renderer) renderImages() {
 		if screenY <= -img.h || screenY >= r.height-statusBarHeight {
 			continue
 		}
-		tex, ok := r.imageTextures[img.url]
-		if !ok && r.loader != nil {
-			data, err := r.loader(img.url)
-			if err == nil {
-				m, _, errDecode := image.Decode(bytes.NewReader(data))
-				if errDecode == nil {
-					bounds := m.Bounds()
-					w, h := bounds.Dx(), bounds.Dy()
-					rgba := image.NewRGBA(image.Rect(0, 0, w, h))
-					draw.Draw(rgba, rgba.Bounds(), m, bounds.Min, draw.Src)
-					t, errTex := r.sdlRenderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STREAMING, int32(w), int32(h))
-					if errTex == nil && len(rgba.Pix) > 0 {
-						t.SetBlendMode(sdl.BLENDMODE_BLEND)
-						t.Update(nil, unsafe.Pointer(&rgba.Pix[0]), rgba.Stride)
-						r.imageTextures[img.url] = t
-						tex = t
-					}
-				}
-			}
-		}
+		tex := r.imgManager.GetTexture(img.url)
 		if tex != nil {
 			r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: img.x, Y: screenY, W: img.w, H: img.h})
 		}

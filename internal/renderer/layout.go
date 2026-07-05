@@ -1,14 +1,8 @@
 package renderer
 
 import (
-	"bytes"
 	"fmt"
-	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"strings"
-
-	_ "golang.org/x/image/webp"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 )
@@ -181,48 +175,35 @@ func (s *layoutState) VisitImage(i *document.Image) {
 		alt = "[image]"
 	}
 
-	if s.r.loader != nil && i.URL != "" {
-		data, err := s.r.loader(i.URL)
-		if err == nil {
-			config, format, errConfig := image.DecodeConfig(bytes.NewReader(data))
-			if errConfig == nil && config.Width > 0 && config.Height > 0 {
-				imgW := int32(config.Width)
-				imgH := int32(config.Height)
-
-				// Restrict image to half the screen width/height, but respect maxW
-				maxImgW := float64(s.r.width) / 2.0
-				if float64(s.maxW) < maxImgW {
-					maxImgW = float64(s.maxW)
-				}
-				maxImgH := float64(s.r.height) / 2.0
-
-				scaleW := maxImgW / float64(imgW)
-				scaleH := maxImgH / float64(imgH)
-				scale := scaleW
-				if scaleH < scale {
-					scale = scaleH
-				}
-				if scale > 1.0 {
-					scale = 1.0 // don't upscale
-				}
-				targetW := int32(float64(imgW) * scale)
-				targetH := int32(float64(imgH) * scale)
-
-				s.r.imageEntries = append(s.r.imageEntries, imageEntry{
-					x:   s.r.marginX + (s.maxW-targetW)/2,
-					y:   s.y,
-					w:   targetW,
-					h:   targetH,
-					url: i.URL,
-				})
-				s.y += targetH + s.r.blockSpacing
-				return
-			} else {
-				fmt.Printf("[DEBUG] Block DecodeConfig failed for %s: format=%s err=%v len=%d\n", i.URL, format, errConfig, len(data))
-			}
-		} else {
-			fmt.Printf("[DEBUG] Block Loader failed for %s: %v\n", i.URL, err)
+	if imgW, imgH, ok := s.r.imgManager.GetDimensions(i.URL); ok && imgW > 0 && imgH > 0 {
+		// Restrict image to half the screen width/height, but respect maxW
+		maxImgW := float64(s.r.width) / 2.0
+		if float64(s.maxW) < maxImgW {
+			maxImgW = float64(s.maxW)
 		}
+		maxImgH := float64(s.r.height) / 2.0
+
+		scaleW := maxImgW / float64(imgW)
+		scaleH := maxImgH / float64(imgH)
+		scale := scaleW
+		if scaleH < scale {
+			scale = scaleH
+		}
+		if scale > 1.0 {
+			scale = 1.0 // don't upscale
+		}
+		targetW := int32(float64(imgW) * scale)
+		targetH := int32(float64(imgH) * scale)
+
+		s.r.imageEntries = append(s.r.imageEntries, imageEntry{
+			x:   s.r.marginX + (s.maxW-targetW)/2,
+			y:   s.y,
+			w:   targetW,
+			h:   targetH,
+			url: i.URL,
+		})
+		s.y += targetH + s.r.blockSpacing
+		return
 	}
 
 	// Fallback to alt-text if image load/decode fails
@@ -239,36 +220,23 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 	textColor, linkColor sdlColor, maxW int32, startY int32, indentX int32, prefix string) int32 {
 
 	measureImg := func(url string) (int32, int32) {
-		if r.loader != nil && url != "" {
-			data, err := r.loader(url)
-			if err == nil {
-				config, format, errConfig := image.DecodeConfig(bytes.NewReader(data))
-				if errConfig == nil && config.Width > 0 && config.Height > 0 {
-					w := int32(config.Width)
-					h := int32(config.Height)
-
-					maxImgW := float64(r.width) / 2.0
-					if float64(maxW) < maxImgW {
-						maxImgW = float64(maxW)
-					}
-					maxImgH := float64(r.height) / 2.0
-
-					scaleW := maxImgW / float64(w)
-					scaleH := maxImgH / float64(h)
-					scale := scaleW
-					if scaleH < scale {
-						scale = scaleH
-					}
-					if scale > 1.0 {
-						scale = 1.0
-					}
-					return int32(float64(w) * scale), int32(float64(h) * scale)
-				} else {
-					fmt.Printf("[DEBUG] DecodeConfig failed for %s: format=%s err=%v len=%d\n", url, format, errConfig, len(data))
-				}
-			} else {
-				fmt.Printf("[DEBUG] Loader failed for %s: %v\n", url, err)
+		if w, h, ok := r.imgManager.GetDimensions(url); ok && w > 0 && h > 0 {
+			maxImgW := float64(r.width) / 2.0
+			if float64(maxW) < maxImgW {
+				maxImgW = float64(maxW)
 			}
+			maxImgH := float64(r.height) / 2.0
+
+			scaleW := maxImgW / float64(w)
+			scaleH := maxImgH / float64(h)
+			scale := scaleW
+			if scaleH < scale {
+				scale = scaleH
+			}
+			if scale > 1.0 {
+				scale = 1.0
+			}
+			return int32(float64(w) * scale), int32(float64(h) * scale)
 		}
 		return 0, 0
 	}

@@ -86,8 +86,7 @@ type Renderer struct {
 
 	textureCache  map[textureKey]*sdl.Texture
 	imageEntries  []imageEntry
-	imageTextures map[string]*sdl.Texture
-	loader        ResourceLoader
+	imgManager    *ImageManager
 
 	baseFontSize   int
 	fontPath       string
@@ -167,7 +166,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		theme:         LightTheme(),
 		light:         true,
 		textureCache:  make(map[textureKey]*sdl.Texture),
-		imageTextures: make(map[string]*sdl.Texture),
+		imgManager:    NewImageManager(sdlRend),
 		baseFontSize:  baseFontSize,
 		fontPath:      fontPath,
 	}
@@ -191,18 +190,15 @@ func (r *Renderer) ClearCache() {
 			delete(r.textureCache, k)
 		}
 	}
-	if r.imageTextures != nil {
-		for k, tex := range r.imageTextures {
-			if tex != nil {
-				tex.Destroy()
-			}
-			delete(r.imageTextures, k)
-		}
+	if r.imgManager != nil {
+		r.imgManager.ClearCache()
 	}
 }
 
 func (r *Renderer) SetResourceLoader(loader ResourceLoader) {
-	r.loader = loader
+	if r.imgManager != nil {
+		r.imgManager.SetLoader(loader)
+	}
 }
 
 func (r *Renderer) Destroy() {
