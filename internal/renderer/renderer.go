@@ -323,6 +323,15 @@ func (r *Renderer) SelectedLinkURL() string {
 	return r.layout.links[r.selectedLink].url
 }
 
+func (r *Renderer) SelectedLinkIndex() int {
+	return r.selectedLink
+}
+
+func (r *Renderer) SetSelectedLinkIndex(idx int) {
+	r.selectedLink = idx
+	r.clampSelection()
+}
+
 func (r *Renderer) moveLink(delta int) {
 	if len(r.layout.links) == 0 {
 		return
@@ -389,6 +398,15 @@ func (r *Renderer) ScrollToBottom() {
 
 func (r *Renderer) ScrollToY(y int32) {
 	r.scrollY = y - r.marginY
+	r.clampScroll()
+}
+
+func (r *Renderer) CurrentScrollY() int32 {
+	return r.scrollY
+}
+
+func (r *Renderer) SetScrollY(scrollY int32) {
+	r.scrollY = scrollY
 	r.clampScroll()
 }
 

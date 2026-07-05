@@ -9,11 +9,11 @@ func TestSimpleNavigator(t *testing.T) {
 		t.Error("empty navigator should return empty current")
 	}
 
-	if n.Back() {
+	if ok, _, _ := n.Back(); ok {
 		t.Error("back on empty navigator should fail")
 	}
 
-	if n.Forward() {
+	if ok, _, _ := n.Forward(); ok {
 		t.Error("forward on empty navigator should fail")
 	}
 
@@ -27,14 +27,14 @@ func TestSimpleNavigator(t *testing.T) {
 		t.Errorf("current: got %q, want doc2", n.Current())
 	}
 
-	if !n.Back() {
+	if ok, _, _ := n.Back(); !ok {
 		t.Error("back should succeed")
 	}
 	if n.Current() != "doc1" {
 		t.Errorf("after back: got %q, want doc1", n.Current())
 	}
 
-	if !n.Forward() {
+	if ok, _, _ := n.Forward(); !ok {
 		t.Error("forward should succeed")
 	}
 	if n.Current() != "doc2" {
@@ -42,16 +42,16 @@ func TestSimpleNavigator(t *testing.T) {
 	}
 
 	// Back twice should fail.
-	if !n.Back() {
+	if ok, _, _ := n.Back(); !ok {
 		t.Error("first back should succeed")
 	}
-	if n.Back() {
+	if ok, _, _ := n.Back(); ok {
 		t.Error("second back should fail")
 	}
 
 	// Open a new doc should truncate forward history.
 	n.Open("doc3")
-	if n.Forward() {
+	if ok, _, _ := n.Forward(); ok {
 		t.Error("forward after new open should fail (history truncated)")
 	}
 	if n.Current() != "doc3" {

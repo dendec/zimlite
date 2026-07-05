@@ -170,7 +170,8 @@ func (c *InputController) processDocKey(sc sdl.Scancode) {
 			app.loader.NavigateLink(url)
 		}
 	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
-		if app.navigator.Back() {
+		app.navigator.UpdateCurrentState(app.scroller.CurrentScrollY(), app.links.SelectedLinkIndex())
+		if ok, scrollY, linkIdx := app.navigator.Back(); ok {
 			prevPath := app.navigator.Current()
 			if prevPath == "virtual:menu" {
 				_ = app.loader.OpenFile("virtual:menu")
@@ -179,6 +180,8 @@ func (c *InputController) processDocKey(sc sdl.Scancode) {
 			if doc, ok := app.loader.docCache[prevPath]; ok {
 				app.viewer.SetDocument(doc)
 				app.viewer.Relayout()
+				app.scroller.SetScrollY(scrollY)
+				app.links.SetSelectedLinkIndex(linkIdx)
 			}
 		} else if app.loader.zimReader != nil {
 			app.enterTreeMode()
@@ -215,19 +218,24 @@ func (c *InputController) processJoyB() {
 	if app.mode == modeTree {
 		app.navState.ActionLeft()
 		app.renderTree()
-	} else if app.navigator.Back() {
-		prevPath := app.navigator.Current()
-		if prevPath == "virtual:menu" {
-			_ = app.loader.OpenFile("virtual:menu")
-			return
-		}
-		if doc, ok := app.loader.docCache[prevPath]; ok {
-			app.viewer.SetDocument(doc)
-			app.viewer.Relayout()
-		}
 	} else {
-		if app.navigator.Current() != "virtual:menu" {
-			_ = app.loader.OpenFile("virtual:menu")
+		app.navigator.UpdateCurrentState(app.scroller.CurrentScrollY(), app.links.SelectedLinkIndex())
+		if ok, scrollY, linkIdx := app.navigator.Back(); ok {
+			prevPath := app.navigator.Current()
+			if prevPath == "virtual:menu" {
+				_ = app.loader.OpenFile("virtual:menu")
+				return
+			}
+			if doc, ok := app.loader.docCache[prevPath]; ok {
+				app.viewer.SetDocument(doc)
+				app.viewer.Relayout()
+				app.scroller.SetScrollY(scrollY)
+				app.links.SetSelectedLinkIndex(linkIdx)
+			}
+		} else {
+			if app.navigator.Current() != "virtual:menu" {
+				_ = app.loader.OpenFile("virtual:menu")
+			}
 		}
 	}
 }

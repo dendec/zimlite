@@ -36,6 +36,8 @@ type LinkBrowser interface {
 	SelectPrevLink()
 	SelectNextLink()
 	SelectedLinkURL() string
+	SelectedLinkIndex() int
+	SetSelectedLinkIndex(idx int)
 	HandleClick(mx, my int32) string
 }
 
@@ -45,6 +47,8 @@ type Scroller interface {
 	ScrollPageUp()
 	ScrollPageDown()
 	ScrollToY(y int32)
+	CurrentScrollY() int32
+	SetScrollY(scrollY int32)
 	SetTextLines(lines []string)
 	ScrollToLine(lineIdx int)
 	HandleTreeClick(mx, my int32) int
@@ -53,6 +57,8 @@ type Scroller interface {
 // DocNavigator manages document history (back/forward).
 type DocNavigator interface {
 	Open(id string)
-	Back() bool
+	UpdateCurrentState(scrollY int32, linkIdx int)
+	Back() (bool, int32, int)
 	Current() string
+	CurrentState() (int32, int)
 }

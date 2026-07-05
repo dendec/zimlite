@@ -57,6 +57,7 @@ func (app *App) enterTreeMode() {
 	if len(articles) == 0 {
 		return
 	}
+	app.navigator.UpdateCurrentState(app.scroller.CurrentScrollY(), app.links.SelectedLinkIndex())
 	root := trie.NewTree(articles)
 	app.navState = trie.NewNavState(root)
 	app.mode = modeTree
@@ -70,6 +71,9 @@ func (app *App) exitTreeMode() {
 	if doc, ok := app.loader.docCache[prevPath]; ok {
 		app.viewer.SetDocument(doc)
 		app.viewer.Relayout()
+		scrollY, linkIdx := app.navigator.CurrentState()
+		app.scroller.SetScrollY(scrollY)
+		app.links.SetSelectedLinkIndex(linkIdx)
 	}
 }
 
@@ -78,6 +82,7 @@ func (app *App) goHome() {
 		mainPath := app.loader.zimReader.MainPagePath()
 		navKey := "zim:" + mainPath
 		if doc, ok := app.loader.docCache[navKey]; ok {
+			app.navigator.UpdateCurrentState(app.scroller.CurrentScrollY(), app.links.SelectedLinkIndex())
 			app.mode = modeDoc
 			app.viewer.SetDocument(doc)
 			app.navigator.Open(navKey)
