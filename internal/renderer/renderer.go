@@ -187,11 +187,11 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 
 	sizes := [fontCount]int{
 		FontBody: baseFontSize,
-		FontH1:   baseFontSize + 14,
-		FontH2:   baseFontSize + 10,
-		FontH3:   baseFontSize + 6,
-		FontH4:   baseFontSize + 3,
-		FontH5:   baseFontSize + 1,
+		FontH1:   baseFontSize + 8,
+		FontH2:   baseFontSize + 5,
+		FontH3:   baseFontSize + 3,
+		FontH4:   baseFontSize + 1,
+		FontH5:   baseFontSize,
 		FontH6:   baseFontSize - 1,
 		FontMono: baseFontSize,
 	}
@@ -493,11 +493,11 @@ func (r *Renderer) Zoom(delta int) error {
 	// Re-build font sizes map
 	sizes := [fontCount]int{
 		FontKind(FontBody): r.baseFontSize,
-		FontKind(FontH1):   r.baseFontSize + 14,
-		FontKind(FontH2):   r.baseFontSize + 10,
-		FontKind(FontH3):   r.baseFontSize + 6,
-		FontKind(FontH4):   r.baseFontSize + 3,
-		FontKind(FontH5):   r.baseFontSize + 1,
+		FontKind(FontH1):   r.baseFontSize + 8,
+		FontKind(FontH2):   r.baseFontSize + 5,
+		FontKind(FontH3):   r.baseFontSize + 3,
+		FontKind(FontH4):   r.baseFontSize + 1,
+		FontKind(FontH5):   r.baseFontSize,
 		FontKind(FontH6):   r.baseFontSize - 1,
 		FontKind(FontMono): r.baseFontSize,
 	}
