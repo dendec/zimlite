@@ -65,6 +65,15 @@ func NewTree(articles []zim.ArticleEntry) *RadixNode {
 		}
 		root.children = append(root.children, node)
 	}
+
+	// Auto-expand small first-level groups.
+	const autoExpandThreshold = 20
+	for _, child := range root.children {
+		if len(child.articles) <= autoExpandThreshold {
+			child.Expand()
+		}
+	}
+
 	return root
 }
 
@@ -128,6 +137,14 @@ func (n *RadixNode) Expand() {
 	sort.Slice(n.children, func(i, j int) bool {
 		return n.children[i].prefix < n.children[j].prefix
 	})
+
+	// Auto-expand shallow branches: if few articles total, show leaves immediately.
+	const autoExpandThreshold = 20
+	if len(n.articles) <= autoExpandThreshold {
+		for _, child := range n.children {
+			child.Expand()
+		}
+	}
 }
 
 // Collapse clears children to free memory.

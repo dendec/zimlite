@@ -101,3 +101,51 @@ func TestCyrillic(t *testing.T) {
 		t.Errorf("second: got %q", root.children[1].Label())
 	}
 }
+
+func TestAutoExpand(t *testing.T) {
+	// 3 articles sharing "XYZ " prefix — auto-expand drills through to leaves.
+	// Structure: X → XY → XYZ → "XYZ " → [A:leaf, B:leaf, G:leaf]
+	articles := []zim.ArticleEntry{
+		{Title: "XYZ Alpha", Path: "A/Alpha"},
+		{Title: "XYZ Beta", Path: "A/Beta"},
+		{Title: "XYZ Gamma", Path: "A/Gamma"},
+	}
+
+	root := NewTree(articles)
+	x := root.children[0]
+	if !x.Expanded() { t.Fatal("X should be auto-expanded") }
+	if len(x.children) != 1 { t.Fatalf("X→1 child, got %d", len(x.children)) }
+
+	xy := x.children[0]
+	if !xy.Expanded() { t.Fatal("XY auto-expanded") }
+	if len(xy.children) != 1 { t.Fatalf("XY→1 child, got %d", len(xy.children)) }
+
+	xyz := xy.children[0]
+	if !xyz.Expanded() { t.Fatal("XYZ auto-expanded") }
+	// Next char after XYZ is space for all three → grouped under "XYZ "
+	if len(xyz.children) != 1 { t.Fatalf("XYZ→1 child (space group), got %d", len(xyz.children)) }
+
+	spaceGroup := xyz.children[0]
+	if !spaceGroup.Expanded() { t.Fatal("space group auto-expanded") }
+	if len(spaceGroup.children) != 3 { t.Fatalf("space→3 leaves, got %d", len(spaceGroup.children)) }
+	for _, c := range spaceGroup.children {
+		if !c.IsLeaf() { t.Errorf("expected leaf, got %q", c.Label()) }
+	}
+}
+
+func TestNoAutoExpand(t *testing.T) {
+	// Large group (>20) should NOT auto-expand.
+	articles := make([]zim.ArticleEntry, 25)
+	for i := 0; i < 25; i++ {
+		articles[i] = zim.ArticleEntry{
+			Title: "A" + string(rune('A'+i)) + "title",
+			Path:  "A/title",
+		}
+	}
+
+	root := NewTree(articles)
+	aNode := root.children[0]
+	if aNode.Expanded() {
+		t.Error("A node with 25 articles should NOT auto-expand")
+	}
+}
