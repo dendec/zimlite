@@ -62,6 +62,7 @@ type Renderer struct {
 	links        []linkEntry
 	codeRanges   []codeBlockRange
 	codeSpans    []codeSpanRange
+	blockquotes  []sdl.Rect
 	totalHeight  int32
 	contentWidth int32
 	textLines    []string // cached for theme toggle
@@ -79,15 +80,17 @@ type Renderer struct {
 	blockSpacing int32
 	listIndent   int32
 
-	bgColor      sdl.Color
-	textColor    sdl.Color
-	linkColor    sdl.Color
-	headingColor sdl.Color
-	selBgColor   sdl.Color
-	codeBgColor  sdl.Color
-	ruleColor    sdl.Color
-	light        bool
-	hasTree      bool
+	bgColor               sdl.Color
+	textColor             sdl.Color
+	linkColor             sdl.Color
+	headingColor          sdl.Color
+	selBgColor            sdl.Color
+	codeBgColor           sdl.Color
+	ruleColor             sdl.Color
+	blockquoteBgColor     sdl.Color
+	blockquoteBorderColor sdl.Color
+	light                 bool
+	hasTree               bool
 
 	textureCache  map[textureKey]*sdl.Texture
 	imageEntries  []imageEntry
@@ -114,14 +117,12 @@ type lineEntry struct {
 }
 
 type linkEntry struct {
-	rect  sdl.Rect
+	rects []sdl.Rect
 	url   string
-	label string
 }
 
 type codeBlockRange struct {
-	startY int32
-	endY   int32
+	x, y, w, h int32
 }
 
 // New creates a Renderer.
@@ -161,28 +162,30 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	}
 
 	r := &Renderer{
-		window:        window,
-		sdlRenderer:   sdlRend,
-		selectedLink:  -1,
-		width:         winW,
-		height:        winH,
-		marginX:       20,
-		marginY:       16,
-		lineSpacing:   6,
-		blockSpacing:  12,
-		listIndent:    24,
-		bgColor:       sdl.Color{R: 245, G: 245, B: 240, A: 255},
-		textColor:     sdl.Color{R: 30, G: 30, B: 30, A: 255},
-		linkColor:     sdl.Color{R: 0, G: 80, B: 180, A: 255},
-		headingColor:  sdl.Color{R: 50, G: 50, B: 50, A: 255},
-		selBgColor:    sdl.Color{R: 255, G: 230, B: 150, A: 255},
-		codeBgColor:   sdl.Color{R: 235, G: 235, B: 230, A: 255},
-		ruleColor:     sdl.Color{R: 180, G: 180, B: 170, A: 255},
-		light:         true,
-		textureCache:  make(map[textureKey]*sdl.Texture),
-		imageTextures: make(map[string]*sdl.Texture),
-		baseFontSize:  baseFontSize,
-		fontPath:      fontPath,
+		window:                window,
+		sdlRenderer:           sdlRend,
+		selectedLink:          -1,
+		width:                 winW,
+		height:                winH,
+		marginX:               20,
+		marginY:               16,
+		lineSpacing:           6,
+		blockSpacing:          12,
+		listIndent:            16,
+		bgColor:               sdl.Color{R: 245, G: 245, B: 240, A: 255},
+		textColor:             sdl.Color{R: 30, G: 30, B: 30, A: 255},
+		linkColor:             sdl.Color{R: 0, G: 80, B: 180, A: 255},
+		headingColor:          sdl.Color{R: 50, G: 50, B: 50, A: 255},
+		selBgColor:            sdl.Color{R: 255, G: 230, B: 150, A: 255},
+		codeBgColor:           sdl.Color{R: 235, G: 235, B: 230, A: 255},
+		ruleColor:             sdl.Color{R: 180, G: 180, B: 170, A: 255},
+		blockquoteBgColor:     sdl.Color{R: 240, G: 240, B: 240, A: 255},
+		blockquoteBorderColor: sdl.Color{R: 180, G: 180, B: 180, A: 255},
+		light:                 true,
+		textureCache:          make(map[textureKey]*sdl.Texture),
+		imageTextures:         make(map[string]*sdl.Texture),
+		baseFontSize:          baseFontSize,
+		fontPath:              fontPath,
 	}
 
 	sizes := [fontCount]int{
@@ -276,6 +279,8 @@ func (r *Renderer) ToggleTheme() {
 		r.selBgColor = sdl.Color{R: 255, G: 230, B: 150, A: 255}
 		r.codeBgColor = sdl.Color{R: 235, G: 235, B: 230, A: 255}
 		r.ruleColor = sdl.Color{R: 180, G: 180, B: 170, A: 255}
+		r.blockquoteBgColor = sdl.Color{R: 240, G: 240, B: 240, A: 255}
+		r.blockquoteBorderColor = sdl.Color{R: 180, G: 180, B: 180, A: 255}
 	} else {
 		r.bgColor = sdl.Color{R: 20, G: 22, B: 28, A: 255}
 		r.textColor = sdl.Color{R: 220, G: 220, B: 220, A: 255}
@@ -284,6 +289,8 @@ func (r *Renderer) ToggleTheme() {
 		r.selBgColor = sdl.Color{R: 80, G: 60, B: 20, A: 255}
 		r.codeBgColor = sdl.Color{R: 35, G: 38, B: 45, A: 255}
 		r.ruleColor = sdl.Color{R: 60, G: 65, B: 70, A: 255}
+		r.blockquoteBgColor = sdl.Color{R: 35, G: 38, B: 45, A: 255}
+		r.blockquoteBorderColor = sdl.Color{R: 80, G: 85, B: 90, A: 255}
 	}
 	r.relayout()
 	r.relayoutTextLines()
@@ -376,14 +383,18 @@ func (r *Renderer) moveLink(delta int) {
 	}
 	if r.selectedLink >= 0 && r.selectedLink < len(r.links) {
 		link := r.links[r.selectedLink]
-		visibleTop := r.scrollY + r.marginY
-		visibleBottom := r.scrollY + r.height - r.marginY - statusBarHeight
-		if link.rect.Y < visibleTop {
-			r.scrollY = link.rect.Y - r.marginY
-		} else if link.rect.Y+link.rect.H > visibleBottom {
-			r.scrollY = link.rect.Y + link.rect.H - r.height + r.marginY + statusBarHeight
+		if len(link.rects) > 0 {
+			first := link.rects[0]
+			last := link.rects[len(link.rects)-1]
+			visibleTop := r.scrollY + r.marginY
+			visibleBottom := r.scrollY + r.height - r.marginY - statusBarHeight
+			if first.Y < visibleTop {
+				r.scrollY = first.Y - r.marginY
+			} else if last.Y+last.H > visibleBottom {
+				r.scrollY = last.Y + last.H - r.height + r.marginY + statusBarHeight
+			}
+			r.clampScroll()
 		}
-		r.clampScroll()
 	}
 }
 
@@ -439,10 +450,12 @@ func (r *Renderer) clampScroll() {
 func (r *Renderer) HandleClick(mx, my int32) string {
 	docY := my + r.scrollY
 	for i, link := range r.links {
-		if mx >= link.rect.X && mx <= link.rect.X+link.rect.W &&
-			docY >= link.rect.Y && docY <= link.rect.Y+link.rect.H {
-			r.selectedLink = i
-			return link.url
+		for _, rect := range link.rects {
+			if mx >= rect.X && mx <= rect.X+rect.W &&
+				docY >= rect.Y && docY <= rect.Y+rect.H {
+				r.selectedLink = i
+				return link.url
+			}
 		}
 	}
 	return ""

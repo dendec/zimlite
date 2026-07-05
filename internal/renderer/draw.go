@@ -17,9 +17,10 @@ func (r *Renderer) Render() {
 	r.sdlRenderer.SetDrawColor(r.bgColor.R, r.bgColor.G, r.bgColor.B, r.bgColor.A)
 	r.sdlRenderer.Clear()
 	r.renderImages()
+	r.renderBlockquotes()
 	r.renderCodeBackgrounds()
-	r.renderLines()
 	r.renderLinkHighlight()
+	r.renderLines()
 	r.renderStatusBar()
 	r.sdlRenderer.Present()
 }
@@ -57,11 +58,10 @@ func (r *Renderer) renderImages() {
 
 func (r *Renderer) renderCodeBackgrounds() {
 	for _, cr := range r.codeRanges {
-		screenY := cr.startY - r.scrollY
-		screenH := cr.endY - cr.startY
-		if screenY > -screenH && screenY < r.height-statusBarHeight {
+		screenY := cr.y - r.scrollY
+		if screenY > -cr.h && screenY < r.height-statusBarHeight {
 			r.sdlRenderer.SetDrawColor(r.codeBgColor.R, r.codeBgColor.G, r.codeBgColor.B, r.codeBgColor.A)
-			r.sdlRenderer.FillRect(&sdl.Rect{X: r.marginX - 4, Y: screenY - 4, W: r.contentWidth + 8, H: screenH + 8})
+			r.sdlRenderer.FillRect(&sdl.Rect{X: cr.x, Y: screenY, W: cr.w, H: cr.h})
 		}
 	}
 	for _, cs := range r.codeSpans {
@@ -69,6 +69,20 @@ func (r *Renderer) renderCodeBackgrounds() {
 		if screenY > -cs.h && screenY < r.height-statusBarHeight {
 			r.sdlRenderer.SetDrawColor(r.codeBgColor.R, r.codeBgColor.G, r.codeBgColor.B, r.codeBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: cs.x, Y: screenY, W: cs.w, H: cs.h})
+		}
+	}
+}
+
+func (r *Renderer) renderBlockquotes() {
+	for _, bq := range r.blockquotes {
+		screenY := bq.Y - r.scrollY
+		if screenY > -bq.H && screenY < r.height-statusBarHeight {
+			// Draw background
+			r.sdlRenderer.SetDrawColor(r.blockquoteBgColor.R, r.blockquoteBgColor.G, r.blockquoteBgColor.B, r.blockquoteBgColor.A)
+			r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: bq.W, H: bq.H})
+			// Draw thick left border
+			r.sdlRenderer.SetDrawColor(r.blockquoteBorderColor.R, r.blockquoteBorderColor.G, r.blockquoteBorderColor.B, r.blockquoteBorderColor.A)
+			r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: 4, H: bq.H})
 		}
 	}
 }
@@ -134,30 +148,13 @@ func (r *Renderer) renderLinkHighlight() {
 		return
 	}
 	link := r.links[r.selectedLink]
-	sy := link.rect.Y - r.scrollY
-	if sy < -link.rect.H || sy > r.height-statusBarHeight {
-		return
-	}
 	r.sdlRenderer.SetDrawColor(r.selBgColor.R, r.selBgColor.G, r.selBgColor.B, r.selBgColor.A)
-	r.sdlRenderer.FillRect(&sdl.Rect{X: link.rect.X - 2, Y: sy - 1, W: link.rect.W + 4, H: link.rect.H + 2})
-	key := textureKey{text: link.label, fontIdx: FontBody, color: r.linkColor}
-	tex, ok := r.textureCache[key]
-	if !ok {
-		font := r.fonts[FontBody].font
-		if font != nil {
-			surf, err := font.RenderUTF8Blended(link.label, r.linkColor)
-			if err == nil {
-				tex, err = r.sdlRenderer.CreateTextureFromSurface(surf)
-				surf.Free()
-				if err == nil {
-					r.textureCache[key] = tex
-				}
-			}
+	for _, rect := range link.rects {
+		sy := rect.Y - r.scrollY
+		if sy < -rect.H || sy > r.height-statusBarHeight {
+			continue
 		}
-	}
-	if tex != nil {
-		_, _, tw, th, _ := tex.Query()
-		r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: link.rect.X, Y: sy, W: tw, H: th})
+		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X - 2, Y: sy - 1, W: rect.W + 4, H: rect.H + 2})
 	}
 }
 

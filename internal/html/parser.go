@@ -3,8 +3,10 @@
 package html
 
 import (
+	"bytes"
 	"html"
 	"io"
+	"os"
 	"strings"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
@@ -14,6 +16,14 @@ import (
 
 // Parse reads HTML from r and returns a Document.
 func Parse(r io.Reader) (*document.Document, error) {
+	if os.Getenv("KIWIX_DEBUG") != "" {
+		data, err := io.ReadAll(r)
+		if err == nil {
+			_ = os.WriteFile("/tmp/debug_kiwix.html", data, 0644)
+			r = bytes.NewReader(data)
+		}
+	}
+
 	mdBytes, err := htmltomarkdown.ConvertReader(r)
 	if err != nil {
 		return nil, err
@@ -21,6 +31,10 @@ func Parse(r io.Reader) (*document.Document, error) {
 
 	// Decode any remaining HTML entities (&lt; → <, &gt; → >, &amp; → &, ...).
 	md := html.UnescapeString(string(mdBytes))
+
+	if os.Getenv("KIWIX_DEBUG") != "" {
+		_ = os.WriteFile("/tmp/debug_kiwix.md", []byte(md), 0644)
+	}
 
 	return markdown.Parse(strings.NewReader(md))
 }

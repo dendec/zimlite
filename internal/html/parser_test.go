@@ -143,5 +143,6 @@ func (tc *textCollector) VisitParagraph(p *document.Paragraph) {
 func (tc *textCollector) VisitList(l *document.List)                   {}
 func (tc *textCollector) VisitCodeBlock(c *document.CodeBlock)         {}
 func (tc *textCollector) VisitThematicBreak(t *document.ThematicBreak) {}
+func (tc *textCollector) VisitBlockquote(b *document.Blockquote)       {}
 func (tc *textCollector) VisitLink(l *document.Link)                   {}
 func (tc *textCollector) VisitImage(i *document.Image)                 {}

@@ -88,8 +88,10 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		return ast.WalkSkipChildren, nil
 
 	case *ast.List:
-		blocks := c.convertList(node)
-		c.document.Blocks = append(c.document.Blocks, blocks...)
+		entries := c.flattenList(node, 0)
+		c.document.Blocks = append(c.document.Blocks, &document.List{
+			Entries: entries,
+		})
 		return ast.WalkSkipChildren, nil
 
 	case *ast.FencedCodeBlock:
@@ -110,9 +112,14 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		c.document.Blocks = append(c.document.Blocks, &document.ThematicBreak{})
 
 	case *ast.Blockquote:
-		// Treat blockquote contents as a flat walk (inline children processed as paragraphs).
-		// For MVP, we walk into blockquote so inner paragraphs appear normally.
-		return ast.WalkContinue, nil
+		subConv := &converter{source: c.source, document: &document.Document{}}
+		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+			ast.Walk(child, subConv.walker)
+		}
+		c.document.Blocks = append(c.document.Blocks, &document.Blockquote{
+			Blocks: subConv.document.Blocks,
+		})
+		return ast.WalkSkipChildren, nil
 
 	default:
 		// Unknown block — ignore.
@@ -194,17 +201,20 @@ func (c *converter) convertInline(n ast.Node) []document.Inline {
 		return inlines
 
 	case *ast.Link:
-		label := c.collectText(node)
+		var inner []document.Inline
+		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+			inner = append(inner, c.convertInline(child)...)
+		}
 		return []document.Inline{&document.LinkInline{
-			URL:   string(node.Destination),
-			Label: label,
+			URL:     string(node.Destination),
+			Content: inner,
 		}}
 
 	case *ast.Image:
 		alt := c.collectText(node)
-		return []document.Inline{&document.LinkInline{
-			URL:   string(node.Destination),
-			Label: alt,
+		return []document.Inline{&document.ImageInline{
+			URL: string(node.Destination),
+			Alt: alt,
 		}}
 
 	case *ast.Emphasis:
@@ -247,36 +257,27 @@ func (c *converter) convertInline(n ast.Node) []document.Inline {
 // Ensure text package is used (needed for Parse call).
 var _ = text.NewReader
 
-func listDepth(n ast.Node) int {
-	depth := 0
-	for p := n.Parent(); p != nil; p = p.Parent() {
-		if _, ok := p.(*ast.List); ok {
-			depth++
-		}
-	}
-	return depth
-}
-
-func (c *converter) convertList(node *ast.List) []document.Block {
-	var blocks []document.Block
-	list := &document.List{
-		Ordered: node.IsOrdered(),
-		Start:   node.Start,
-		Indent:  listDepth(node),
-	}
+func (c *converter) flattenList(node *ast.List, depth int) []document.ListEntry {
+	var entries []document.ListEntry
+	itemIndex := 0
 	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
 		if li, ok := child.(*ast.ListItem); ok {
 			itemInlines := c.collectItemInlines(li)
-			list.Items = append(list.Items, itemInlines)
+			entries = append(entries, document.ListEntry{
+				Item:    itemInlines,
+				Ordered: node.IsOrdered(),
+				Start:   node.Start + itemIndex,
+				Indent:  depth,
+			})
+			itemIndex++
 
 			// Find nested lists inside this list item
 			for sub := li.FirstChild(); sub != nil; sub = sub.NextSibling() {
 				if subList, ok := sub.(*ast.List); ok {
-					nested := c.convertList(subList)
-					blocks = append(blocks, nested...)
+					entries = append(entries, c.flattenList(subList, depth+1)...)
 				}
 			}
 		}
 	}
-	return append([]document.Block{list}, blocks...)
+	return entries
 }

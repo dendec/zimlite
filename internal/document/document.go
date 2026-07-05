@@ -24,11 +24,15 @@ type Paragraph struct {
 
 func (*Paragraph) blockMarker() {}
 
-type List struct {
-	Items   [][]Inline
+type ListEntry struct {
+	Item    []Inline
 	Ordered bool
 	Start   int
 	Indent  int
+}
+
+type List struct {
+	Entries []ListEntry
 }
 
 func (*List) blockMarker() {}
@@ -58,6 +62,12 @@ type ThematicBreak struct{}
 
 func (*ThematicBreak) blockMarker() {}
 
+type Blockquote struct {
+	Blocks []Block
+}
+
+func (*Blockquote) blockMarker() {}
+
 // --- Inline types ---
 
 type Inline interface{ inlineMarker() }
@@ -69,11 +79,18 @@ type Text struct {
 func (*Text) inlineMarker() {}
 
 type LinkInline struct {
-	URL   string
-	Label string
+	URL     string
+	Content []Inline
 }
 
 func (*LinkInline) inlineMarker() {}
+
+type ImageInline struct {
+	Alt string
+	URL string
+}
+
+func (*ImageInline) inlineMarker() {}
 
 type Emphasis struct {
 	Content []Inline
@@ -110,6 +127,7 @@ type BlockVisitor interface {
 	VisitList(l *List)
 	VisitCodeBlock(c *CodeBlock)
 	VisitThematicBreak(t *ThematicBreak)
+	VisitBlockquote(b *Blockquote)
 	VisitLink(l *Link)
 	VisitImage(i *Image)
 }
@@ -128,6 +146,8 @@ func VisitBlocks(blocks []Block, v BlockVisitor) {
 			v.VisitCodeBlock(b)
 		case *ThematicBreak:
 			v.VisitThematicBreak(b)
+		case *Blockquote:
+			v.VisitBlockquote(b)
 		case *Link:
 			v.VisitLink(b)
 		case *Image:
@@ -138,11 +158,13 @@ func VisitBlocks(blocks []Block, v BlockVisitor) {
 
 // InlineWordVisitor converts inlines into a flat word list for word-wrapping layout.
 type InlineWordVisitor struct {
-	Words   []Word
-	LinkMap map[string]string // label → URL, populated for link tracking
-	Font    Font
-	SpaceW  int32
-	SpaceH  int32
+	Words        []Word
+	LinkURLs     map[int]string // LinkID → URL, populated for link tracking
+	Font         Font
+	MeasureImage func(url string) (int32, int32)
+	SpaceW       int32
+	SpaceH       int32
+	NextLinkID   int
 }
 
 // Font abstracts font measurement needed by the inline visitor.
@@ -154,96 +176,136 @@ type Font interface {
 type Word struct {
 	Text        string
 	IsSpace     bool
+	IsImage     bool
+	ImageURL    string
 	PixW        int32
 	PixH        int32
-	IsLink      bool
+	LinkID      int
 	IsHardBreak bool
 	IsBold      bool
 	IsItalic    bool
 	IsCode      bool
 }
 
-func NewInlineWordVisitor(f Font, linkMap map[string]string) *InlineWordVisitor {
+func NewInlineWordVisitor(f Font, measureImage func(string) (int32, int32)) *InlineWordVisitor {
 	sw, sh := f.Measure(" ", false, false, false)
 	return &InlineWordVisitor{
-		Font:    f,
-		LinkMap: linkMap,
-		SpaceW:  sw,
-		SpaceH:  sh,
+		Font:         f,
+		MeasureImage: measureImage,
+		LinkURLs:     make(map[int]string),
+		SpaceW:       sw,
+		SpaceH:       sh,
+		NextLinkID:   1,
 	}
 }
 
 // VisitInlines flattens all inlines into Words.
 func VisitInlines(inlines []Inline, v *InlineWordVisitor) {
-	visitInlinesStyled(inlines, v, false, false, false)
+	visitInlinesStyled(inlines, v, false, false, false, 0)
 }
 
-func visitInlinesStyled(inlines []Inline, v *InlineWordVisitor, isBold, isItalic, isCode bool) {
+func visitInlinesStyled(inlines []Inline, v *InlineWordVisitor, isBold, isItalic, isCode bool, linkID int) {
 	for _, inl := range inlines {
 		switch i := inl.(type) {
 		case *Text:
-			parts := splitWords(i.Content)
-			for n, p := range parts {
-				w, h := v.Font.Measure(p, isBold, isItalic, isCode)
-				v.Words = append(v.Words, Word{
-					Text: p, PixW: w, PixH: h,
-					IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
-				})
-				if n < len(parts)-1 {
+			tokens := tokenizeText(i.Content)
+			for _, t := range tokens {
+				if t == " " {
 					v.Words = append(v.Words, Word{
 						Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH,
+						IsBold: isBold, IsItalic: isItalic, IsCode: isCode, LinkID: linkID,
+					})
+				} else {
+					w, h := v.Font.Measure(t, isBold, isItalic, isCode)
+					v.Words = append(v.Words, Word{
+						Text: t, PixW: w, PixH: h, LinkID: linkID,
 						IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
 					})
 				}
 			}
 		case *LinkInline:
-			w, h := v.Font.Measure(i.Label, isBold, isItalic, isCode)
-			v.Words = append(v.Words, Word{
-				Text: i.Label, PixW: w, PixH: h, IsLink: true,
-				IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
-			})
-			if v.LinkMap != nil {
-				v.LinkMap[i.Label] = i.URL
+			id := v.NextLinkID
+			v.NextLinkID++
+			if v.LinkURLs != nil {
+				v.LinkURLs[id] = i.URL
+			}
+			visitInlinesStyled(i.Content, v, isBold, isItalic, isCode, id)
+		case *ImageInline:
+			var w, h int32
+			if v.MeasureImage != nil {
+				w, h = v.MeasureImage(i.URL)
+			}
+			if w == 0 || h == 0 {
+				altText := "[" + i.Alt + "]"
+				w, h = v.Font.Measure(altText, isBold, isItalic, isCode)
+				v.Words = append(v.Words, Word{
+					Text: altText, PixW: w, PixH: h, LinkID: linkID,
+					IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
+				})
+			} else {
+				v.Words = append(v.Words, Word{
+					IsImage: true, ImageURL: i.URL, PixW: w, PixH: h, LinkID: linkID,
+				})
 			}
 		case *Emphasis:
-			visitInlinesStyled(i.Content, v, isBold, true, isCode)
+			visitInlinesStyled(i.Content, v, isBold, true, isCode, linkID)
 		case *Strong:
-			visitInlinesStyled(i.Content, v, true, isItalic, isCode)
+			visitInlinesStyled(i.Content, v, true, isItalic, isCode, linkID)
 		case *Code:
-			w, h := v.Font.Measure(i.Content, isBold, isItalic, true)
-			v.Words = append(v.Words, Word{
-				Text: i.Content, PixW: w, PixH: h,
-				IsBold: isBold, IsItalic: isItalic, IsCode: true,
-			})
+			tokens := tokenizeText(i.Content)
+			for _, t := range tokens {
+				if t == " " {
+					v.Words = append(v.Words, Word{
+						Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH,
+						IsBold: isBold, IsItalic: isItalic, IsCode: true, LinkID: linkID,
+					})
+				} else {
+					w, h := v.Font.Measure(t, isBold, isItalic, true)
+					v.Words = append(v.Words, Word{
+						Text: t, PixW: w, PixH: h, LinkID: linkID,
+						IsBold: isBold, IsItalic: isItalic, IsCode: true,
+					})
+				}
+			}
 		case *SoftBreak:
 			v.Words = append(v.Words, Word{
 				Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH,
-				IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
+				IsBold: isBold, IsItalic: isItalic, IsCode: isCode, LinkID: linkID,
 			})
 		case *HardBreak:
 			v.Words = append(v.Words, Word{
-				IsHardBreak: true,
-				IsBold:      isBold, IsItalic: isItalic, IsCode: isCode,
+				IsHardBreak: true, LinkID: linkID,
+				IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
 			})
 		}
 	}
 }
 
-func splitWords(text string) []string {
-	var ws []string
-	cur := ""
+func tokenizeText(text string) []string {
+	var tokens []string
+	var cur string
+	isSpace := false
 	for _, r := range text {
 		if r == ' ' || r == '\t' || r == '\n' {
-			if cur != "" {
-				ws = append(ws, cur)
-				cur = ""
+			if !isSpace {
+				if cur != "" {
+					tokens = append(tokens, cur)
+					cur = ""
+				}
+				isSpace = true
 			}
 		} else {
+			if isSpace {
+				tokens = append(tokens, " ")
+				isSpace = false
+			}
 			cur += string(r)
 		}
 	}
-	if cur != "" {
-		ws = append(ws, cur)
+	if isSpace {
+		tokens = append(tokens, " ")
+	} else if cur != "" {
+		tokens = append(tokens, cur)
 	}
-	return ws
+	return tokens
 }

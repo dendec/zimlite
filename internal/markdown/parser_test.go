@@ -111,14 +111,17 @@ func TestParseList(t *testing.T) {
 		t.Fatal("block 0 not a list")
 	}
 
-	if l.Ordered {
+	if len(l.Entries) == 0 {
+		t.Fatal("list has no entries")
+	}
+	if l.Entries[0].Ordered {
 		t.Error("expected unordered list")
 	}
-	if len(l.Items) != 3 {
-		t.Fatalf("got %d items, want 3", len(l.Items))
+	if len(l.Entries) != 3 {
+		t.Fatalf("got %d items, want 3", len(l.Entries))
 	}
-	for i, item := range l.Items {
-		if len(item) == 0 {
+	for i, entry := range l.Entries {
+		if len(entry.Item) == 0 {
 			t.Errorf("item %d has no inline content", i)
 		}
 	}
@@ -138,11 +141,14 @@ func TestParseOrderedList(t *testing.T) {
 	if !ok {
 		t.Fatal("block 0 not a list")
 	}
-	if !l.Ordered {
+	if len(l.Entries) == 0 {
+		t.Fatal("list has no entries")
+	}
+	if !l.Entries[0].Ordered {
 		t.Error("expected ordered list")
 	}
-	if l.Start != 1 {
-		t.Errorf("start: got %d, want 1", l.Start)
+	if l.Entries[0].Start != 1 {
+		t.Errorf("start: got %d, want 1", l.Entries[0].Start)
 	}
 }
 
