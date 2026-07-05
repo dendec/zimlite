@@ -50,6 +50,10 @@ const (
 )
 
 // TextureCache manages GPU texture caching with LRU eviction.
+//
+// IMPORTANT: TextureCache is NOT safe for concurrent use. All methods must be
+// called from the SDL main thread (the render goroutine). Background goroutines
+// (animation ticker, downloads) must only interact with SDL via PushEvent.
 type TextureCache[K comparable] struct {
 	textures map[K]*sdl.Texture
 	order    []K

@@ -36,6 +36,7 @@ type App struct {
 	mode      appMode
 	navState  *trie.NavState
 	gamepad   GamepadState
+	config    config.Provider
 
 	loader *DocumentLoader
 	input  *InputController
@@ -43,12 +44,13 @@ type App struct {
 }
 
 // New creates the app with injected dependencies.
-func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n DocNavigator) *App {
+func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n DocNavigator, cfg config.Provider) *App {
 	app := &App{
 		viewer:    viewer,
 		links:     links,
 		scroller:  scroller,
 		navigator: n,
+		config:    cfg,
 		mode:      modeDoc,
 		stopCh:    make(chan struct{}),
 	}
@@ -265,8 +267,8 @@ func parseSettingsURL(u *neturl.URL) settingsChange {
 	return sc
 }
 
-func applySettings(sc settingsChange) (themeChanged, anyChanged bool) {
-	config.Update(func(c *config.Config) {
+func applySettings(cfg config.Provider, sc settingsChange) (themeChanged, anyChanged bool) {
+	cfg.Update(func(c *config.Config) {
 		if sc.HasTheme && sc.Theme != c.Theme {
 			c.Theme = sc.Theme
 			themeChanged = true
@@ -293,17 +295,25 @@ func applySettings(sc settingsChange) (themeChanged, anyChanged bool) {
 // HandleSettingsAction parses settings URL and updates config and UI.
 func (app *App) HandleSettingsAction(u *neturl.URL) {
 	sc := parseSettingsURL(u)
-	themeChanged, anyChanged := applySettings(sc)
+	themeChanged, anyChanged := applySettings(app.config, sc)
 
 	if themeChanged {
 		app.viewer.ToggleTheme()
 	}
 	if sc.HasFs {
-		_ = app.viewer.Zoom(sc.FontSize)
+		if err := app.viewer.Zoom(sc.FontSize); err != nil {
+			slog.Error("Zoom failed", "delta", sc.FontSize, "error", err)
+		}
 	}
 	if anyChanged {
-		_ = config.Save()
-		doc, _ := menu.SettingsPage()
+		if err := app.config.Save(); err != nil {
+			slog.Error("Config save failed", "error", err)
+		}
+		doc, err := menu.SettingsPage(app.config.Get())
+		if err != nil {
+			slog.Error("Settings page generation failed", "error", err)
+			return
+		}
 		app.ReloadCurrentDocument(doc)
 	}
 }

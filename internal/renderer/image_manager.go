@@ -28,20 +28,19 @@ type AnimatedTexture struct {
 }
 
 type ImageManager struct {
-	loader       ResourceLoader
-	textures     map[string]*sdl.Texture
-	textureOrder []string
-	animated     map[string]*AnimatedTexture
-	dimensions   map[string]struct{ w, h int32 }
-	renderer     *sdl.Renderer
-	startTime    time.Time
+	loader     ResourceLoader
+	cache      *TextureCache[string]
+	animated   map[string]*AnimatedTexture
+	dimensions map[string]struct{ w, h int32 }
+	renderer   *sdl.Renderer
+	startTime  time.Time
 }
 
 const maxImageTextureEntries = 256
 
 func NewImageManager(renderer *sdl.Renderer) *ImageManager {
 	return &ImageManager{
-		textures:   make(map[string]*sdl.Texture),
+		cache:      NewTextureCache[string](maxImageTextureEntries),
 		animated:   make(map[string]*AnimatedTexture),
 		dimensions: make(map[string]struct{ w, h int32 }),
 		renderer:   renderer,
@@ -110,7 +109,7 @@ func (m *ImageManager) GetTexture(url string) (*sdl.Texture, bool) {
 		return anim.Texture, true
 	}
 
-	if tex, ok := m.textures[url]; ok {
+	if tex := m.cache.Get(url); tex != nil {
 		return tex, false
 	}
 
@@ -248,44 +247,22 @@ func (m *ImageManager) createTextureFromImage(url string, img image.Image) *sdl.
 	if err == nil && len(rgba.Pix) > 0 {
 		tex.SetBlendMode(sdl.BLENDMODE_BLEND)
 		tex.Update(nil, unsafe.Pointer(&rgba.Pix[0]), rgba.Stride)
-		m.textures[url] = tex
-		m.textureOrder = append(m.textureOrder, url)
+		m.cache.Set(url, tex)
 		m.dimensions[url] = struct{ w, h int32 }{int32(w), int32(h)}
-		if len(m.textures) > maxImageTextureEntries {
-			m.evictTextures()
-		}
 		return tex
 	}
 
 	return nil
 }
 
-// evictTextures destroys the oldest quarter of cached static textures to bound
-// GPU memory. Dimensions are retained so layout does not need to re-decode.
-func (m *ImageManager) evictTextures() {
-	remove := len(m.textureOrder) / 4
-	if remove < 1 {
-		return
-	}
-	for _, url := range m.textureOrder[:remove] {
-		if tex, ok := m.textures[url]; ok && tex != nil {
-			tex.Destroy()
-		}
-		delete(m.textures, url)
-	}
-	m.textureOrder = m.textureOrder[remove:]
-}
-
 func (m *ImageManager) ClearCache() {
-	destroyTextures(m.textures)
-	m.textureOrder = nil
+	m.cache.Clear()
 	for k, anim := range m.animated {
 		if anim.Texture != nil {
 			anim.Texture.Destroy()
 		}
 		delete(m.animated, k)
 	}
-	// We do not delete dimensions as they can be reused without re-decoding
 }
 
 func (m *ImageManager) Destroy() {

@@ -57,7 +57,7 @@ func main() {
 		r.ToggleTheme()
 	}
 
-	app := ui.New(r, r, r, navigation.NewSimpleNavigator())
+	app := ui.New(r, r, r, navigation.NewSimpleNavigator(), config.NewProvider())
 
 	if err := app.OpenFile(filePath); err != nil {
 		slog.Error("Error opening file", "file", filePath, "error", err)

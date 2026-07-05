@@ -3,6 +3,7 @@ package ui
 import (
 	"net/url"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 )
 
@@ -14,6 +15,7 @@ type LoaderHost interface {
 	getViewer() DocViewer
 	getScroller() Scroller
 	getLinks() LinkBrowser
+	getConfig() config.Provider
 	HandleSettingsAction(u *url.URL)
 	navStateClear()
 }
@@ -25,4 +27,5 @@ func (app *App) getNavigator() DocNavigator { return app.navigator }
 func (app *App) getViewer() DocViewer       { return app.viewer }
 func (app *App) getScroller() Scroller      { return app.scroller }
 func (app *App) getLinks() LinkBrowser      { return app.links }
+func (app *App) getConfig() config.Provider { return app.config }
 func (app *App) navStateClear()             { app.navState = nil }

@@ -27,10 +27,10 @@ func NewInputController(app *App) *InputController {
 		sdl.SCANCODE_RETURN2:   func() { app.toggleMode() },
 		sdl.SCANCODE_T:         func() { app.toggleMode() },
 		sdl.SCANCODE_C:         func() { app.viewer.ToggleTheme() },
-		sdl.SCANCODE_EQUALS:    func() { _ = app.viewer.Zoom(1) },
-		sdl.SCANCODE_KP_PLUS:   func() { _ = app.viewer.Zoom(1) },
-		sdl.SCANCODE_MINUS:     func() { _ = app.viewer.Zoom(-1) },
-		sdl.SCANCODE_KP_MINUS:  func() { _ = app.viewer.Zoom(-1) },
+		sdl.SCANCODE_EQUALS:    func() { c.zoom(1) },
+		sdl.SCANCODE_KP_PLUS:   func() { c.zoom(1) },
+		sdl.SCANCODE_MINUS:     func() { c.zoom(-1) },
+		sdl.SCANCODE_KP_MINUS:  func() { c.zoom(-1) },
 		sdl.SCANCODE_ESCAPE:    func() { app.goBack() },
 		sdl.SCANCODE_BACKSPACE: func() { app.goBack() },
 	}
@@ -221,15 +221,21 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 	case ActionQuit:
 		app.running.Store(false)
 	case ActionZoomIn:
-		_ = app.viewer.Zoom(1)
+		c.zoom(1)
 	case ActionZoomOut:
-		_ = app.viewer.Zoom(-1)
+		c.zoom(-1)
 	case ActionSelectPrevLink:
 		app.links.SelectPrevLink()
 	case ActionSelectNextLink:
 		app.links.SelectNextLink()
 	case ActionToggleTheme:
 		app.viewer.ToggleTheme()
+	}
+}
+
+func (c *InputController) zoom(delta int) {
+	if err := c.app.viewer.Zoom(delta); err != nil {
+		slog.Error("Zoom failed", "delta", delta, "error", err)
 	}
 }
 

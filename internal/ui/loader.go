@@ -52,7 +52,7 @@ func (l *DocumentLoader) registerVirtualPages() {
 		return menu.HelpPage(sdl.NumJoysticks() > 0)
 	}
 	l.virtualPages["virtual:settings"] = func(path string, l *DocumentLoader) (*document.Document, error) {
-		return menu.SettingsPage()
+		return menu.SettingsPage(l.host.getConfig().Get())
 	}
 	l.virtualPages["virtual:library"] = func(path string, l *DocumentLoader) (*document.Document, error) {
 		return l.generateLibraryDoc(path)
@@ -202,7 +202,9 @@ func (l *DocumentLoader) NavigateLink(url string) {
 
 func (l *DocumentLoader) openExternalURL(url string) {
 	slog.Info("Opening external URL", "url", url)
-	_ = exec.Command("xdg-open", url).Start()
+	if err := exec.Command("xdg-open", url).Start(); err != nil {
+		slog.Error("Failed to open external URL", "url", url, "error", err)
+	}
 }
 
 func (l *DocumentLoader) handleDeleteFile(url string) {
@@ -219,7 +221,9 @@ func (l *DocumentLoader) handleDeleteFile(url string) {
 		slog.Error("Failed to delete file", "filename", filename, "error", err)
 	}
 	if l.host.getNavigator().Current() == "virtual:menu" {
-		_ = l.OpenFile("virtual:menu")
+		if err := l.OpenFile("virtual:menu"); err != nil {
+			slog.Error("Failed to reload menu after delete", "error", err)
+		}
 		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 	}
 }
@@ -301,7 +305,9 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 		viewer.SetStatusOverride("")
 		current := navigator.Current()
 		if current == "virtual:menu" || strings.HasPrefix(current, "virtual:library/download") {
-			_ = l.OpenFile("virtual:menu")
+			if err := l.OpenFile("virtual:menu"); err != nil {
+				slog.Error("Failed to reload menu after download", "error", err)
+			}
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 		}
 	}()

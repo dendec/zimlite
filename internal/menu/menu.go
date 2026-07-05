@@ -101,9 +101,8 @@ func HelpPage(hasGamepad bool) (*document.Document, error) {
 }
 
 // SettingsPage generates the settings document.
-func SettingsPage() (*document.Document, error) {
+func SettingsPage(cfg config.Config) (*document.Document, error) {
 	var buf bytes.Buffer
-	cfg := config.Get()
 	if err := settingsTmpl.Execute(&buf, cfg); err != nil {
 		return nil, fmt.Errorf("execute template: %w", err)
 	}

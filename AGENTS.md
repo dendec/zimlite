@@ -83,7 +83,7 @@ main.go
 - `draw.go` — `Render()` draws: images → blockquotes → code bg → tables → link highlight → text lines → scrollbar → status bar. Texture caching for text+emoji.
 - `theme.go` — Light/Dark color palettes.
 - `fonts.go` — Embedded `unifont.otf` (fallback). `loadFonts()` loads 8 font sizes (body, h1–h6, mono). `measureText()` handles emoji sizing.
-- `fonts_default.go` / `fonts_windows.go` — Platform-specific font loading (Windows uses separate thread with 64MB stack for TTF_OpenFont).
+- `fonts_default.go` — Font loading wrappers for SDL_ttf.
 - `emoji.go` — Embedded `emoji.zip` (Twemoji SVGs). `getEmojiSVG(hex)` opens from in-memory zip.
 - `image_manager.go` — Loads PNG/JPEG/GIF/SVG/webp. `ImageManager` caches textures. GIF animation with frame timing.
   - `GetDimensions(url)` — loads & caches image dimensions.
@@ -173,9 +173,7 @@ trie.VisLine { TreePrefix, Label, Suffix, IsLeaf, IsExpanded, IsCursor }
 
 ## Known Issues (see ISSUES.md)
 
-- `renderTables()` is dead code — tables never drawn
-- Config is global mutable singleton (race with background goroutine)
-- Texture cache unbounded
+- Config package still uses global singleton internally (partially addressed via Provider DI)
 - No errcheck (disabled in .golangci.yml)
 - HTTP clients not unified
 - Library atom XML has typo in namespace field tag
