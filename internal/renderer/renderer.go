@@ -3,6 +3,7 @@ package renderer
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/veandco/go-sdl2/sdl"
@@ -105,6 +106,7 @@ type lineEntry struct {
 	isBold   bool
 	isItalic bool
 	isCode   bool
+	isCursor bool
 }
 
 type linkEntry struct {
@@ -297,10 +299,17 @@ func (r *Renderer) SetTextLines(lines []string) {
 	font := r.fonts[FontBody].font
 	y := r.marginY
 	for _, text := range lines {
-		tw, th := measureText(text, font, false, false)
+		isCursor := false
+		displayText := text
+		if strings.HasPrefix(text, ">") {
+			isCursor = true
+			displayText = text[1:]
+		}
+		tw, th := measureText(displayText, font, false, false)
 		r.lines = append(r.lines, lineEntry{
-			text: text, fontIdx: FontBody, color: r.textColor,
+			text: displayText, fontIdx: FontBody, color: r.textColor,
 			x: r.marginX, y: y, w: tw, h: th,
+			isCursor: isCursor,
 		})
 		y += th + r.lineSpacing
 	}

@@ -30,74 +30,79 @@ func (ns *NavState) CursorPath() string {
 	return ns.Cursor.FullPath()
 }
 
-// MoveDown moves cursor to next visible sibling.
+// flatVisible collects all visible nodes in the tree in a flat list.
+func (ns *NavState) flatVisible() []*RadixNode {
+	var nodes []*RadixNode
+	ns.collectVisible(ns.Root, &nodes)
+	return nodes
+}
+
+func (ns *NavState) collectVisible(node *RadixNode, out *[]*RadixNode) {
+	if node.parent != nil {
+		*out = append(*out, node)
+	}
+	if node.Expanded() {
+		for _, c := range node.children {
+			ns.collectVisible(c, out)
+		}
+	}
+}
+
+// MoveDown moves cursor to the next flat visible node.
 func (ns *NavState) MoveDown() {
-	if ns.Cursor == nil {
-		return
-	}
-	parent := ns.Cursor.parent
-	if parent == nil {
-		return
-	}
-	for i, c := range parent.children {
-		if c == ns.Cursor && i+1 < len(parent.children) {
-			ns.Cursor = parent.children[i+1]
+	nodes := ns.flatVisible()
+	for i, n := range nodes {
+		if n == ns.Cursor && i+1 < len(nodes) {
+			ns.Cursor = nodes[i+1]
 			return
 		}
 	}
 }
 
-// MoveUp moves cursor to previous visible sibling.
+// MoveUp moves cursor to the previous flat visible node.
 func (ns *NavState) MoveUp() {
-	if ns.Cursor == nil {
-		return
-	}
-	parent := ns.Cursor.parent
-	if parent == nil {
-		return
-	}
-	for i, c := range parent.children {
-		if c == ns.Cursor && i > 0 {
-			ns.Cursor = parent.children[i-1]
+	nodes := ns.flatVisible()
+	for i, n := range nodes {
+		if n == ns.Cursor && i > 0 {
+			ns.Cursor = nodes[i-1]
 			return
 		}
 	}
 }
 
-// ExpandCurrent expands the cursor node, moving into first child if available.
-func (ns *NavState) ExpandCurrent() {
-	if ns.Cursor == nil || ns.Cursor.IsLeaf() {
+// ActionRight implements the Right-key action:
+// - On a collapsed node: expands it and selects the first child (if any).
+// - On an expanded node: moves down to its first child.
+// - On a leaf: does nothing.
+func (ns *NavState) ActionRight() {
+	if ns.Cursor == nil {
 		return
 	}
-	ns.Cursor.Expand()
+	if ns.Cursor.IsLeaf() {
+		return
+	}
+	if !ns.Cursor.Expanded() {
+		ns.Cursor.Expand()
+	}
 	if len(ns.Cursor.children) > 0 {
 		ns.Cursor = ns.Cursor.children[0]
 	}
 }
 
-// GoToParent moves cursor to parent without collapsing.
-func (ns *NavState) GoToParent() {
+// ActionLeft implements the Left-key action:
+// - On an expanded node: collapses it.
+// - On a collapsed node or leaf: moves cursor to the parent node.
+func (ns *NavState) ActionLeft() {
 	if ns.Cursor == nil {
 		return
 	}
-	parent := ns.Cursor.parent
-	if parent == nil || parent == ns.Root {
+	if ns.Cursor.Expanded() && len(ns.Cursor.children) > 0 {
+		ns.Cursor.Collapse()
 		return
 	}
-	ns.Cursor = parent
-}
-
-// CollapseCurrent collapses cursor's parent and moves cursor up.
-func (ns *NavState) CollapseCurrent() {
-	if ns.Cursor == nil {
-		return
+	if ns.Cursor.parent != nil && ns.Cursor.parent != ns.Root {
+		ns.Cursor = ns.Cursor.parent
 	}
-	parent := ns.Cursor.parent
-	if parent == nil || parent == ns.Root {
-		return
-	}
-	parent.Collapse()
-	ns.Cursor = parent
 }
 
 // VisLine describes one line in the tree display.

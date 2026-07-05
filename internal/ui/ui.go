@@ -115,18 +115,18 @@ func (app *App) renderTree() {
 		indent := strings.Repeat("  ", l.Indent)
 		var prefix string
 		if l.IsLeaf {
-			prefix = "* "
+			prefix = "• "
 		} else if l.IsExpanded {
-			prefix = "- "
+			prefix = "▾ "
 		} else {
-			prefix = "+ "
+			prefix = "▸ "
 		}
 		entry := indent + prefix + l.Label
 		if l.Suffix != "" {
 			entry += " (" + l.Suffix + ")"
 		}
 		if l.IsCursor {
-			entry = ">" + entry[1:]
+			entry = ">" + entry
 			cursorIdx = i
 		}
 		out = append(out, entry)
@@ -225,6 +225,7 @@ func (app *App) navigateLink(url string) {
 			app.renderer.Relayout()
 			return
 		}
+		fmt.Fprintf(os.Stderr, "ResolveArticle(%q) failed: %v\n", url, err)
 		return
 	}
 	if err := app.OpenFile(url); err != nil {
@@ -318,11 +319,12 @@ func (app *App) processTreeKey(sc sdl.Scancode) {
 	switch sc {
 	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
 		app.navState.MoveUp()
-		app.renderTree()
 	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
 		app.navState.MoveDown()
-		app.renderTree()
-	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_KP_6, sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
+	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_KP_6:
+		app.navState.ActionRight()
+	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
+		fmt.Fprintf(os.Stderr, "ENTER: label=%q, isLeaf=%v, path=%q\n", app.navState.Cursor.Label(), app.navState.CursorIsLeaf(), app.navState.CursorPath())
 		if app.navState.CursorIsLeaf() {
 			// Open article.
 			path := app.navState.CursorPath()
@@ -330,19 +332,19 @@ func (app *App) processTreeKey(sc sdl.Scancode) {
 				app.navigateLink(path)
 			}
 		} else {
-			app.navState.ExpandCurrent()
-			app.renderTree()
+			app.navState.ActionRight()
 		}
 	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4:
-		app.navState.GoToParent()
-		app.renderTree()
+		app.navState.ActionLeft()
 	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
-		app.navState.CollapseCurrent()
-		app.renderTree()
+		app.navState.ActionLeft()
 	case sdl.SCANCODE_PAGEUP:
 		app.renderer.ScrollPageUp()
 	case sdl.SCANCODE_PAGEDOWN:
 		app.renderer.ScrollPageDown()
+	}
+	if app.mode == modeTree {
+		app.renderTree()
 	}
 }
 

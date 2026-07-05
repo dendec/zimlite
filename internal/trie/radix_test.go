@@ -103,7 +103,7 @@ func TestCyrillic(t *testing.T) {
 }
 
 func TestAutoDrill(t *testing.T) {
-	// Single-child chains auto-drill on manual Expand(), not on tree load.
+	// Single-child chains are absorbed on manual Expand(), not on tree load.
 	articles := []zim.ArticleEntry{
 		{Title: "XYZ Alpha", Path: "A/Alpha"},
 		{Title: "XYZ Beta", Path: "A/Beta"},
@@ -117,11 +117,17 @@ func TestAutoDrill(t *testing.T) {
 		t.Fatal("X should NOT be expanded on load")
 	}
 
-	// Manual expand: drills through single-child chain to leaves.
+	// Manual expand: drills through single-child chain, absorbing it.
 	x.Expand()
 	if !x.Expanded() { t.Fatal("X should be expanded after manual Expand()") }
-	if len(x.children) != 1 { t.Fatalf("X→1 child (XY), got %d", len(x.children)) }
-	if !x.children[0].Expanded() { t.Fatal("XY auto-drilled") }
+	// Should have absorbed "XY" and "XYZ " and directly have the 3 leaf children.
+	if x.prefix != "XYZ " { t.Errorf("expected absorbed prefix %q, got %q", "XYZ ", x.prefix) }
+	if len(x.children) != 3 { t.Fatalf("expected 3 children after absorption, got %d", len(x.children)) }
+	for _, child := range x.children {
+		if !child.IsLeaf() {
+			t.Errorf("child %q should be leaf", child.Label())
+		}
+	}
 }
 
 func TestMultiBranchStops(t *testing.T) {
@@ -141,7 +147,7 @@ func TestMultiBranchStops(t *testing.T) {
 }
 
 func TestMultiBranchAfterDrill(t *testing.T) {
-	// Manual Expand() drills single-child chain, stops at first branching.
+	// Manual Expand() drills single-child chain and absorbs it, stopping at first branching.
 	articles := []zim.ArticleEntry{
 		{Title: "A X Alpha", Path: "A"},
 		{Title: "A X Beta", Path: "B"},
@@ -151,20 +157,93 @@ func TestMultiBranchAfterDrill(t *testing.T) {
 	a := root.children[0]
 	if a.Expanded() { t.Fatal("A should NOT be expanded on load") }
 
-	// Manually expand — drills through single-child "A " to branching.
+	// Manually expand — drills through single-child "A " to branching, absorbing "A ".
 	a.Expand()
 	if !a.Expanded() { t.Fatal("A drilled") }
-	if len(a.children) != 1 { t.Fatalf("A→1 child, got %d", len(a.children)) }
+	if a.prefix != "A " { t.Errorf("expected absorbed prefix %q, got %q", "A ", a.prefix) }
+	if len(a.children) != 2 { t.Fatalf("A should have 2 children (X, Y) after absorbing, got %d", len(a.children)) }
 
-	sp := a.children[0] // "A "
-	if !sp.Expanded() { t.Fatal("'A ' drilled") }
-	if len(sp.children) != 2 { t.Fatalf("'A '→2 children (X,Y), got %d", len(sp.children)) }
-
-	// X group has 2 children → stop, Y leaf → drilled.
-	xGrp := sp.children[0]
+	// X group has 2 children → stop (not expanded, not leaf)
+	xGrp := a.children[0]
 	if xGrp.IsLeaf() { t.Error("A X should NOT be leaf") }
 	if xGrp.Expanded() { t.Error("A X should NOT be expanded (2 children, stop)") }
+	if xGrp.prefix != "A X" { t.Errorf("expected X prefix %q, got %q", "A X", xGrp.prefix) }
 
-	yLeaf := sp.children[1]
+	// Y group has 1 child which is leaf -> since it's a leaf, it was NOT expanded/absorbed as a parent, but it itself is a leaf
+	yLeaf := a.children[1]
 	if !yLeaf.IsLeaf() { t.Error("A Y Gamma should be leaf") }
+}
+
+func TestFlatNavigation(t *testing.T) {
+	articles := []zim.ArticleEntry{
+		{Title: "Apple", Path: "A/Apple"},
+		{Title: "Apricot", Path: "A/Apricot"},
+		{Title: "Banana", Path: "A/Banana"},
+	}
+	root := NewTree(articles)
+	// Root has "A" (group with 2 articles) and "Banana" (leaf)
+	ns := NewNavState(root)
+
+	if ns.Cursor.Label() != "A" {
+		t.Fatalf("expected initial cursor to be 'A', got %q", ns.Cursor.Label())
+	}
+
+	// Move down -> should go to Banana (since A is collapsed)
+	ns.MoveDown()
+	if ns.Cursor.Label() != "Banana" {
+		t.Fatalf("expected cursor to go to 'Banana', got %q", ns.Cursor.Label())
+	}
+
+	// Go back up to A and expand it
+	ns.MoveUp()
+	ns.ActionRight() // expands A and moves to first child "Apple"
+	if ns.Cursor.Label() != "Apple" {
+		t.Fatalf("expected expanded cursor on 'Apple', got %q", ns.Cursor.Label())
+	}
+
+	// Move down -> should go to Apricot (sibling)
+	ns.MoveDown()
+	if ns.Cursor.Label() != "Apricot" {
+		t.Fatalf("expected cursor on 'Apricot', got %q", ns.Cursor.Label())
+	}
+
+	// Move down again -> since A is expanded, from last child of A ("Apricot") we should go to "Banana"
+	ns.MoveDown()
+	if ns.Cursor.Label() != "Banana" {
+		t.Fatalf("expected flat navigation down to 'Banana', got %q", ns.Cursor.Label())
+	}
+}
+
+func TestActionLeftRight(t *testing.T) {
+	articles := []zim.ArticleEntry{
+		{Title: "Apple", Path: "A/Apple"},
+		{Title: "Apricot", Path: "A/Apricot"},
+		{Title: "Banana", Path: "A/Banana"},
+	}
+	root := NewTree(articles)
+	ns := NewNavState(root)
+
+	// 1. Right on collapsed node -> expands and enters
+	ns.ActionRight()
+	if !ns.Root.children[0].Expanded() {
+		t.Error("expected 'A' to be expanded")
+	}
+	if ns.Cursor.Label() != "Apple" {
+		t.Errorf("expected cursor to enter 'Apple', got %q", ns.Cursor.Label())
+	}
+
+	// 2. Left on leaf -> goes to parent 'Ap' (originally 'A', but absorbed to 'Ap' during expansion)
+	ns.ActionLeft()
+	if ns.Cursor.Label() != "Ap" {
+		t.Errorf("expected left on leaf to go to parent 'Ap', got %q", ns.Cursor.Label())
+	}
+
+	// 3. Left on expanded node 'Ap' -> collapses it
+	ns.ActionLeft()
+	if ns.Root.children[0].Expanded() {
+		t.Error("expected left on expanded 'Ap' to collapse it")
+	}
+	if ns.Cursor.Label() != "Ap" {
+		t.Errorf("expected cursor to remain on 'Ap', got %q", ns.Cursor.Label())
+	}
 }

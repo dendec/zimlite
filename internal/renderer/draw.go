@@ -80,6 +80,12 @@ func (r *Renderer) Render() {
 		if screenY < -line.h || screenY > r.height-statusBarHeight {
 			continue
 		}
+
+		if line.isCursor {
+			r.sdlRenderer.SetDrawColor(r.selBgColor.R, r.selBgColor.G, r.selBgColor.B, r.selBgColor.A)
+			r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: screenY, W: r.width, H: line.h})
+		}
+
 		if line.text == "" {
 			if line.h <= 2 {
 				r.sdlRenderer.SetDrawColor(line.color.R, line.color.G, line.color.B, line.color.A)

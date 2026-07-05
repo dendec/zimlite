@@ -130,15 +130,16 @@ func (n *RadixNode) Expand() {
 		return n.children[i].prefix < n.children[j].prefix
 	})
 
-	// Auto-drill single-child chains.
-	if len(n.children) == 1 {
-		child := n.children[0]
-		for child != nil && !child.IsLeaf() {
-			child.Expand()
-			if len(child.children) != 1 {
-				break
-			}
-			child = child.children[0]
+	// Auto-drill and absorb single-child chains.
+	for len(n.children) == 1 && !n.children[0].IsLeaf() {
+		only := n.children[0]
+		only.Expand()
+		n.prefix = only.prefix
+		n.articles = only.articles
+		n.children = only.children
+		n.leaf = only.leaf
+		for _, c := range n.children {
+			c.parent = n
 		}
 	}
 }
