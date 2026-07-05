@@ -28,6 +28,18 @@ func Parse(r io.Reader) (*document.Document, error) {
 		}
 	}
 
+	doc, err := html.Parse(r)
+	if err != nil {
+		return nil, err
+	}
+
+	preprocessTables(doc)
+
+	var buf bytes.Buffer
+	if err := html.Render(&buf, doc); err != nil {
+		return nil, err
+	}
+
 	conv := converter.NewConverter(
 		converter.WithPlugins(
 			base.NewBasePlugin(),
@@ -36,7 +48,7 @@ func Parse(r io.Reader) (*document.Document, error) {
 			MathPlugin(),
 		),
 	)
-	mdBytes, err := conv.ConvertReader(r)
+	mdBytes, err := conv.ConvertReader(&buf)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +61,40 @@ func Parse(r io.Reader) (*document.Document, error) {
 	}
 
 	return markdown.Parse(strings.NewReader(md))
+}
+
+func preprocessTables(doc *html.Node) {
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "tr" {
+			hasTh := false
+			hasTd := false
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				if c.Type == html.ElementNode {
+					switch c.Data {
+					case "th":
+						hasTh = true
+					case "td":
+						hasTd = true
+					}
+				}
+			}
+			if hasTh && hasTd {
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					if c.Type == html.ElementNode && c.Data == "th" {
+						c.AppendChild(&html.Node{
+							Type: html.TextNode,
+							Data: ": ",
+						})
+					}
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
 }
 
 // MathPlugin intercepts Wikipedia math tags and formats them as inline code.
