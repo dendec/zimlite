@@ -66,11 +66,14 @@ func NewTree(articles []zim.ArticleEntry) *RadixNode {
 		root.children = append(root.children, node)
 	}
 
-	// Auto-expand small first-level groups (fits on small screens).
-	const autoExpandThreshold = 12
+	// Auto-drill single-child chains: if a node has only 1 child, expand it.
 	for _, child := range root.children {
-		if len(child.articles) <= autoExpandThreshold {
+		for child != nil && !child.IsLeaf() && len(child.articles) > 0 {
 			child.Expand()
+			if len(child.children) != 1 {
+				break
+			}
+			child = child.children[0]
 		}
 	}
 
@@ -138,11 +141,15 @@ func (n *RadixNode) Expand() {
 		return n.children[i].prefix < n.children[j].prefix
 	})
 
-	// Auto-expand shallow branches: fits small console screens.
-	const autoExpandThreshold = 12
-	if len(n.articles) <= autoExpandThreshold {
-		for _, child := range n.children {
+	// Auto-drill single-child chains.
+	if len(n.children) == 1 {
+		child := n.children[0]
+		for child != nil && !child.IsLeaf() {
 			child.Expand()
+			if len(child.children) != 1 {
+				break
+			}
+			child = child.children[0]
 		}
 	}
 }
