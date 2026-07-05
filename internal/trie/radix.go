@@ -29,6 +29,16 @@ type RadixNode struct {
 	built    bool
 }
 
+func extractNextLogicalChar(runes []rune, offset int) string {
+	if offset >= len(runes) {
+		return ""
+	}
+	if _, consumed, ok := document.EmojiSequence(runes, offset); ok {
+		return string(runes[offset : offset+consumed])
+	}
+	return string(runes[offset])
+}
+
 // NewTree builds a tree from a pre-fetched article list.
 // Builds first level eagerly (grouping by first rune).
 func NewTree(articles []document.ArticleEntry) *RadixNode {
@@ -37,18 +47,25 @@ func NewTree(articles []document.ArticleEntry) *RadixNode {
 		return root
 	}
 
-	// Group by first rune.
+	// Group by first logical character (could be an emoji sequence).
 	type group struct {
-		r    rune
+		r    string
 		arts []document.ArticleEntry
 	}
 	var groups []group
 	for _, a := range articles {
-		r, _ := utf8.DecodeRuneInString(a.Title)
-		if r == utf8.RuneError {
+		runes := []rune(a.Title)
+		label := extractNextLogicalChar(runes, 0)
+		if label == "" {
 			continue
 		}
-		label := labelForRune(r)
+		if utf8.RuneCountInString(label) == 1 {
+			r, _ := utf8.DecodeRuneInString(label)
+			if r == utf8.RuneError {
+				continue
+			}
+			label = string(labelForRune(r))
+		}
 		if len(groups) == 0 || groups[len(groups)-1].r != label {
 			groups = append(groups, group{r: label})
 		}
@@ -57,7 +74,7 @@ func NewTree(articles []document.ArticleEntry) *RadixNode {
 
 	for _, g := range groups {
 		node := &RadixNode{
-			prefix:   string(g.r),
+			prefix:   g.r,
 			parent:   root,
 			articles: g.arts,
 		}
@@ -94,12 +111,7 @@ func (n *RadixNode) Expand() {
 
 	for _, a := range n.articles {
 		runes := []rune(a.Title)
-		var key string
-		if len(runes) > prefixLen {
-			key = string(runes[prefixLen])
-		} else {
-			key = ""
-		}
+		key := extractNextLogicalChar(runes, prefixLen)
 		if key == "" {
 			if selfArticle == nil {
 				art := a

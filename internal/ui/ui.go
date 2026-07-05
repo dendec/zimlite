@@ -132,7 +132,8 @@ func (app *App) enterTreeMode() {
 	}
 	app.saveCurrentState()
 	if app.navState == nil {
-		articles := app.loader.zimReader.ListArticles()
+		allArticles := app.loader.zimReader.ListArticles()
+		articles := filterDisplayableArticles(allArticles)
 		if len(articles) == 0 {
 			return
 		}
@@ -141,6 +142,28 @@ func (app *App) enterTreeMode() {
 	}
 	app.mode = modeTree
 	app.renderTree()
+}
+
+func filterDisplayableArticles(allArticles []document.ArticleEntry) []document.ArticleEntry {
+	var articles []document.ArticleEntry
+	for _, a := range allArticles {
+		runes := []rune(a.Title)
+		if len(runes) == 0 {
+			continue
+		}
+		if _, _, ok := document.EmojiSequence(runes, 0); ok {
+			articles = append(articles, a)
+			continue
+		}
+		r := runes[0]
+		// Unifont primarily supports BMP. Filter out SMP (>0xFFFF),
+		// Private Use Area, and Replacement Character.
+		if r > 0xFFFF || (r >= 0xE000 && r <= 0xF8FF) || r == 0xFFFD {
+			continue
+		}
+		articles = append(articles, a)
+	}
+	return articles
 }
 
 func (app *App) exitTreeMode() {

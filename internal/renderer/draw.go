@@ -143,19 +143,76 @@ func (r *Renderer) renderTreeLineParts(line lineEntry, screenY int32) {
 	}
 }
 
+type textSegment struct {
+	tex     *sdl.Texture
+	w, h    int32
+	isEmoji bool
+}
+
+func (r *Renderer) createTextSegments(text string, font *ttf.Font, color sdl.Color) ([]textSegment, int32) {
+	var segments []textSegment
+	var totalW int32
+	if text == "" || font == nil {
+		return segments, 0
+	}
+	sz := int32(font.Ascent())
+	runes := []rune(text)
+
+	i := 0
+	for i < len(runes) {
+		hex, consumed, ok := document.EmojiSequence(runes, i)
+		var tex *sdl.Texture
+		if ok {
+			le := lineEntry{isEmoji: true, emojiHex: hex, h: sz}
+			tex = r.renderEmojiTexture(le)
+		}
+		if tex != nil {
+			_, _, ew, eh, _ := tex.Query()
+			segments = append(segments, textSegment{tex: tex, w: ew, h: eh, isEmoji: true})
+			totalW += ew
+			i += consumed
+			continue
+		}
+		start := i
+		for i < len(runes) {
+			hex2, _, ok2 := document.EmojiSequence(runes, i)
+			var tex2 *sdl.Texture
+			if ok2 {
+				le2 := lineEntry{isEmoji: true, emojiHex: hex2, h: sz}
+				tex2 = r.renderEmojiTexture(le2)
+			}
+			if tex2 != nil {
+				break
+			}
+			i++
+		}
+		textStr := string(runes[start:i])
+		surf, err := font.RenderUTF8Blended(textStr, color)
+		if err != nil {
+			continue
+		}
+		texText, err := r.sdlRenderer.CreateTextureFromSurface(surf)
+		surf.Free()
+		if err != nil {
+			continue
+		}
+		_, _, tw, th, _ := texText.Query()
+		segments = append(segments, textSegment{tex: texText, w: tw, h: th})
+		totalW += tw
+	}
+	return segments, totalW
+}
+
 func (r *Renderer) renderColoredText(text string, font *ttf.Font, color sdl.Color, x, y int32) {
-	surf, err := font.RenderUTF8Blended(text, color)
-	if err != nil {
-		return
+	segments, _ := r.createTextSegments(text, font, color)
+	cx := x
+	for _, s := range segments {
+		r.sdlRenderer.Copy(s.tex, nil, &sdl.Rect{X: cx, Y: y, W: s.w, H: s.h})
+		if !s.isEmoji {
+			s.tex.Destroy()
+		}
+		cx += s.w
 	}
-	tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
-	surf.Free()
-	if err != nil {
-		return
-	}
-	_, _, tw, th, _ := tex.Query()
-	r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: x, Y: y, W: tw, H: th})
-	tex.Destroy()
 }
 
 func (r *Renderer) renderLinkUnderline() {
@@ -284,51 +341,7 @@ func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
 		return
 	}
 	font := r.fonts[FontBody].font
-	sz := int32(font.Ascent())
-	runes := []rune(text)
-
-	type seg struct {
-		tex     *sdl.Texture
-		w, h    int32
-		isEmoji bool
-	}
-	var segments []seg
-	var totalW int32
-
-	i := 0
-	for i < len(runes) {
-		if hex, consumed, ok := document.EmojiSequence(runes, i); ok {
-			le := lineEntry{isEmoji: true, emojiHex: hex, h: sz}
-			tex := r.renderEmojiTexture(le)
-			if tex != nil {
-				_, _, ew, eh, _ := tex.Query()
-				segments = append(segments, seg{tex: tex, w: ew, h: eh, isEmoji: true})
-				totalW += ew
-			}
-			i += consumed
-			continue
-		}
-		start := i
-		for i < len(runes) {
-			if _, _, ok := document.EmojiSequence(runes, i); ok {
-				break
-			}
-			i++
-		}
-		textStr := string(runes[start:i])
-		surf, err := font.RenderUTF8Blended(textStr, r.theme.TextColor)
-		if err != nil {
-			continue
-		}
-		tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
-		surf.Free()
-		if err != nil {
-			continue
-		}
-		_, _, tw, th, _ := tex.Query()
-		segments = append(segments, seg{tex: tex, w: tw, h: th})
-		totalW += tw
-	}
+	segments, totalW := r.createTextSegments(text, font, r.theme.TextColor)
 
 	if len(segments) == 0 {
 		return
