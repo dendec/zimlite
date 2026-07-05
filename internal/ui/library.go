@@ -182,7 +182,8 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 				fmt.Fprintf(&sb, "*Size*: %s\n", sizeStr)
 				escURL := url.QueryEscape(directURL)
 				escFile := url.QueryEscape(filename)
-				fmt.Fprintf(&sb, "[Download Archive](virtual:library/download?url=%s&filename=%s)\n", escURL, escFile)
+				label := "Download " + filename
+				fmt.Fprintf(&sb, "[%s](virtual:library/download?url=%s&filename=%s)\n", label, escURL, escFile)
 				sb.WriteString("---\n\n")
 			}
 			// Pagination nav.
