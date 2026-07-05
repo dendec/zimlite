@@ -15,6 +15,7 @@ func (r *Renderer) Render() {
 	r.renderTables()
 	r.renderLinkHighlight()
 	r.renderLines()
+	r.renderScrollbar()
 	r.renderStatusBar()
 	r.sdlRenderer.Present()
 }
@@ -248,6 +249,39 @@ func (r *Renderer) renderStatusBar() {
 			}
 		}
 	}
+}
+
+func (r *Renderer) renderScrollbar() {
+	vpHeight := r.height - statusBarHeight
+	totalH := r.layout.totalHeight
+
+	if totalH <= vpHeight {
+		return // No need for scrollbar
+	}
+
+	// Calculate thumb size
+	thumbH := int32(float64(vpHeight) * float64(vpHeight) / float64(totalH))
+	if thumbH < 20 {
+		thumbH = 20
+	}
+
+	// Calculate thumb position
+	maxScroll := totalH - vpHeight
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	var thumbY int32
+	if maxScroll > 0 {
+		thumbY = int32(float64(r.scrollY) / float64(maxScroll) * float64(vpHeight-thumbH))
+	}
+
+	// Draw track (optional, using theme.CodeBgColor or RuleColor)
+	// r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, 100)
+	// r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - 8, Y: 0, W: 8, H: vpHeight})
+
+	// Draw thumb
+	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, 200)
+	r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - 6, Y: thumbY, W: 6, H: thumbH})
 }
 
 // Type aliases to keep sdl imports contained.
