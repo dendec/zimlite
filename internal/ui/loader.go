@@ -293,7 +293,7 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 		})
 		if err != nil {
 			slog.Error("Download failed", "url", downloadURL, "filename", filename, "error", err)
-			app.viewer.SetStatusOverride("Download failed: " + err.Error())
+			app.viewer.SetStatusOverride("❌ Download failed: " + err.Error())
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 			return
 		}

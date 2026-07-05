@@ -56,9 +56,9 @@ func (f *AtomFeed) NextPage() string {
 
 func renderErrorDoc(section string, err error) (*document.Document, error) {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "# Error loading %s\n\n", section)
+	fmt.Fprintf(&sb, "# ❌ Error loading %s\n\n", section)
 	fmt.Fprintf(&sb, "An error occurred while communicating with the Kiwix library catalog:\n\n`%v`\n\n", err)
-	sb.WriteString("[← Back to Menu](virtual:menu)\n")
+	sb.WriteString("[🔙 Back to Menu](virtual:menu)\n")
 	return markdown.Parse(strings.NewReader(sb.String()))
 }
 
@@ -90,9 +90,9 @@ func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document,
 			return renderErrorDoc("languages", err)
 		}
 		var sb strings.Builder
-		sb.WriteString("# Kiwix Online Library - Languages\n\n")
-		sb.WriteString("Select a language to browse categories:\n\n")
-		sb.WriteString("[← Back to Files](virtual:menu)\n\n")
+		sb.WriteString("# 🌐 Kiwix Online Library - Languages\n\n")
+		sb.WriteString("👇 Select a language to browse categories:\n\n")
+		sb.WriteString("[🔙 Back to Files](virtual:menu)\n\n")
 		sort.Slice(feed.Entries, func(i, j int) bool {
 			if feed.Entries[i].Count != feed.Entries[j].Count {
 				return feed.Entries[i].Count > feed.Entries[j].Count
@@ -113,9 +113,9 @@ func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document,
 			return renderErrorDoc("categories", err)
 		}
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "# Kiwix Online Library - Categories (%s)\n\n", lang)
-		sb.WriteString("Select a category:\n\n")
-		sb.WriteString("[← Back to Languages](virtual:library)\n\n")
+		fmt.Fprintf(&sb, "# 🌐 Kiwix Online Library - Categories (%s)\n\n", lang)
+		sb.WriteString("👇 Select a category:\n\n")
+		sb.WriteString("[🔙 Back to Languages](virtual:library)\n\n")
 		for _, entry := range categories.Entries {
 			category := strings.ToLower(entry.Title)
 			fmt.Fprintf(&sb, "* [%s](virtual:library/entries?lang=%s&category=%s)\n", entry.Title, lang, category)
@@ -135,13 +135,13 @@ func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document,
 			return renderErrorDoc("archives", err)
 		}
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "# Kiwix Online Library - ZIM Archives (%s / %s)\n\n", lang, category)
-		fmt.Fprintf(&sb, "[← Back to Categories](virtual:library/categories?lang=%s)\n\n", lang)
+		fmt.Fprintf(&sb, "# 🌐 Kiwix Online Library - ZIM Archives (%s / %s)\n\n", lang, category)
+		fmt.Fprintf(&sb, "[🔙 Back to Categories](virtual:library/categories?lang=%s)\n\n", lang)
 		if len(feed.Entries) == 0 {
 			if page > 0 {
-				sb.WriteString("*No more archives on this page.*\n")
+				sb.WriteString("*📭 No more archives on this page.*\n")
 			} else {
-				sb.WriteString("*No archives found in this language and category.*\n")
+				sb.WriteString("*📭 No archives found in this language and category.*\n")
 			}
 		} else {
 			for _, entry := range feed.Entries {
@@ -165,21 +165,21 @@ func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document,
 				}
 				fmt.Fprintf(&sb, "### %s\n\n", entry.Title)
 				if entry.Summary != "" {
-					fmt.Fprintf(&sb, "*Description*: %s\n", entry.Summary)
+					fmt.Fprintf(&sb, "*📝 Description*: %s\n", entry.Summary)
 				}
-				fmt.Fprintf(&sb, "*Size*: %s\n", sizeStr)
+				fmt.Fprintf(&sb, "*💾 Size*: %s\n", sizeStr)
 				escURL := url.QueryEscape(directURL)
 				escFile := url.QueryEscape(filename)
-				label := "Download " + filename
+				label := "⬇ Download " + filename
 				fmt.Fprintf(&sb, "[%s](virtual:library/download?url=%s&filename=%s)\n", label, escURL, escFile)
 				sb.WriteString("\n---\n\n")
 			}
 			// Pagination nav.
 			if page > 0 {
-				fmt.Fprintf(&sb, "[← Previous Page](virtual:library/entries?lang=%s&category=%s&page=%d)  ", lang, category, page-1)
+				fmt.Fprintf(&sb, "[◀ Previous Page](virtual:library/entries?lang=%s&category=%s&page=%d)  ", lang, category, page-1)
 			}
 			if len(feed.Entries) == 50 {
-				fmt.Fprintf(&sb, "[Next Page →](virtual:library/entries?lang=%s&category=%s&page=%d)", lang, category, page+1)
+				fmt.Fprintf(&sb, "[Next Page ▶](virtual:library/entries?lang=%s&category=%s&page=%d)", lang, category, page+1)
 			}
 			sb.WriteString("\n")
 		}

@@ -127,7 +127,7 @@ func Download(url, filename string, onProgress ProgressFn) error {
 			if totalSize > 0 {
 				percent = float64(downloaded) / float64(totalSize) * 100
 			}
-			onProgress(fmt.Sprintf("Downloading %s: %.1f%%", filepath.Base(filename), percent))
+			onProgress(fmt.Sprintf("⬇ Downloading %s: %.1f%%", filepath.Base(filename), percent))
 		default:
 		}
 	}
@@ -137,6 +137,6 @@ func Download(url, filename string, onProgress ProgressFn) error {
 		return fmt.Errorf("rename: %w", err)
 	}
 
-	onProgress("Download finished successfully!")
+	onProgress("✅ Download finished successfully!")
 	return nil
 }
