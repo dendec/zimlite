@@ -187,7 +187,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 
 	sizes := [fontCount]int{
 		FontBody: baseFontSize,
-		FontH1:   baseFontSize + 8,
+		FontH1:   baseFontSize + 7,
 		FontH2:   baseFontSize + 5,
 		FontH3:   baseFontSize + 3,
 		FontH4:   baseFontSize + 1,
