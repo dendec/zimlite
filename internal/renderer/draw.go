@@ -2,7 +2,6 @@ package renderer
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	"image/draw"
 	_ "image/jpeg"
@@ -186,23 +185,15 @@ func (r *Renderer) Render() {
 	})
 
 	// Render status bar text.
-	percent := int32(0)
-	if r.totalHeight > r.height-statusBarHeight {
-		denom := r.totalHeight - (r.height - statusBarHeight)
-		if denom > 0 {
-			percent = (r.scrollY * 100) / denom
-		}
-	}
-
 	var statusText string
 	if r.doc != nil {
 		if r.hasTree {
-			statusText = fmt.Sprintf("Scroll: %d%%  |  [T] Tree  [D] Theme  [Q] Quit", percent)
+			statusText = "←→:links  ↑↓:scroll  ↩:open  ⌫:back  H:home  T:tree  D:theme"
 		} else {
-			statusText = fmt.Sprintf("Scroll: %d%%  |  [D] Theme  [Q] Quit", percent)
+			statusText = "←→:links  ↑↓:scroll  ↩:open  ⌫:back  D:theme"
 		}
 	} else {
-		statusText = "Tree Mode  |  [T] Document  [D] Theme  [Q] Quit"
+		statusText = "↑↓:nav  ↩→:enter  ←⌫:back  T:doc  D:theme"
 	}
 
 	font := r.fonts[FontBody].font

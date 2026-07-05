@@ -106,6 +106,19 @@ func (app *App) exitTreeMode() {
 	}
 }
 
+func (app *App) goHome() {
+	if app.zimReader != nil {
+		mainPath := app.zimReader.MainPagePath()
+		navKey := "zim:" + mainPath
+		if doc, ok := app.docCache[navKey]; ok {
+			app.mode = modeDoc
+			app.renderer.SetDocument(doc)
+			app.navigator.Open(navKey)
+			app.renderer.Relayout()
+		}
+	}
+}
+
 func (app *App) renderTree() {
 	if app.navState == nil {
 		return
@@ -182,7 +195,9 @@ func (app *App) OpenFile(path string) error {
 	app.renderer.SetDocument(doc)
 	if isZIM && app.zimReader != nil {
 		mainPath := app.zimReader.MainPagePath()
-		app.navigator.Open("zim:" + mainPath)
+		navKey := "zim:" + mainPath
+		app.docCache[navKey] = doc
+		app.navigator.Open(navKey)
 	} else {
 		app.navigator.Open(absPath)
 	}
@@ -250,9 +265,11 @@ func (app *App) navigateLink(url string) {
 					resolved = path.Join(referrer, url)
 				}
 			}
+			navKey := "zim:" + resolved
+			app.docCache[navKey] = doc
 			app.mode = modeDoc
 			app.renderer.SetDocument(doc)
-			app.navigator.Open("zim:" + resolved)
+			app.navigator.Open(navKey)
 			app.renderer.Relayout()
 			return
 		}
@@ -300,6 +317,9 @@ func (app *App) processEvent(event sdl.Event) {
 		switch sc {
 		case sdl.SCANCODE_Q:
 			app.running = false
+			return
+		case sdl.SCANCODE_H: // H = go home
+			app.goHome()
 			return
 		case sdl.SCANCODE_RETURN2, sdl.SCANCODE_T: // T = toggle tree mode
 			app.toggleMode()
@@ -407,6 +427,8 @@ func (app *App) processDocKey(sc sdl.Scancode) {
 				app.renderer.SetDocument(doc)
 				app.renderer.Relayout()
 			}
+		} else if app.zimReader != nil {
+			app.enterTreeMode()
 		}
 	}
 }
