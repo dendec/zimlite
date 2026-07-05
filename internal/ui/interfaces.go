@@ -11,9 +11,9 @@ type ZimReader interface {
 	Close()
 	ArticleCount() int
 	ListArticles() []document.ArticleEntry
-	MainPage() (*document.Document, error)
+	MainPage() ([]byte, string, error)
 	MainPagePath() string
-	ResolveArticle(rawURL string, referrer string) (*document.Document, error)
+	ResolveArticle(rawURL string, referrer string) ([]byte, string, error)
 	ResolveResource(rawURL string) ([]byte, string, error)
 }
 

@@ -46,9 +46,8 @@ const char* zim_get_main_page_redirect(zim_archive_t archive) {
         auto entry = a->getMainEntry();
         // Follow redirect chain to get the real target.
         entry = entry.getRedirectEntry();
-        static thread_local std::string path;
-        path = entry.getPath();
-        return path.c_str();
+        std::string path = entry.getPath();
+        return strdup(path.c_str());
     } catch (...) {
         return nullptr;
     }
@@ -67,10 +66,8 @@ zim_entry_t zim_get_entry_by_path(zim_archive_t archive, const char* path) {
 const char* zim_entry_get_path(zim_entry_t entry) {
     if (!entry) return nullptr;
     auto* e = static_cast<zim::Entry*>(entry);
-    // Return a static copy — caller must not free.
-    static thread_local std::string path;
-    path = e->getPath();
-    return path.c_str();
+    std::string path = e->getPath();
+    return strdup(path.c_str());
 }
 
 char zim_entry_get_namespace(zim_entry_t entry) {
@@ -83,9 +80,8 @@ char zim_entry_get_namespace(zim_entry_t entry) {
 const char* zim_entry_get_title(zim_entry_t entry) {
     if (!entry) return nullptr;
     auto* e = static_cast<zim::Entry*>(entry);
-    static thread_local std::string title;
-    title = e->getTitle();
-    return title.c_str();
+    std::string title = e->getTitle();
+    return strdup(title.c_str());
 }
 
 zim_item_t zim_entry_get_item(zim_entry_t entry, int follow) {
@@ -102,19 +98,21 @@ zim_item_t zim_entry_get_item(zim_entry_t entry, int follow) {
 const char* zim_item_get_content(zim_item_t item, int* size_out) {
     if (!item) return nullptr;
     auto* i = static_cast<zim::Item*>(item);
-    static thread_local std::string content;
     zim::Blob blob = i->getData();
-    content.assign(blob.data(), blob.size());
-    if (size_out) *size_out = static_cast<int>(blob.size());
-    return content.data();
+    size_t sz = blob.size();
+    if (size_out) *size_out = static_cast<int>(sz);
+    char* data = (char*)malloc(sz);
+    if (data) {
+        memcpy(data, blob.data(), sz);
+    }
+    return data;
 }
 
 const char* zim_item_get_mimetype(zim_item_t item) {
     if (!item) return nullptr;
     auto* i = static_cast<zim::Item*>(item);
-    static thread_local std::string mime;
-    mime = i->getMimetype();
-    return mime.c_str();
+    std::string mime = i->getMimetype();
+    return strdup(mime.c_str());
 }
 
 void zim_entry_free(zim_entry_t entry) {

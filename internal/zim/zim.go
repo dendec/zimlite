@@ -9,7 +9,6 @@ package zim
 */
 import "C"
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"net/url"
@@ -19,7 +18,6 @@ import (
 	"unsafe"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
 )
 
 // Reader wraps a libzim Archive handle.
@@ -44,13 +42,16 @@ func Open(filePath string) (*Reader, error) {
 	mainPagePath := ""
 	if entry != nil {
 		defer C.zim_entry_free(entry)
-		mainPagePath = C.GoString(C.zim_entry_get_path(entry))
+		cPathStr := C.zim_entry_get_path(entry)
+		mainPagePath = C.GoString(cPathStr)
+		C.free(unsafe.Pointer(cPathStr))
 	}
 
 	// Follow main page redirect to get real namespace prefix.
 	redirect := C.zim_get_main_page_redirect(h)
 	if redirect != nil {
 		realPath := C.GoString(redirect)
+		C.free(unsafe.Pointer(redirect))
 		rootPrefix = path.Dir(realPath)
 		mainPagePath = realPath
 	} else if mainPagePath != "" {
@@ -78,9 +79,14 @@ func (r *Reader) MainPagePath() string {
 	defer C.zim_entry_free(entry)
 	redirect := C.zim_get_main_page_redirect(r.handle)
 	if redirect != nil {
-		return C.GoString(redirect)
+		res := C.GoString(redirect)
+		C.free(unsafe.Pointer(redirect))
+		return res
 	}
-	return C.GoString(C.zim_entry_get_path(entry))
+	cPathStr := C.zim_entry_get_path(entry)
+	res := C.GoString(cPathStr)
+	C.free(unsafe.Pointer(cPathStr))
+	return res
 }
 
 // Close releases the archive.
@@ -119,18 +125,18 @@ func (r *Reader) ListArticles() []document.ArticleEntry {
 	return result
 }
 
-// MainPage returns the main article as a Document.
-func (r *Reader) MainPage() (*document.Document, error) {
+// MainPage returns the main article content and mime.
+func (r *Reader) MainPage() ([]byte, string, error) {
 	entry := C.zim_get_main_entry(r.handle)
 	if entry == nil {
-		return nil, errors.New("main page: no main entry")
+		return nil, "", errors.New("main page: no main entry")
 	}
 	defer C.zim_entry_free(entry)
-	return r.entryToDoc(entry)
+	return r.entryToData(entry)
 }
 
 // GetArticle looks up an article by its ZIM-internal path.
-func (r *Reader) GetArticle(path string) (*document.Document, error) {
+func (r *Reader) GetArticle(path string) ([]byte, string, error) {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 
@@ -140,19 +146,18 @@ func (r *Reader) GetArticle(path string) (*document.Document, error) {
 		if debug {
 			fmt.Fprintf(os.Stderr, "[GetArticle] NOT FOUND: %q\n", path)
 		}
-		return nil, fmt.Errorf("article %q: not found", path)
+		return nil, "", fmt.Errorf("article %q: not found", path)
 	}
 	defer C.zim_entry_free(entry)
-	return r.entryToDoc(entry)
+	return r.entryToData(entry)
 }
 
-// ResolveArticle tries multiple path formats to find an article.
-// ZIM links may lose namespace prefix (A/) or extension during HTML→MD conversion.
-func (r *Reader) ResolveArticle(rawURL string, referrer string) (*document.Document, error) {
+// ResolveArticle tries to resolve an article by URL and referrer.
+func (r *Reader) ResolveArticle(rawURL string, referrer string) ([]byte, string, error) {
 	// Skip external URLs.
 	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") ||
 		strings.HasPrefix(rawURL, "//") {
-		return nil, fmt.Errorf("external URL: %s", rawURL)
+		return nil, "", fmt.Errorf("external URL: %s", rawURL)
 	}
 
 	// Strip query parameters and anchors/fragments
@@ -187,81 +192,23 @@ func (r *Reader) ResolveArticle(rawURL string, referrer string) (*document.Docum
 		candidates = append(candidates, c)
 	}
 
-	add(pathOnly)
 	add(decoded)
 
-	// If already has namespace prefix, try directly.
-	if hasNamespace(decoded) {
-		add(decoded + ".html")
-		base := strings.TrimSuffix(decoded, "/")
-		if base != decoded {
-			add(base)
-			add(base + ".html")
-		}
-		if debug {
-			fmt.Fprintf(os.Stderr, "[ResolveArticle] namespace-prefixed candidates: %v\n", candidates)
-		}
-		for _, c := range candidates {
-			doc, err := r.GetArticle(c)
-			if err == nil {
-				if debug {
-					fmt.Fprintf(os.Stderr, "[ResolveArticle] OK=%q\n", c)
-				}
-				return doc, nil
-			}
-			if debug {
-				fmt.Fprintf(os.Stderr, "[ResolveArticle] try %q → %v\n", c, err)
-			}
-		}
-		return nil, fmt.Errorf("article not found: %s", rawURL)
-	}
-
-	// Build absolute paths.
 	if referrer != "" {
-		add(path.Join(referrer, decoded))
-		add(path.Join(referrer, decoded) + ".html")
 		add(path.Join(path.Dir(referrer), decoded))
-		add(path.Join(path.Dir(referrer), decoded) + ".html")
 	}
 	if r.rootPrefix != "" {
 		add(path.Join(r.rootPrefix, decoded))
-		add(path.Join(r.rootPrefix, decoded) + ".html")
 	}
 
-	// With trailing slash.
-	n := len(candidates)
-	for i := 0; i < n; i++ {
-		if !strings.HasSuffix(candidates[i], "/") && candidates[i] != "" {
-			add(candidates[i] + "/")
-		}
-	}
-
-	if debug {
-		fmt.Fprintf(os.Stderr, "[ResolveArticle] all candidates: %v\n", candidates)
-	}
 	for _, c := range candidates {
-		doc, err := r.GetArticle(c)
+		data, mime, err := r.GetArticle(c)
 		if err == nil {
-			if debug {
-				fmt.Fprintf(os.Stderr, "[ResolveArticle] OK=%q\n", c)
-			}
-			return doc, nil
-		}
-		if debug {
-			fmt.Fprintf(os.Stderr, "[ResolveArticle] try %q → %v\n", c, err)
+			return data, mime, nil
 		}
 	}
 
-	return nil, fmt.Errorf("article not found: %s", rawURL)
-}
-
-func hasNamespace(s string) bool {
-	for _, ns := range []string{"A/", "C/", "I/", "M/", "X/", "-/"} {
-		if strings.HasPrefix(s, ns) {
-			return true
-		}
-	}
-	return false
+	return nil, "", fmt.Errorf("article not found: %s", rawURL)
 }
 
 // GetResource retrieves raw bytes and mimetype of any ZIM entry (e.g. images, css).
@@ -281,14 +228,17 @@ func (r *Reader) GetResource(path string) ([]byte, string, error) {
 	}
 	defer C.zim_item_free(item)
 
-	mime := C.GoString(C.zim_item_get_mimetype(item))
+	cMime := C.zim_item_get_mimetype(item)
+	mime := C.GoString(cMime)
+	C.free(unsafe.Pointer(cMime))
 
 	var size C.int
-	content := C.zim_item_get_content(item, &size)
-	if content == nil {
+	cData := C.zim_item_get_content(item, &size)
+	if cData == nil {
 		return nil, "", errors.New("empty content")
 	}
-	data := C.GoBytes(unsafe.Pointer(content), size)
+	data := C.GoBytes(unsafe.Pointer(cData), size)
+	C.free(unsafe.Pointer(cData))
 	return data, mime, nil
 }
 
@@ -324,26 +274,26 @@ func (r *Reader) ResolveResource(rawURL string) ([]byte, string, error) {
 	return nil, "", fmt.Errorf("resource not found: %s", rawURL)
 }
 
-func (r *Reader) entryToDoc(entry C.zim_entry_t) (*document.Document, error) {
+func (r *Reader) entryToData(entry C.zim_entry_t) ([]byte, string, error) {
 	item := C.zim_entry_get_item(entry, 1) // follow redirects
 	if item == nil {
-		return nil, errors.New("cannot get item")
+		return nil, "", errors.New("cannot get item")
 	}
 	defer C.zim_item_free(item)
 
-	mime := C.GoString(C.zim_item_get_mimetype(item))
-	if !isHTML(mime) {
-		return nil, fmt.Errorf("unsupported mime type: %s", mime)
-	}
+	cMime := C.zim_item_get_mimetype(item)
+	mime := C.GoString(cMime)
+	C.free(unsafe.Pointer(cMime))
 
 	var size C.int
-	content := C.zim_item_get_content(item, &size)
-	if content == nil {
-		return nil, errors.New("empty content")
+	cContent := C.zim_item_get_content(item, &size)
+	if cContent == nil {
+		return nil, "", errors.New("empty content")
 	}
-	data := C.GoBytes(unsafe.Pointer(content), size)
+	data := C.GoBytes(unsafe.Pointer(cContent), size)
+	C.free(unsafe.Pointer(cContent))
 
-	return html.Parse(bytes.NewReader(data))
+	return data, mime, nil
 }
 
 func isHTML(mime string) bool {

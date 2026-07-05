@@ -1,5 +1,7 @@
 // C-compatible opaque handle types for libzim.
 // The actual implementation is in bridge.cpp.
+// NOTE: All functions returning `const char*` return strings allocated via malloc/strdup.
+// The caller is responsible for freeing them using free().
 #ifndef ZIM_BRIDGE_H
 #define ZIM_BRIDGE_H
 

@@ -2,6 +2,7 @@
 package storage
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -40,7 +41,17 @@ func OpenZIM(path string) (*zim.Reader, *document.Document, error) {
 		return nil, nil, err
 	}
 
-	doc, err := zr.MainPage()
+	data, mime, err := zr.MainPage()
+	if err != nil {
+		zr.Close()
+		return nil, nil, err
+	}
+	if !strings.HasPrefix(mime, "text/html") {
+		zr.Close()
+		return nil, nil, fmt.Errorf("unsupported main page mime: %s", mime)
+	}
+
+	doc, err := html.Parse(bytes.NewReader(data))
 	if err != nil {
 		zr.Close()
 		return nil, nil, err

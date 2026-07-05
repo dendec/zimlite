@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/menu"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
@@ -178,8 +180,18 @@ func (l *DocumentLoader) NavigateLink(url string) {
 		if strings.HasPrefix(current, "zim:") {
 			referrer = strings.TrimPrefix(current, "zim:")
 		}
-		doc, err := l.zimReader.ResolveArticle(url, referrer)
+		data, mime, err := l.zimReader.ResolveArticle(url, referrer)
 		if err == nil {
+			if !strings.HasPrefix(mime, "text/html") {
+				fmt.Fprintf(os.Stderr, "Unsupported article mime: %s\n", mime)
+				return
+			}
+			doc, err := html.Parse(bytes.NewReader(data))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Parse error: %v\n", err)
+				return
+			}
+
 			// Store full resolved path so ../ links work across levels.
 			resolved := url
 			if !strings.HasPrefix(url, "A/") && !strings.HasPrefix(url, "C/") &&

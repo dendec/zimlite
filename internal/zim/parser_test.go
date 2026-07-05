@@ -19,14 +19,14 @@ func TestOpenZIM(t *testing.T) {
 	}
 	defer r.Close()
 
-	doc, err := r.MainPage()
+	data, mime, err := r.MainPage()
 	if err != nil {
 		t.Fatalf("MainPage: %v", err)
 	}
-	if doc == nil {
-		t.Fatal("nil document")
+	if len(data) == 0 {
+		t.Fatal("empty document data")
 	}
-	if len(doc.Blocks) == 0 {
-		t.Error("main page has no blocks")
+	if mime == "" {
+		t.Error("main page has no mime type")
 	}
 }
