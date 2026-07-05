@@ -26,6 +26,7 @@ type Block interface{ blockMarker() }
 type Heading struct {
 	Level   int // 1–6
 	Content string
+	ID      string // original HTML id attribute, empty if not available
 }
 
 func (*Heading) blockMarker() {}
@@ -95,6 +96,12 @@ type Blockquote struct {
 
 func (*Blockquote) blockMarker() {}
 
+type Anchor struct {
+	ID string
+}
+
+func (*Anchor) blockMarker() {}
+
 // --- Inline types ---
 
 type Inline interface{ inlineMarker() }
@@ -158,6 +165,7 @@ type BlockVisitor interface {
 	VisitLink(l *Link)
 	VisitImage(i *Image)
 	VisitTable(t *Table)
+	VisitAnchor(a *Anchor)
 }
 
 // VisitBlocks dispatches each block to the visitor.
@@ -182,6 +190,8 @@ func VisitBlocks(blocks []Block, v BlockVisitor) {
 			v.VisitImage(b)
 		case *Table:
 			v.VisitTable(b)
+		case *Anchor:
+			v.VisitAnchor(b)
 		}
 	}
 }

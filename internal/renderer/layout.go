@@ -11,7 +11,9 @@ import (
 
 func (r *Renderer) relayout() {
 	r.ClearCache()
-	r.layout = PageLayout{}
+	r.layout = PageLayout{
+		anchorPositions: make(map[string]int32),
+	}
 
 	if r.doc == nil {
 		return
@@ -46,12 +48,21 @@ type layoutState struct {
 	maxW int32
 }
 
+func (s *layoutState) VisitAnchor(a *document.Anchor) {
+	s.r.layout.anchorPositions[a.ID] = s.y
+}
+
 func (s *layoutState) VisitHeading(h *document.Heading) {
 	fidx := headingFontIdx(h.Level)
 	inlines := []document.Inline{&document.Strong{
 		Content: []document.Inline{&document.Text{Content: h.Content}},
 	}}
+	startY := s.y
 	s.y = s.r.layoutInlines(inlines, fidx, s.r.theme.HeadingColor, s.r.theme.HeadingColor, s.maxW, s.y, 0, "")
+
+	if h.ID != "" {
+		s.r.layout.anchorPositions[h.ID] = startY
+	}
 
 	if h.Level == 1 || h.Level == 2 {
 		s.y += 4
@@ -140,13 +151,19 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 			}
 
 			runes := []rune(textLeft)
-			fitCount := 1
-			for i := 2; i <= len(runes); i++ {
-				w, _ := measureText(string(runes[:i]), fontMono, false, false, false)
-				if w > maxCodeW {
-					break
+			lo, hi := 0, len(runes)
+			for lo < hi {
+				mid := (lo + hi + 1) / 2
+				w, _ := measureText(string(runes[:mid]), fontMono, false, false, false)
+				if w <= maxCodeW {
+					lo = mid
+				} else {
+					hi = mid - 1
 				}
-				fitCount = i
+			}
+			fitCount := lo
+			if fitCount < 1 {
+				fitCount = 1
 			}
 
 			breakAt := fitCount

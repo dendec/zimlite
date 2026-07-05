@@ -147,3 +147,156 @@ func (tc *textCollector) VisitBlockquote(b *document.Blockquote)       {}
 func (tc *textCollector) VisitLink(l *document.Link)                   {}
 func (tc *textCollector) VisitImage(i *document.Image)                 {}
 func (tc *textCollector) VisitTable(t *document.Table)                 {}
+func (tc *textCollector) VisitAnchor(a *document.Anchor)               {}
+
+func TestHeadingIDs(t *testing.T) {
+	input := `<!DOCTYPE html>
+<html><body>
+<h2 id="Introduction">Introduction</h2>
+<p>Some text.</p>
+<h3 id="Early_life">Early life</h3>
+<p>More text.</p>
+<h2>No ID heading</h2>
+<p>Even more.</p>
+<h2 id="Later_career">Later career</h2>
+</body></html>`
+
+	doc, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	var headings []*document.Heading
+	for _, b := range doc.Blocks {
+		if h, ok := b.(*document.Heading); ok {
+			headings = append(headings, h)
+		}
+	}
+
+	if len(headings) != 4 {
+		t.Fatalf("expected 4 headings, got %d", len(headings))
+	}
+
+	tests := []struct {
+		idx      int
+		level    int
+		expected string
+	}{
+		{0, 2, "Introduction"},
+		{1, 3, "Early_life"},
+		{2, 2, ""}, // No ID
+		{3, 2, "Later_career"},
+	}
+
+	for _, tt := range tests {
+		if tt.idx >= len(headings) {
+			t.Errorf("heading[%d]: missing", tt.idx)
+			continue
+		}
+		h := headings[tt.idx]
+		if h.Level != tt.level {
+			t.Errorf("heading[%d]: level=%d, want=%d", tt.idx, h.Level, tt.level)
+		}
+		if h.ID != tt.expected {
+			t.Errorf("heading[%d]: ID=%q, want=%q", tt.idx, h.ID, tt.expected)
+		}
+	}
+}
+
+func TestHeadingIDsFromChildSpan(t *testing.T) {
+	input := `<!DOCTYPE html>
+<html><body>
+<h2><span id="History">History</span></h2>
+<p>Some text.</p>
+<h3><span class="mw-headline" id="Early_life">Early life</span></h3>
+<p>More text.</p>
+<h2><span id="See_also">See also</span></h2>
+</body></html>`
+
+	doc, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	var headings []*document.Heading
+	for _, b := range doc.Blocks {
+		if h, ok := b.(*document.Heading); ok {
+			headings = append(headings, h)
+		}
+	}
+
+	if len(headings) != 3 {
+		t.Fatalf("expected 3 headings, got %d", len(headings))
+	}
+
+	want := []string{"History", "Early_life", "See_also"}
+	for i, id := range want {
+		if headings[i].ID != id {
+			t.Errorf("heading[%d]: ID=%q, want=%q", i, headings[i].ID, id)
+		}
+	}
+}
+
+func TestNonHeadingAnchors(t *testing.T) {
+	input := `<!DOCTYPE html>
+<html><body>
+<h2 id="Top">Top</h2>
+<p>First paragraph<span id="ref1"></span> text here.</p>
+<p><span id="ref2"></span>Second paragraph.</p>
+<p>Third paragraph <a name="ref3"></a> more text.</p>
+</body></html>`
+
+	doc, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	wantAnchors := []string{"ref1", "ref2", "ref3"}
+	var found []string
+	for _, b := range doc.Blocks {
+		if a, ok := b.(*document.Anchor); ok {
+			found = append(found, a.ID)
+		}
+	}
+
+	if len(found) != len(wantAnchors) {
+		t.Fatalf("expected %d anchors, got %d: %v", len(wantAnchors), len(found), found)
+	}
+	for i, want := range wantAnchors {
+		if found[i] != want {
+			t.Errorf("anchor[%d]: %q, want %q", i, found[i], want)
+		}
+	}
+}
+
+func TestNonHeadingAnchorsSkipHeadingID(t *testing.T) {
+	input := `<!DOCTYPE html>
+<html><body>
+<h2><span id="SectionTitle">Section</span></h2>
+<p>Paragraph<span id="inlineRef"></span> text.</p>
+</body></html>`
+
+	doc, err := Parse(strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	var anchorIDs []string
+	var headingIDs []string
+	for _, b := range doc.Blocks {
+		if a, ok := b.(*document.Anchor); ok {
+			anchorIDs = append(anchorIDs, a.ID)
+		}
+		if h, ok := b.(*document.Heading); ok {
+			headingIDs = append(headingIDs, h.ID)
+		}
+	}
+
+	// "SectionTitle" should be on the heading, not an Anchor block
+	if len(anchorIDs) != 1 || anchorIDs[0] != "inlineRef" {
+		t.Errorf("anchors: %v, want [inlineRef]", anchorIDs)
+	}
+	if len(headingIDs) != 1 || headingIDs[0] != "SectionTitle" {
+		t.Errorf("heading IDs: %v, want [SectionTitle]", headingIDs)
+	}
+}

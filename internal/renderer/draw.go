@@ -180,16 +180,22 @@ func (r *Renderer) renderStatusBar() {
 	if leftText != "" {
 		leftW, _ := measureText(leftText, font, false, false, false)
 		if leftW > availLeft {
-			runeCount := len([]rune(leftText))
-			if runeCount > 0 {
-				for i := runeCount; i > 0; i-- {
-					try := string([]rune(leftText)[:i]) + "..."
-					tw, _ := measureText(try, font, false, false, false)
-					if tw <= availLeft {
-						leftText = try
-						break
-					}
+			runes := []rune(leftText)
+			lo, hi := 0, len(runes)
+			for lo < hi {
+				mid := (lo + hi + 1) / 2
+				try := string(runes[:mid]) + "..."
+				tw, _ := measureText(try, font, false, false, false)
+				if tw <= availLeft {
+					lo = mid
+				} else {
+					hi = mid - 1
 				}
+			}
+			if lo > 0 {
+				leftText = string(runes[:lo]) + "..."
+			} else {
+				leftText = "..."
 			}
 		}
 		r.renderStatusText(leftText, 12, availLeft)

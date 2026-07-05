@@ -5,6 +5,7 @@ package html
 import (
 	"bytes"
 	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -35,6 +36,8 @@ func Parse(r io.Reader) (*document.Document, error) {
 
 	preprocessTables(doc)
 
+	headingMeta, anchors := extractDocMeta(doc)
+
 	var buf bytes.Buffer
 	if err := html.Render(&buf, doc); err != nil {
 		return nil, err
@@ -60,7 +63,12 @@ func Parse(r io.Reader) (*document.Document, error) {
 		_ = os.WriteFile("/tmp/debug_kiwix.md", []byte(md), 0644)
 	}
 
-	return markdown.Parse(strings.NewReader(md))
+	result, err := markdown.Parse(strings.NewReader(md))
+	if err == nil {
+		assignHeadingIDs(result, headingMeta)
+		insertAnchors(result, anchors)
+	}
+	return result, err
 }
 
 func preprocessTables(doc *html.Node) {
@@ -97,7 +105,276 @@ func preprocessTables(doc *html.Node) {
 	walk(doc)
 }
 
-// MathPlugin intercepts Wikipedia math tags and formats them as inline code.
+// headingMeta holds metadata about a heading extracted from the HTML tree
+// before it gets converted to markdown (which loses id attributes).
+type headingMeta struct {
+	Level int
+	ID    string
+}
+
+// anchorInfo holds a non-heading anchor extracted from the HTML tree.
+type anchorInfo struct {
+	ID     string
+	Prefix string // first 40 chars of the nearest block ancestor text content
+}
+
+func findFirstID(n *html.Node) string {
+	if id := nodeID(n); id != "" {
+		return id
+	}
+	for c := n.FirstChild; c != nil; c = c.NextSibling {
+		if c.Type == html.ElementNode && c.Data == "span" {
+			if id := nodeID(c); id != "" {
+				return id
+			}
+		}
+	}
+	return ""
+}
+
+func nodeID(n *html.Node) string {
+	for _, attr := range n.Attr {
+		if attr.Key == "id" && attr.Val != "" {
+			return attr.Val
+		}
+	}
+	return ""
+}
+
+// extractDocMeta walks the HTML tree and returns heading metadata and non-heading
+// anchor info in document order. Anchors inside heading elements are skipped
+// (they are collected as heading metadata instead).
+func extractDocMeta(root *html.Node) ([]headingMeta, []anchorInfo) {
+	var headings []headingMeta
+	var anchors []anchorInfo
+
+	var walk func(*html.Node, bool)
+	walk = func(n *html.Node, insideHeading bool) {
+		if n.Type == html.ElementNode {
+			level := headingLevel(n.Data)
+			if level > 0 {
+				headings = append(headings, headingMeta{Level: level, ID: findFirstID(n)})
+				for c := n.FirstChild; c != nil; c = c.NextSibling {
+					walk(c, true)
+				}
+				return
+			}
+
+			if !insideHeading {
+				if id := elementAnchorID(n); id != "" {
+					prefix := blockTextPrefix(n)
+					anchors = append(anchors, anchorInfo{ID: id, Prefix: prefix})
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c, insideHeading)
+		}
+	}
+	walk(root, false)
+	return headings, anchors
+}
+
+func headingLevel(tag string) int {
+	switch tag {
+	case "h1":
+		return 1
+	case "h2":
+		return 2
+	case "h3":
+		return 3
+	case "h4":
+		return 4
+	case "h5":
+		return 5
+	case "h6":
+		return 6
+	}
+	return 0
+}
+
+func elementAnchorID(n *html.Node) string {
+	if n.Data == "span" {
+		return nodeID(n)
+	}
+	if n.Data == "a" {
+		for _, attr := range n.Attr {
+			if attr.Key == "name" && attr.Val != "" {
+				return attr.Val
+			}
+		}
+	}
+	return ""
+}
+
+func blockTextPrefix(anchorNode *html.Node) string {
+	parent := anchorNode.Parent
+	if parent == nil {
+		return ""
+	}
+	text := collectTextExcluding(parent, anchorNode)
+	text = strings.TrimSpace(text)
+	text = truncateText(text, 40)
+	return text
+}
+
+// collectTextExcluding walks n's subtree and collects all text nodes,
+// excluding the subtree rooted at exclude. The anchor's surrounding text
+// (both before and after) is needed for reliable prefix matching.
+func collectTextExcluding(n, exclude *html.Node) string {
+	var buf strings.Builder
+	var walk func(*html.Node)
+	walk = func(node *html.Node) {
+		if node == exclude {
+			return
+		}
+		if node.Type == html.TextNode {
+			buf.WriteString(node.Data)
+		}
+		for c := node.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(n)
+	return buf.String()
+}
+
+// assignHeadingIDs consumes headingMeta entries in order and assigns IDs to
+// matching Heading blocks in the document. Empty-ID entries are consumed normally
+// (1:1 correspondence is preserved).
+func assignHeadingIDs(doc *document.Document, meta []headingMeta) {
+	i := 0
+	for _, block := range doc.Blocks {
+		h, ok := block.(*document.Heading)
+		if !ok {
+			continue
+		}
+		for i < len(meta) && meta[i].Level != h.Level {
+			i++
+		}
+		if i < len(meta) {
+			h.ID = meta[i].ID
+			i++
+		}
+	}
+}
+
+// insertAnchors inserts Anchor blocks into the document for non-heading anchor
+// elements. Each anchorInfo has a text Prefix collected from the nearest block
+// ancestor. The function scans non-heading blocks and inserts an Anchor before
+// the first block whose text content starts with the prefix.
+// Unmatched anchors are inserted at the end of the document.
+func insertAnchors(doc *document.Document, anchors []anchorInfo) {
+	if len(anchors) == 0 {
+		return
+	}
+
+	type blockText struct {
+		idx  int
+		text string
+	}
+	var blocks []blockText
+	for i, b := range doc.Blocks {
+		if _, ok := b.(*document.Heading); ok {
+			continue
+		}
+		blocks = append(blocks, blockText{idx: i, text: docBlockTextPrefix(b)})
+	}
+
+	// Match anchors to blocks by text prefix and record insertions.
+	// anchorIdx → block index in doc.Blocks where it should be inserted before.
+	inserts := make(map[int][]string)
+	matched := make(map[string]bool)
+
+	for _, a := range anchors {
+		if a.Prefix == "" {
+			continue
+		}
+		for _, b := range blocks {
+			if b.text != "" && strings.HasPrefix(b.text, a.Prefix) {
+				inserts[b.idx] = append(inserts[b.idx], a.ID)
+				matched[a.ID] = true
+				break
+			}
+		}
+	}
+
+	// Unmatched anchors go at the end.
+	var unmatchedIDs []string
+	for _, a := range anchors {
+		if !matched[a.ID] {
+			unmatchedIDs = append(unmatchedIDs, a.ID)
+		}
+	}
+	if len(unmatchedIDs) > 0 {
+		log.Printf("html: %d of %d anchors unmatched, appending at document end: %v",
+			len(unmatchedIDs), len(anchors), unmatchedIDs)
+	}
+
+	// Build new block list with anchors inserted.
+	var newBlocks []document.Block
+	for i, b := range doc.Blocks {
+		if ids, ok := inserts[i]; ok {
+			for _, id := range ids {
+				newBlocks = append(newBlocks, &document.Anchor{ID: id})
+			}
+		}
+		newBlocks = append(newBlocks, b)
+	}
+	for _, id := range unmatchedIDs {
+		newBlocks = append(newBlocks, &document.Anchor{ID: id})
+	}
+
+	doc.Blocks = newBlocks
+}
+
+func docBlockTextPrefix(b document.Block) string {
+	switch b := b.(type) {
+	case *document.Paragraph:
+		return paragraphText(b, 40)
+	case *document.CodeBlock:
+		text := strings.TrimSpace(b.Code)
+		text = truncateText(text, 40)
+		return text
+	case *document.Table:
+		if len(b.Rows) > 0 && len(b.Rows[0].Cells) > 0 {
+			return paragraphTextInline(b.Rows[0].Cells[0].Inlines, 40)
+		}
+	case *document.Blockquote:
+		if len(b.Blocks) > 0 {
+			return docBlockTextPrefix(b.Blocks[0])
+		}
+	case *document.List:
+		if len(b.Entries) > 0 && len(b.Entries[0].Item) > 0 {
+			return paragraphTextInline(b.Entries[0].Item, 40)
+		}
+	}
+	return ""
+}
+
+func paragraphText(p *document.Paragraph, maxLen int) string {
+	return paragraphTextInline(p.Inlines, maxLen)
+}
+
+func paragraphTextInline(inlines []document.Inline, maxLen int) string {
+	var buf strings.Builder
+	for _, inl := range inlines {
+		if t, ok := inl.(*document.Text); ok {
+			buf.WriteString(t.Content)
+		}
+	}
+	text := strings.TrimSpace(buf.String())
+	text = truncateText(text, maxLen)
+	return text
+}
+
+func truncateText(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) > maxRunes {
+		return string(runes[:maxRunes])
+	}
+	return s
+}
 func MathPlugin() converter.Plugin {
 	return &mathPlugin{}
 }

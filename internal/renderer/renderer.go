@@ -3,6 +3,7 @@ package renderer
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
@@ -132,15 +133,16 @@ type tableGridEntry struct {
 }
 
 type PageLayout struct {
-	lines        []lineEntry
-	links        []linkEntry
-	codeRanges   []codeBlockRange
-	codeSpans    []codeSpanRange
-	blockquotes  []sdlRect
-	imageEntries []imageEntry
-	tables       []tableGridEntry
-	totalHeight  int32
-	contentWidth int32
+	lines           []lineEntry
+	links           []linkEntry
+	codeRanges      []codeBlockRange
+	codeSpans       []codeSpanRange
+	blockquotes     []sdlRect
+	imageEntries    []imageEntry
+	tables          []tableGridEntry
+	totalHeight     int32
+	contentWidth    int32
+	anchorPositions map[string]int32
 }
 
 // New creates a Renderer.
@@ -475,13 +477,37 @@ func (r *Renderer) SetScrollY(scrollY int32) {
 }
 
 func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
-	// 1. Try to find a heading
+	if y, ok := r.layout.anchorPositions[anchor]; ok {
+		return y, true
+	}
+
+	if decoded, err := url.QueryUnescape(anchor); err == nil && decoded != anchor {
+		if y, ok := r.layout.anchorPositions[decoded]; ok {
+			return y, true
+		}
+		anchor = decoded
+	}
+
+	isHeadingFont := func(f FontKind) bool {
+		return f == FontH1 || f == FontH2 || f == FontH3 ||
+			f == FontH4 || f == FontH5 || f == FontH6
+	}
 	headingText := strings.ReplaceAll(strings.ToLower(anchor), "_", " ")
-	for _, line := range r.layout.lines {
-		if line.fontIdx == FontH1 || line.fontIdx == FontH2 || line.fontIdx == FontH3 || line.fontIdx == FontH4 {
-			if strings.ToLower(line.text) == headingText {
-				return line.y, true
-			}
+	for i := 0; i < len(r.layout.lines); {
+		line := r.layout.lines[i]
+		if !isHeadingFont(line.fontIdx) {
+			i++
+			continue
+		}
+		startY := line.y
+		var parts []string
+		for i < len(r.layout.lines) && isHeadingFont(r.layout.lines[i].fontIdx) {
+			parts = append(parts, r.layout.lines[i].text)
+			i++
+		}
+		joined := strings.Join(parts, " ")
+		if strings.ToLower(strings.TrimSpace(joined)) == headingText {
+			return startY, true
 		}
 	}
 
