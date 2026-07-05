@@ -296,7 +296,7 @@ func (app *App) navigateLink(url string) {
 		return
 	}
 
-	if app.zimReader != nil {
+	if app.zimReader != nil && !strings.HasPrefix(url, "virtual:") {
 		var referrer string
 		current := app.navigator.Current()
 		if strings.HasPrefix(current, "zim:") {
