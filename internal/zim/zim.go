@@ -46,6 +46,23 @@ func (r *Reader) Close() {
 	}
 }
 
+// ArticleCount returns the number of articles in the archive.
+func (r *Reader) ArticleCount() int {
+	return int(C.zim_get_article_count(r.handle))
+}
+
+// TitleByIndex returns the title and path of the article at the given title-order index.
+func (r *Reader) TitleByIndex(idx int) (title string, path string, err error) {
+	entry := C.zim_get_entry_by_title_index(r.handle, C.int(idx))
+	if entry == nil {
+		return "", "", fmt.Errorf("no entry at index %d", idx)
+	}
+	defer C.zim_entry_free(entry)
+	title = C.GoString(C.zim_entry_get_title(entry))
+	path = C.GoString(C.zim_entry_get_path(entry))
+	return title, path, nil
+}
+
 // MainPage returns the main article as a Document.
 func (r *Reader) MainPage() (*document.Document, error) {
 	entry := C.zim_get_main_entry(r.handle)

@@ -10,11 +10,12 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-// DocRenderer is the interface for rendering documents.
+// DocRenderer is the interface for rendering documents and tree views.
 type DocRenderer interface {
 	SetDocument(doc *document.Document)
 	Relayout()
@@ -26,6 +27,7 @@ type DocRenderer interface {
 	ScrollBy(delta int32)
 	ScrollPageUp()
 	ScrollPageDown()
+	SetTextLines(lines []string)
 }
 
 // DocNavigator manages document history (back/forward).
@@ -35,13 +37,22 @@ type DocNavigator interface {
 	Current() string
 }
 
+type appMode int
+
+const (
+	modeDoc  appMode = iota
+	modeTree
+)
+
 // App is the top-level application state.
 type App struct {
 	renderer  DocRenderer
 	navigator DocNavigator
 	running   bool
+	mode      appMode
 	docCache  map[string]*document.Document
-	zimReader *zim.Reader // non-nil when a ZIM archive is open
+	zimReader *zim.Reader
+	navState  *trie.NavState
 }
 
 // New creates the app with injected dependencies.
@@ -50,6 +61,7 @@ func New(r DocRenderer, n DocNavigator) *App {
 		renderer:  r,
 		navigator: n,
 		running:   false,
+		mode:      modeDoc,
 		docCache:  make(map[string]*document.Document),
 	}
 }
@@ -59,6 +71,59 @@ func (app *App) shutdown() {
 		app.zimReader.Close()
 		app.zimReader = nil
 	}
+	app.navState = nil
+}
+
+func (app *App) enterTreeMode() {
+	if app.zimReader == nil {
+		return
+	}
+	count := app.zimReader.ArticleCount()
+	if count == 0 {
+		return
+	}
+	root := trie.Root(app.zimReader, count)
+	app.navState = trie.NewNavState(root)
+	app.mode = modeTree
+	app.renderTree()
+}
+
+func (app *App) exitTreeMode() {
+	app.mode = modeDoc
+	// Restore last viewed document from history.
+	prevPath := app.navigator.Current()
+	if doc, ok := app.docCache[prevPath]; ok {
+		app.renderer.SetDocument(doc)
+		app.renderer.Relayout()
+	}
+}
+
+func (app *App) renderTree() {
+	if app.navState == nil {
+		return
+	}
+	lines := app.navState.VisibleNodes()
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		indent := strings.Repeat("  ", l.Indent)
+		prefix := "  "
+		if l.IsLeaf {
+			prefix = "• "
+		} else if l.IsExpanded {
+			prefix = "▾ "
+		} else {
+			prefix = "▸ "
+		}
+		entry := indent + prefix + l.Label
+		if l.Suffix != "" {
+			entry += " (" + l.Suffix + ")"
+		}
+		if l.IsCursor {
+			entry = ">" + entry[1:]
+		}
+		out = append(out, entry)
+	}
+	app.renderer.SetTextLines(out)
 }
 
 // OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim.
@@ -83,6 +148,7 @@ func (app *App) OpenFile(path string) error {
 		app.docCache[absPath] = doc
 	}
 
+	app.mode = modeDoc
 	app.renderer.SetDocument(doc)
 	app.navigator.Open(absPath)
 	app.renderer.Relayout()
@@ -106,7 +172,7 @@ func (app *App) openFile(path string) (*document.Document, error) {
 }
 
 func (app *App) openZIM(path string) (*document.Document, error) {
-	app.shutdown() // close previous ZIM if any
+	app.shutdown()
 
 	zr, err := zim.Open(path)
 	if err != nil {
@@ -117,21 +183,18 @@ func (app *App) openZIM(path string) (*document.Document, error) {
 	return zr.MainPage()
 }
 
-// navigateLink follows a link URL. For ZIM archives, resolves internally.
 func (app *App) navigateLink(url string) {
 	if app.zimReader != nil {
 		doc, err := app.zimReader.ResolveArticle(url)
 		if err == nil {
+			app.mode = modeDoc
 			app.renderer.SetDocument(doc)
 			app.navigator.Open("zim:" + url)
 			app.renderer.Relayout()
 			return
 		}
-		// External URLs or not-found — silent skip.
 		return
 	}
-
-	// No ZIM open: try local file.
 	if err := app.OpenFile(url); err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot open: %s (%v)\n", url, err)
 	}
@@ -168,44 +231,102 @@ func (app *App) processEvent(event sdl.Event) {
 			return
 		}
 		sc := e.Keysym.Scancode
+
+		// Global keys (work in both modes).
 		switch sc {
-		case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
-			if app.renderer.LinkCount() > 0 {
-				app.renderer.SelectPrevLink()
-			} else {
-				app.renderer.ScrollBy(-40)
-			}
-		case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
-			if app.renderer.LinkCount() > 0 {
-				app.renderer.SelectNextLink()
-			} else {
-				app.renderer.ScrollBy(40)
-			}
-		case sdl.SCANCODE_PAGEUP:
-			app.renderer.ScrollPageUp()
-		case sdl.SCANCODE_PAGEDOWN:
-			app.renderer.ScrollPageDown()
-		case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
-			url := app.renderer.SelectedLinkURL()
-			if url != "" {
-				app.navigateLink(url)
-			}
-		case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
-			if app.navigator.Back() {
-				prevPath := app.navigator.Current()
-				if doc, ok := app.docCache[prevPath]; ok {
-					app.renderer.SetDocument(doc)
-					app.renderer.Relayout()
-				}
-			}
 		case sdl.SCANCODE_Q:
 			app.running = false
+			return
+		case sdl.SCANCODE_RETURN2, sdl.SCANCODE_T: // Start / T = toggle tree mode
+			app.toggleMode()
+			return
+		}
+
+		// Mode-specific handling.
+		if app.mode == modeTree {
+			app.processTreeKey(sc)
+		} else {
+			app.processDocKey(sc)
 		}
 
 	case *sdl.WindowEvent:
 		if e.Event == sdl.WINDOWEVENT_RESIZED ||
 			e.Event == sdl.WINDOWEVENT_SIZE_CHANGED {
 			app.renderer.Relayout()
+		}
+	}
+}
+
+func (app *App) toggleMode() {
+	if app.zimReader == nil {
+		return // no ZIM open, tree unavailable
+	}
+	if app.mode == modeTree {
+		app.exitTreeMode()
+	} else {
+		app.enterTreeMode()
+	}
+}
+
+func (app *App) processTreeKey(sc sdl.Scancode) {
+	switch sc {
+	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
+		app.navState.MoveUp()
+		app.renderTree()
+	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
+		app.navState.MoveDown()
+		app.renderTree()
+	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_KP_6, sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
+		if app.navState.CursorIsLeaf() {
+			// Open article.
+			path := app.navState.CursorPath()
+			if path != "" {
+				app.navigateLink(path)
+			}
+		} else {
+			app.navState.ExpandCurrent()
+			app.renderTree()
+		}
+	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4, sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
+		app.navState.CollapseCurrent()
+		app.renderTree()
+	case sdl.SCANCODE_PAGEUP:
+		app.renderer.ScrollPageUp()
+	case sdl.SCANCODE_PAGEDOWN:
+		app.renderer.ScrollPageDown()
+	}
+}
+
+func (app *App) processDocKey(sc sdl.Scancode) {
+	switch sc {
+	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
+		if app.renderer.LinkCount() > 0 {
+			app.renderer.SelectPrevLink()
+		} else {
+			app.renderer.ScrollBy(-40)
+		}
+	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
+		if app.renderer.LinkCount() > 0 {
+			app.renderer.SelectNextLink()
+		} else {
+			app.renderer.ScrollBy(40)
+		}
+	case sdl.SCANCODE_PAGEUP:
+		app.renderer.ScrollPageUp()
+	case sdl.SCANCODE_PAGEDOWN:
+		app.renderer.ScrollPageDown()
+	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
+		url := app.renderer.SelectedLinkURL()
+		if url != "" {
+			app.navigateLink(url)
+		}
+	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
+		if app.navigator.Back() {
+			prevPath := app.navigator.Current()
+			if doc, ok := app.docCache[prevPath]; ok {
+				app.renderer.SetDocument(doc)
+				app.renderer.Relayout()
+			}
 		}
 	}
 }

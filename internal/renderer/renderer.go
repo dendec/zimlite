@@ -188,6 +188,34 @@ func (r *Renderer) Relayout() {
 	r.relayout()
 }
 
+// --- Text line mode (for tree view, etc.) ---
+
+// SetTextLines configures the renderer for simple text-line display mode.
+func (r *Renderer) SetTextLines(lines []string) {
+	r.lines = nil
+	r.links = nil
+	r.codeRanges = nil
+	r.doc = nil
+	r.selectedLink = -1
+	r.scrollY = 0
+
+	font := r.fonts[FontBody].font
+	y := r.marginY
+	for _, text := range lines {
+		tw, th := r.measure(text, font)
+		r.lines = append(r.lines, lineEntry{
+			text: text, fontIdx: FontBody, color: r.textColor,
+			x: r.marginX, y: y, w: tw, h: th,
+		})
+		y += th + r.lineSpacing
+	}
+	if y < r.height {
+		y = r.height
+	}
+	r.totalHeight = y
+	r.clampScroll()
+}
+
 // --- Link API ---
 
 func (r *Renderer) LinkCount() int               { return len(r.links) }
