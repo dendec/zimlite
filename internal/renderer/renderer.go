@@ -38,6 +38,11 @@ type codeSpanRange struct {
 	x, y, w, h int32
 }
 
+type emojiCacheKey struct {
+	hex  string
+	size int32
+}
+
 const (
 	statusBarHeight        = 24
 	maxTextureCacheEntries = 1500
@@ -84,6 +89,7 @@ type Renderer struct {
 
 	textureCache      map[textureKey]*sdl.Texture
 	textureCacheOrder []textureKey
+	emojiCache        map[emojiCacheKey]*sdl.Texture
 	imgManager        *ImageManager
 
 	baseFontSize        int
@@ -105,6 +111,8 @@ type lineEntry struct {
 	isItalic bool
 	isCode   bool
 	isCursor bool
+	isEmoji  bool
+	emojiHex string
 }
 
 type linkEntry struct {
@@ -182,6 +190,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		theme:        LightTheme(),
 		light:        true,
 		textureCache: make(map[textureKey]*sdl.Texture),
+		emojiCache:   make(map[emojiCacheKey]*sdl.Texture),
 		imgManager:   NewImageManager(sdlRend),
 		baseFontSize: baseFontSize,
 		fontPath:     fontPath,
@@ -221,6 +230,14 @@ func (r *Renderer) ClearCache() {
 		}
 	}
 	r.textureCacheOrder = nil
+	if r.emojiCache != nil {
+		for k, tex := range r.emojiCache {
+			if tex != nil {
+				tex.Destroy()
+			}
+			delete(r.emojiCache, k)
+		}
+	}
 	if r.imgManager != nil {
 		r.imgManager.ClearCache()
 	}
@@ -301,7 +318,7 @@ func (r *Renderer) SetTextLines(lines []string) {
 			isCursor = true
 			displayText = text[1:]
 		}
-		tw, th := measureText(displayText, font, false, false)
+		tw, th := measureText(displayText, font, false, false, false)
 		r.layout.lines = append(r.layout.lines, lineEntry{
 			text: displayText, fontIdx: FontBody, color: r.theme.TextColor,
 			x: r.marginX, y: y, w: tw, h: th,
@@ -538,7 +555,7 @@ func (f *sdlFont) Measure(text string, isBold, isItalic, isCode bool) (int32, in
 	if font == nil {
 		return 0, 0
 	}
-	return measureText(text, font, isBold, isItalic)
+	return measureText(text, font, isBold, isItalic, isCode)
 }
 
 // Zoom adjusts baseFontSize by delta and re-initializes fonts at runtime.

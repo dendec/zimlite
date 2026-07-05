@@ -3,6 +3,7 @@ package renderer
 import (
 	_ "embed"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -26,7 +27,7 @@ func headingFontIdx(level int) FontKind {
 	return FontBody
 }
 
-func measureText(text string, font *ttf.Font, isBold, isItalic bool) (int32, int32) {
+func measureText(text string, font *ttf.Font, isBold, isItalic, isCode bool) (int32, int32) {
 	if font == nil {
 		return 0, 0
 	}
@@ -44,6 +45,13 @@ func measureText(text string, font *ttf.Font, isBold, isItalic bool) (int32, int
 
 	if text == "" {
 		return 0, int32(font.Height())
+	}
+	if !isCode {
+		runes := []rune(text)
+		if _, consumed, ok := document.EmojiSequence(runes, 0); ok && consumed == len(runes) {
+			a := int32(font.Ascent())
+			return a, a
+		}
 	}
 	w, h, err := font.SizeUTF8(text)
 	if err != nil {

@@ -104,4 +104,47 @@ This image does not exist, so it should render the fallback alt text:
 >    2. Sub-step 3.2
 
 ---
+## 8. Emoji Rendering
+
+### 8.1 Basic Emoji
+😀😁😂🤣😃😄😅😆😇😈😉😊😋😌😍😎😏
+
+### 8.2 Emoji in Sentences
+This is **awesome** 🚀! I love kiwix-sdl ❤️. Click here ✅ to continue.
+The weather is ☀️⛅🌧️❄️. Let's go ⛰️🏖️🌋!
+
+### 8.3 Emoji Mixed with Bold/Italic
+*Italic emoji test* 🔥 **Bold emoji test** ⭐ ***Both*** 💎
+
+### 8.4 Flags
+🇺🇸🇬🇧🇫🇷🇩🇪🇮🇹🇪🇸🇯🇵🇷🇺🇨🇳🇧🇷🇦🇺🇨🇦
+
+### 8.5 ZWJ Sequences (Families)
+- 👨‍👩‍👧‍👦 Family: man, woman, girl, boy
+- 👨‍👩‍👧 Family: man, woman, girl
+- 👩‍👩‍👧‍👧 Two women, two girls
+- 👨‍👨‍👦‍👦 Two men, two boys
+
+### 8.6 Skin Tones
+👍👍🏻👍🏼👍🏽👍🏾👍🏿
+👋👋🏻👋🏼👋🏽👋🏾👋🏿
+🖐️🖐🏻🖐🏼🖐🏽🖐🏾🖐🏿
+
+### 8.7 Keycaps
+0️⃣1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣8️⃣9️⃣🔟
+#️⃣*️⃣
+
+### 8.8 Inline Emoji
+To test word-wrapping with emoji: Lorem ipsum 😀 dolor sit amet 🔥 consectetur adipiscing elit 🚀 sed do eiusmod tempor ❤️ incididunt ut labore ⭐ et dolore magna aliqua 🎉
+
+### 8.9 Emoji in Lists
+- 😀 Smiley face
+- 🚀 Rocket
+- ❤️ Red heart
+- ⭐ Star
+  - 🎂 Birthday cake
+  - 🎁 Gift
+    - 💎 Gem stone
+
+---
 End of test suite.

@@ -3,6 +3,7 @@ package renderer
 import (
 	"fmt"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/svg"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -90,46 +91,11 @@ func (r *Renderer) renderLines() {
 			}
 			continue
 		}
-		key := textureKey{text: line.text, fontIdx: line.fontIdx, color: line.color, isBold: line.isBold, isItalic: line.isItalic, isCode: line.isCode}
-		tex, ok := r.textureCache[key]
-		if !ok {
-			var font *ttf.Font
-			if line.isCode {
-				font = r.fonts[FontMono].font
-			} else {
-				font = r.fonts[line.fontIdx].font
-			}
-			if font == nil {
-				continue
-			}
-			style := ttf.STYLE_NORMAL
-			if line.isBold && line.isItalic {
-				style = ttf.STYLE_BOLD | ttf.STYLE_ITALIC
-			} else if line.isBold {
-				style = ttf.STYLE_BOLD
-			} else if line.isItalic {
-				style = ttf.STYLE_ITALIC
-			}
-			oldStyle := font.GetStyle()
-			font.SetStyle(style)
-			surf, err := font.RenderUTF8Blended(line.text, line.color)
-			font.SetStyle(oldStyle)
-			if err != nil {
-				continue
-			}
-			tex, err = r.sdlRenderer.CreateTextureFromSurface(surf)
-			surf.Free()
-			if err != nil {
-				continue
-			}
-			r.textureCache[key] = tex
-			r.textureCacheOrder = append(r.textureCacheOrder, key)
-			if len(r.textureCache) > maxTextureCacheEntries {
-				r.evictTextureCache()
-			}
+		tex := r.renderLineTexture(line)
+		if tex != nil {
+			_, _, tw, th, _ := tex.Query()
+			r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: line.x, Y: screenY, W: tw, H: th})
 		}
-		_, _, tw, th, _ := tex.Query()
-		r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: line.x, Y: screenY, W: tw, H: th})
 	}
 }
 
@@ -217,7 +183,7 @@ func (r *Renderer) renderStatusBar() {
 		return
 	}
 
-	rightW, _ := measureText(rightText, font, false, false)
+	rightW, _ := measureText(rightText, font, false, false, false)
 	gap := int32(24)
 	rightX := r.width - rightW - 12
 	availLeft := rightX - gap - 12
@@ -227,13 +193,13 @@ func (r *Renderer) renderStatusBar() {
 
 	leftText := r.docTitle
 	if leftText != "" {
-		leftW, _ := measureText(leftText, font, false, false)
+		leftW, _ := measureText(leftText, font, false, false, false)
 		if leftW > availLeft {
 			runeCount := len([]rune(leftText))
 			if runeCount > 0 {
 				for i := runeCount; i > 0; i-- {
 					try := string([]rune(leftText)[:i]) + "..."
-					tw, _ := measureText(try, font, false, false)
+					tw, _ := measureText(try, font, false, false, false)
 					if tw <= availLeft {
 						leftText = try
 						break
@@ -332,6 +298,80 @@ func (r *Renderer) renderScrollbar() {
 	// Draw thumb
 	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, 200)
 	r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - 6, Y: thumbY, W: 6, H: thumbH})
+}
+
+func (r *Renderer) renderLineTexture(line lineEntry) *sdl.Texture {
+	if line.isEmoji {
+		return r.renderEmojiTexture(line)
+	}
+	return r.renderTextTexture(line)
+}
+
+func (r *Renderer) renderEmojiTexture(line lineEntry) *sdl.Texture {
+	sz := line.h
+	if sz < 4 {
+		sz = 4
+	}
+	ek := emojiCacheKey{hex: line.emojiHex, size: sz}
+	tex := r.emojiCache[ek]
+	if tex != nil {
+		return tex
+	}
+	data, err := emojiFS.ReadFile("assets/emoji/" + line.emojiHex + ".svg")
+	if err != nil {
+		return nil
+	}
+	img := svg.RenderToSize(data, int(sz), int(sz))
+	if img == nil {
+		return nil
+	}
+	return r.createEmojiTexture(img, line.emojiHex, sz)
+}
+
+func (r *Renderer) renderTextTexture(line lineEntry) *sdl.Texture {
+	key := textureKey{
+		text: line.text, fontIdx: line.fontIdx, color: line.color,
+		isBold: line.isBold, isItalic: line.isItalic, isCode: line.isCode,
+	}
+	tex := r.textureCache[key]
+	if tex != nil {
+		return tex
+	}
+	var font *ttf.Font
+	if line.isCode {
+		font = r.fonts[FontMono].font
+	} else {
+		font = r.fonts[line.fontIdx].font
+	}
+	if font == nil {
+		return nil
+	}
+	style := ttf.STYLE_NORMAL
+	if line.isBold && line.isItalic {
+		style = ttf.STYLE_BOLD | ttf.STYLE_ITALIC
+	} else if line.isBold {
+		style = ttf.STYLE_BOLD
+	} else if line.isItalic {
+		style = ttf.STYLE_ITALIC
+	}
+	oldStyle := font.GetStyle()
+	font.SetStyle(style)
+	surf, err := font.RenderUTF8Blended(line.text, line.color)
+	font.SetStyle(oldStyle)
+	if err != nil {
+		return nil
+	}
+	tex, err = r.sdlRenderer.CreateTextureFromSurface(surf)
+	surf.Free()
+	if err != nil {
+		return nil
+	}
+	r.textureCache[key] = tex
+	r.textureCacheOrder = append(r.textureCacheOrder, key)
+	if len(r.textureCache) > maxTextureCacheEntries {
+		r.evictTextureCache()
+	}
+	return tex
 }
 
 // Type aliases to keep sdl imports contained.

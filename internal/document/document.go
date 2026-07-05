@@ -207,6 +207,8 @@ type Word struct {
 	Text        string
 	IsSpace     bool
 	IsImage     bool
+	IsEmoji     bool
+	EmojiHex    string
 	ImageURL    string
 	PixW        int32
 	PixH        int32
@@ -240,15 +242,22 @@ func visitInlinesStyled(inlines []Inline, v *InlineWordVisitor, isBold, isItalic
 		case *Text:
 			tokens := tokenizeText(i.Content)
 			for _, t := range tokens {
-				if t == " " {
+				if t.IsSpace {
 					v.Words = append(v.Words, Word{
 						Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH,
 						IsBold: isBold, IsItalic: isItalic, IsCode: isCode, LinkID: linkID,
 					})
-				} else {
-					w, h := v.Font.Measure(t, isBold, isItalic, isCode)
+				} else if t.IsEmoji {
+					w, h := v.Font.Measure(t.Text, isBold, isItalic, isCode)
 					v.Words = append(v.Words, Word{
-						Text: t, PixW: w, PixH: h, LinkID: linkID,
+						Text: t.Text, IsEmoji: true, EmojiHex: t.EmojiHex,
+						PixW: w, PixH: h, LinkID: linkID,
+						IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
+					})
+				} else {
+					w, h := v.Font.Measure(t.Text, isBold, isItalic, isCode)
+					v.Words = append(v.Words, Word{
+						Text: t.Text, PixW: w, PixH: h, LinkID: linkID,
 						IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
 					})
 				}
@@ -284,15 +293,15 @@ func visitInlinesStyled(inlines []Inline, v *InlineWordVisitor, isBold, isItalic
 		case *Code:
 			tokens := tokenizeText(i.Content)
 			for _, t := range tokens {
-				if t == " " {
+				if t.IsSpace {
 					v.Words = append(v.Words, Word{
 						Text: " ", IsSpace: true, PixW: v.SpaceW, PixH: v.SpaceH,
 						IsBold: isBold, IsItalic: isItalic, IsCode: true, LinkID: linkID,
 					})
 				} else {
-					w, h := v.Font.Measure(t, isBold, isItalic, true)
+					w, h := v.Font.Measure(t.Text, isBold, isItalic, true)
 					v.Words = append(v.Words, Word{
-						Text: t, PixW: w, PixH: h, LinkID: linkID,
+						Text: t.Text, PixW: w, PixH: h, LinkID: linkID,
 						IsBold: isBold, IsItalic: isItalic, IsCode: true,
 					})
 				}
@@ -311,31 +320,47 @@ func visitInlinesStyled(inlines []Inline, v *InlineWordVisitor, isBold, isItalic
 	}
 }
 
-func tokenizeText(text string) []string {
-	var tokens []string
-	var cur string
-	isSpace := false
-	for _, r := range text {
+type textToken struct {
+	Text     string
+	IsSpace  bool
+	IsEmoji  bool
+	EmojiHex string
+}
+
+func tokenizeText(text string) []textToken {
+	var tokens []textToken
+	runes := []rune(text)
+	n := len(runes)
+	i := 0
+	for i < n {
+		r := runes[i]
 		if r == ' ' || r == '\t' || r == '\n' {
-			if !isSpace {
-				if cur != "" {
-					tokens = append(tokens, cur)
-					cur = ""
-				}
-				isSpace = true
+			tokens = append(tokens, textToken{Text: " ", IsSpace: true})
+			for i < n && (runes[i] == ' ' || runes[i] == '\t' || runes[i] == '\n') {
+				i++
 			}
-		} else {
-			if isSpace {
-				tokens = append(tokens, " ")
-				isSpace = false
-			}
-			cur += string(r)
+			continue
 		}
-	}
-	if isSpace {
-		tokens = append(tokens, " ")
-	} else if cur != "" {
-		tokens = append(tokens, cur)
+		if hex, consumed, ok := EmojiSequence(runes, i); ok {
+			tokens = append(tokens, textToken{
+				Text:     string(runes[i : i+consumed]),
+				IsEmoji:  true,
+				EmojiHex: hex,
+			})
+			i += consumed
+			continue
+		}
+		start := i
+		for i < n && runes[i] != ' ' && runes[i] != '\t' && runes[i] != '\n' && !canStartEmoji(runes[i]) {
+			i++
+		}
+		if i > start {
+			tokens = append(tokens, textToken{Text: string(runes[start:i])})
+		} else {
+			// Safety: advance by 1 if nothing matched (should not happen).
+			tokens = append(tokens, textToken{Text: string(runes[i])})
+			i++
+		}
 	}
 	return tokens
 }

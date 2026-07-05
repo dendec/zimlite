@@ -113,7 +113,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	}
 
 	addLine := func(text string) {
-		tw, th := measureText(text, fontMono, false, false)
+		tw, th := measureText(text, fontMono, false, false, false)
 		if th == 0 {
 			th = 18
 		}
@@ -133,7 +133,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 
 		textLeft := cl
 		for len(textLeft) > 0 {
-			tw, _ := measureText(textLeft, fontMono, false, false)
+			tw, _ := measureText(textLeft, fontMono, false, false, false)
 			if tw <= maxCodeW {
 				addLine(textLeft)
 				break
@@ -142,7 +142,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 			runes := []rune(textLeft)
 			fitCount := 1
 			for i := 2; i <= len(runes); i++ {
-				w, _ := measureText(string(runes[:i]), fontMono, false, false)
+				w, _ := measureText(string(runes[:i]), fontMono, false, false, false)
 				if w > maxCodeW {
 					break
 				}
@@ -253,7 +253,7 @@ func (s *layoutState) VisitImage(i *document.Image) {
 
 	// Fallback to alt-text if image load/decode fails
 	font := s.r.fonts[FontBody].font
-	tw, th := measureText(alt, font, false, false)
+	tw, th := measureText(alt, font, false, false, false)
 	s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 		text: alt, fontIdx: FontBody, color: sdlColor{R: 150, G: 150, B: 150, A: 255},
 		x: s.r.marginX, y: s.y, w: tw, h: th,
@@ -455,7 +455,7 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 
 		if isFirstLine && prefix != "" {
 			pFont := r.fonts[fidx].font
-			pw, ph := measureText(prefix, pFont, false, false)
+			pw, ph := measureText(prefix, pFont, false, false, false)
 			r.layout.lines = append(r.layout.lines, lineEntry{
 				text: prefix, fontIdx: fidx, color: textColor,
 				x: currX, y: y, w: pw, h: ph,
@@ -475,7 +475,7 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 		}
 
 		for _, w := range lineWords {
-			if w.Text == "" && !w.IsImage {
+			if w.Text == "" && !w.IsImage && !w.IsEmoji {
 				continue
 			}
 
@@ -484,6 +484,17 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 			if w.IsImage {
 				r.layout.imageEntries = append(r.layout.imageEntries, imageEntry{
 					x: currX, y: wordY, w: w.PixW, h: w.PixH, url: w.ImageURL,
+				})
+			} else if w.IsEmoji {
+				wColor := textColor
+				if w.LinkID != 0 {
+					wColor = linkColor
+				}
+
+				r.layout.lines = append(r.layout.lines, lineEntry{
+					text: w.Text, fontIdx: fidx, color: wColor,
+					x: currX, y: wordY, w: w.PixW, h: w.PixH,
+					isEmoji: true, emojiHex: w.EmojiHex,
 				})
 			} else {
 				wColor := textColor
