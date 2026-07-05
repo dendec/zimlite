@@ -10,11 +10,11 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
 // DocRenderer is the interface for rendering documents.
-// Concrete implementations live in internal/renderer.
 type DocRenderer interface {
 	SetDocument(doc *document.Document)
 	Relayout()
@@ -29,7 +29,6 @@ type DocRenderer interface {
 }
 
 // DocNavigator manages document history (back/forward).
-// Concrete implementation lives in internal/navigation.
 type DocNavigator interface {
 	Open(id string)
 	Back() bool
@@ -42,6 +41,7 @@ type App struct {
 	navigator DocNavigator
 	running   bool
 	docCache  map[string]*document.Document
+	zimReader *zim.Reader // non-nil when a ZIM archive is open
 }
 
 // New creates the app with injected dependencies.
@@ -54,7 +54,14 @@ func New(r DocRenderer, n DocNavigator) *App {
 	}
 }
 
-// OpenFile loads a markdown file and displays it.
+func (app *App) shutdown() {
+	if app.zimReader != nil {
+		app.zimReader.Close()
+		app.zimReader = nil
+	}
+}
+
+// OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim.
 func (app *App) OpenFile(path string) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
@@ -63,21 +70,15 @@ func (app *App) OpenFile(path string) error {
 
 	doc, ok := app.docCache[absPath]
 	if !ok {
-		f, err := os.Open(absPath)
-		if err != nil {
-			return fmt.Errorf("open file: %w", err)
-		}
-		defer f.Close()
-
 		ext := strings.ToLower(filepath.Ext(absPath))
 		switch ext {
-		case ".html", ".htm":
-			doc, err = html.Parse(f)
+		case ".zim":
+			doc, err = app.openZIM(absPath)
 		default:
-			doc, err = markdown.Parse(f)
+			doc, err = app.openFile(absPath)
 		}
 		if err != nil {
-			return fmt.Errorf("parse: %w", err)
+			return err
 		}
 		app.docCache[absPath] = doc
 	}
@@ -88,8 +89,57 @@ func (app *App) OpenFile(path string) error {
 	return nil
 }
 
+func (app *App) openFile(path string) (*document.Document, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open file: %w", err)
+	}
+	defer f.Close()
+
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".html", ".htm":
+		return html.Parse(f)
+	default:
+		return markdown.Parse(f)
+	}
+}
+
+func (app *App) openZIM(path string) (*document.Document, error) {
+	app.shutdown() // close previous ZIM if any
+
+	zr, err := zim.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	app.zimReader = zr
+
+	return zr.MainPage()
+}
+
+// navigateLink follows a link URL. For ZIM archives, resolves internally.
+func (app *App) navigateLink(url string) {
+	// Try ZIM resolver first.
+	if app.zimReader != nil {
+		doc, err := app.zimReader.GetArticle(url)
+		if err == nil {
+			app.renderer.SetDocument(doc)
+			app.navigator.Open("zim:" + url)
+			app.renderer.Relayout()
+			return
+		}
+		// If not found in ZIM, fall through to file loading.
+	}
+
+	// Try local file.
+	if err := app.OpenFile(url); err != nil {
+		fmt.Fprintf(os.Stderr, "Cannot open: %s (%v)\n", url, err)
+	}
+}
+
 // Run starts the main event loop. Blocks until quit.
 func (app *App) Run() {
+	defer app.shutdown()
 	app.running = true
 	for app.running {
 		event := sdl.WaitEvent()
@@ -138,9 +188,7 @@ func (app *App) processEvent(event sdl.Event) {
 		case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
 			url := app.renderer.SelectedLinkURL()
 			if url != "" {
-				if err := app.OpenFile(url); err != nil {
-					fmt.Fprintf(os.Stderr, "Cannot open: %s (%v)\n", url, err)
-				}
+				app.navigateLink(url)
 			}
 		case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
 			if app.navigator.Back() {
