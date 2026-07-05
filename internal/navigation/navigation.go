@@ -7,12 +7,11 @@ import (
 )
 
 // Navigator is the abstract navigation interface.
-// Implementations manage history, back/forward, and document opening.
+// Implementations manage history and back navigation.
 type Navigator interface {
 	Open(id string)
 	UpdateCurrentState(state document.ViewState)
 	Back() (bool, document.ViewState)
-	Forward() (bool, document.ViewState)
 	Current() string
 	CurrentState() document.ViewState
 }
@@ -71,13 +70,5 @@ func (n *SimpleNavigator) Back() (bool, document.ViewState) {
 		return false, document.ViewState{ScrollY: 0, SelectedLink: -1}
 	}
 	n.index--
-	return true, n.history[n.index].State
-}
-
-func (n *SimpleNavigator) Forward() (bool, document.ViewState) {
-	if n.index+1 >= len(n.history) {
-		return false, document.ViewState{ScrollY: 0, SelectedLink: -1}
-	}
-	n.index++
 	return true, n.history[n.index].State
 }
