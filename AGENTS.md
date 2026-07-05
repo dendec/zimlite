@@ -165,6 +165,7 @@ trie.VisLine { TreePrefix, Label, Suffix, IsLeaf, IsExpanded, IsCursor }
 ## Build System
 
 - `Makefile` — `make build`, `make test`, `make lint`, `make clean`, `make run`
+- Перед коммитом проверяй код через `make test && make lint`
 - Cross-build targets: `build-linux-amd64`, `build-linux-arm64`, `build-linux-armv8`, `build-windows-amd64`
 - Docker: `Dockerfile.arm64` (cross-build for TrimUI), `Dockerfile.windows`
 - PortMaster packaging: `dist-portmaster` creates `dist/kiwix-sdl.zip`

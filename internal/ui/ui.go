@@ -53,6 +53,9 @@ func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n DocNavigator)
 	}
 	app.loader = NewDocumentLoader(app)
 	app.input = NewInputController(app)
+	// Install a static resource loader once. It always resolves paths from the
+	// current navigator state, so it stays valid across navigations.
+	app.viewer.SetResourceLoader(app.loader.loadResource)
 	return app
 }
 
@@ -68,6 +71,22 @@ func (app *App) saveCurrentState() {
 		ScrollY:      app.scroller.CurrentScrollY(),
 		SelectedLink: app.links.SelectedLinkIndex(),
 	})
+}
+
+func (app *App) showDocument(doc *document.Document, navKey string) {
+	app.mode = modeDoc
+	app.saveCurrentState()
+	app.viewer.SetDocument(doc)
+	app.navigator.Open(navKey)
+	app.viewer.Relayout()
+}
+
+func (app *App) restoreCachedDocument(doc *document.Document, state document.ViewState) {
+	app.mode = modeDoc
+	app.viewer.SetDocument(doc)
+	app.viewer.Relayout()
+	app.scroller.SetScrollY(state.ScrollY)
+	app.links.SetSelectedLinkIndex(state.SelectedLink)
 }
 
 func (app *App) goBack() {
@@ -88,10 +107,7 @@ func (app *App) goBack() {
 			return
 		}
 		if doc, ok := app.loader.docCache[prevPath]; ok {
-			app.viewer.SetDocument(doc)
-			app.viewer.Relayout()
-			app.scroller.SetScrollY(state.ScrollY)
-			app.links.SetSelectedLinkIndex(state.SelectedLink)
+			app.restoreCachedDocument(doc, state)
 		}
 	} else if app.loader.zimReader != nil && app.mode == modeDoc {
 		app.enterTreeMode()
@@ -127,11 +143,8 @@ func (app *App) exitTreeMode() {
 	}
 	prevPath := app.navigator.Current()
 	if doc, ok := app.loader.docCache[prevPath]; ok {
-		app.viewer.SetDocument(doc)
-		app.viewer.Relayout()
 		state := app.navigator.CurrentState()
-		app.scroller.SetScrollY(state.ScrollY)
-		app.links.SetSelectedLinkIndex(state.SelectedLink)
+		app.restoreCachedDocument(doc, state)
 	}
 }
 
@@ -159,11 +172,7 @@ func (app *App) goHome() {
 		}
 		app.loader.docCache[navKey] = doc
 	}
-	app.saveCurrentState()
-	app.mode = modeDoc
-	app.viewer.SetDocument(doc)
-	app.navigator.Open(navKey)
-	app.viewer.Relayout()
+	app.showDocument(doc, navKey)
 }
 
 func (app *App) toggleMode() {

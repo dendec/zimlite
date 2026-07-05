@@ -143,50 +143,44 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 		}
 	}
 
-	app.mode = modeDoc
-	app.viewer.SetResourceLoader(func(rawURL string) ([]byte, error) {
-		if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
-			client := storage.HTTPClient(10 * time.Second)
-			resp, err := client.Get(rawURL)
-			if err != nil {
-				return nil, err
-			}
-			defer func() { _ = resp.Body.Close() }()
-			return io.ReadAll(resp.Body)
-		}
-		if l.zimReader != nil {
-			data, _, err := l.zimReader.ResolveResource(rawURL)
-			return data, err
-		}
-		docPath := app.navigator.Current()
-		if docPath == "" {
-			docPath = absPath
-		}
-		if strings.HasPrefix(docPath, "virtual:") {
-			return os.ReadFile(rawURL)
-		}
-		dir := filepath.Dir(docPath)
-		fullPath := filepath.Join(dir, rawURL)
-		return os.ReadFile(fullPath)
-	})
-
-	app.saveCurrentState()
-	app.viewer.SetDocument(doc)
 	if isZIM && l.zimReader != nil {
 		mainPath := l.zimReader.MainPagePath()
 		navKey := "zim:" + mainPath
 		l.docCache[navKey] = doc
-		app.navigator.Open(navKey)
+		app.viewer.SetHasTree(l.zimReader.ArticleCount() > 1)
+		app.showDocument(doc, navKey)
 	} else {
-		app.navigator.Open(absPath)
+		app.showDocument(doc, absPath)
 	}
 
-	hasTree := l.zimReader != nil && l.zimReader.ArticleCount() > 1
-	app.viewer.SetHasTree(hasTree)
-
-	app.viewer.Relayout()
 	slog.Info("Successfully loaded document", "path", pathStr, "isZIM", isZIM)
 	return nil
+}
+
+// loadResource is the static resource loader installed once on the viewer. It
+// always resolves relative paths against the current navigator location, so it
+// remains correct across navigations without being recreated per OpenFile.
+func (l *DocumentLoader) loadResource(rawURL string) ([]byte, error) {
+	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+		client := storage.HTTPClient(10 * time.Second)
+		resp, err := client.Get(rawURL)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = resp.Body.Close() }()
+		return io.ReadAll(resp.Body)
+	}
+	if l.zimReader != nil {
+		data, _, err := l.zimReader.ResolveResource(rawURL)
+		return data, err
+	}
+	docPath := l.app.navigator.Current()
+	if docPath == "" || strings.HasPrefix(docPath, "virtual:") {
+		return os.ReadFile(rawURL)
+	}
+	dir := filepath.Dir(docPath)
+	fullPath := filepath.Join(dir, rawURL)
+	return os.ReadFile(fullPath)
 }
 
 func (l *DocumentLoader) NavigateLink(url string) {
@@ -259,11 +253,7 @@ func (l *DocumentLoader) NavigateLink(url string) {
 			}
 			navKey := "zim:" + resolved
 			l.docCache[navKey] = doc
-			app.mode = modeDoc
-			app.saveCurrentState()
-			app.viewer.SetDocument(doc)
-			app.navigator.Open(navKey)
-			app.viewer.Relayout()
+			app.showDocument(doc, navKey)
 			slog.Info("Navigated to article", "url", navKey)
 			return
 		}
