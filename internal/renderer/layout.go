@@ -102,11 +102,14 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	oldMarginX := s.r.marginX
 	oldMaxW := s.maxW
 
-	s.y += 8 // top padding
+	pad := int32(8)
+	leftPad := int32(12)
 
-	maxCodeW := s.maxW - 24
-	if maxCodeW < 50 {
-		maxCodeW = 50
+	s.y += pad
+
+	maxCodeW := s.maxW - 2*leftPad
+	if maxCodeW < pad*6+2 {
+		maxCodeW = pad * 6
 	}
 
 	addLine := func(text string) {
@@ -116,7 +119,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 		}
 		s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 			text: text, fontIdx: FontMono, color: s.r.theme.TextColor,
-			x: s.r.marginX + 12, y: s.y, w: tw, h: th,
+			x: s.r.marginX + leftPad, y: s.y, w: tw, h: th,
 			isCode: true,
 		})
 		s.y += th + 1
@@ -162,7 +165,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 		}
 	}
 
-	s.y += 8 // bottom padding
+	s.y += pad
 
 	s.r.layout.codeRanges = append(s.r.layout.codeRanges, codeBlockRange{
 		x: oldMarginX, y: startCodeY, w: oldMaxW, h: s.y - startCodeY,

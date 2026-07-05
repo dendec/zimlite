@@ -6,7 +6,10 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-const scrollStep = 40
+const (
+	scrollStep     = 40
+	axisSensitivity = 16000
+)
 
 type InputController struct {
 	app *App
@@ -20,7 +23,7 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 	app := c.app
 	switch e := event.(type) {
 	case *sdl.QuitEvent:
-		app.running = false
+		app.running.Store(false)
 
 	case *sdl.KeyboardEvent:
 		if e.Type != sdl.KEYDOWN {
@@ -32,7 +35,7 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 		// Global keys (work in both modes).
 		switch sc {
 		case sdl.SCANCODE_Q:
-			app.running = false
+			app.running.Store(false)
 			return
 		case sdl.SCANCODE_H: // H = go home
 			app.goHome()
@@ -193,7 +196,7 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 			app.renderTree()
 		} else {
 			if val != 0 {
-				app.scroller.ScrollBy(-scrollStep * int32(-val/16000))
+				app.scroller.ScrollBy(-scrollStep * int32(-val/axisSensitivity))
 			} else {
 				app.scroller.ScrollBy(-scrollStep)
 			}
@@ -204,7 +207,7 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 			app.renderTree()
 		} else {
 			if val != 0 {
-				app.scroller.ScrollBy(scrollStep * int32(val/16000))
+				app.scroller.ScrollBy(scrollStep * int32(val/axisSensitivity))
 			} else {
 				app.scroller.ScrollBy(scrollStep)
 			}
@@ -218,7 +221,7 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 	case ActionGoHome:
 		app.goHome()
 	case ActionQuit:
-		app.running = false
+		app.running.Store(false)
 	case ActionZoomIn:
 		_ = app.viewer.Zoom(1)
 	case ActionZoomOut:

@@ -147,7 +147,10 @@ func (m *ImageManager) updateAnimation(anim *AnimatedTexture) {
 	}
 	if currentFrame != anim.LastFrame {
 		anim.LastFrame = currentFrame
-		anim.Texture.Update(nil, unsafe.Pointer(&anim.Frames[currentFrame].Pix[0]), anim.Frames[currentFrame].Stride)
+		frame := anim.Frames[currentFrame]
+		if len(frame.Pix) > 0 {
+			anim.Texture.Update(nil, unsafe.Pointer(&frame.Pix[0]), frame.Stride)
+		}
 	}
 }
 
@@ -223,7 +226,7 @@ func (m *ImageManager) loadGIF(url string, data []byte) (*sdl.Texture, bool) {
 		}
 	}
 
-	if len(anim.Frames) > 0 {
+	if len(anim.Frames) > 0 && len(anim.Frames[0].Pix) > 0 {
 		anim.Texture.Update(nil, unsafe.Pointer(&anim.Frames[0].Pix[0]), anim.Frames[0].Stride)
 	}
 

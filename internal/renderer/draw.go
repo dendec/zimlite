@@ -121,6 +121,10 @@ func (r *Renderer) renderLines() {
 				continue
 			}
 			r.textureCache[key] = tex
+			r.textureCacheOrder = append(r.textureCacheOrder, key)
+			if len(r.textureCache) > maxTextureCacheEntries {
+				r.evictTextureCache()
+			}
 		}
 		_, _, tw, th, _ := tex.Query()
 		r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: line.x, Y: screenY, W: tw, H: th})

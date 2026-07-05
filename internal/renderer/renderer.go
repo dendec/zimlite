@@ -38,7 +38,10 @@ type codeSpanRange struct {
 	x, y, w, h int32
 }
 
-const statusBarHeight = 24
+const (
+	statusBarHeight      = 24
+	maxTextureCacheEntries = 1500
+)
 
 type ResourceLoader func(url string) ([]byte, error)
 
@@ -79,8 +82,9 @@ type Renderer struct {
 	light   bool
 	hasTree bool
 
-	textureCache map[textureKey]*sdl.Texture
-	imgManager   *ImageManager
+	textureCache      map[textureKey]*sdl.Texture
+	textureCacheOrder []textureKey
+	imgManager        *ImageManager
 
 	baseFontSize        int
 	fontPath            string
@@ -193,6 +197,20 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	return r, nil
 }
 
+func (r *Renderer) evictTextureCache() {
+	remove := len(r.textureCacheOrder) / 4
+	if remove < 1 {
+		return
+	}
+	for _, k := range r.textureCacheOrder[:remove] {
+		if tex, ok := r.textureCache[k]; ok && tex != nil {
+			tex.Destroy()
+		}
+		delete(r.textureCache, k)
+	}
+	r.textureCacheOrder = r.textureCacheOrder[remove:]
+}
+
 func (r *Renderer) ClearCache() {
 	if r.textureCache != nil {
 		for k, tex := range r.textureCache {
@@ -202,6 +220,7 @@ func (r *Renderer) ClearCache() {
 			delete(r.textureCache, k)
 		}
 	}
+	r.textureCacheOrder = nil
 	if r.imgManager != nil {
 		r.imgManager.ClearCache()
 	}

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	neturl "net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
@@ -28,13 +29,14 @@ type App struct {
 	links     LinkBrowser
 	scroller  Scroller
 	navigator DocNavigator
-	running   bool
+	running   atomic.Bool
 	mode      appMode
 	navState  *trie.NavState
 	gamepad   GamepadState
 
 	loader *DocumentLoader
 	input  *InputController
+	stopCh chan struct{}
 }
 
 // New creates the app with injected dependencies.
@@ -44,8 +46,8 @@ func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n DocNavigator)
 		links:     links,
 		scroller:  scroller,
 		navigator: n,
-		running:   false,
 		mode:      modeDoc,
+		stopCh:    make(chan struct{}),
 	}
 	app.loader = NewDocumentLoader(app)
 	app.input = NewInputController(app)
@@ -53,6 +55,7 @@ func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n DocNavigator)
 }
 
 func (app *App) shutdown() {
+	close(app.stopCh)
 	app.loader.shutdown()
 }
 
@@ -242,15 +245,17 @@ func (app *App) HandleSettingsAction(u *neturl.URL) {
 func (app *App) Run() {
 	defer app.shutdown()
 	app.loader.checkInternetAsync()
-	app.running = true
+	app.running.Store(true)
 
 	// Background ticker to wake up the event loop for animations at ~30 FPS
 	go func() {
 		ticker := time.NewTicker(33 * time.Millisecond)
 		defer ticker.Stop()
-		for range ticker.C {
-			if !app.running {
-				break
+		for {
+			select {
+			case <-ticker.C:
+			case <-app.stopCh:
+				return
 			}
 			if app.viewer != nil && app.viewer.HasAnimations() {
 				// Push a dummy event to wake up sdl.WaitEvent()
@@ -259,7 +264,7 @@ func (app *App) Run() {
 		}
 	}()
 
-	for app.running {
+	for app.running.Load() {
 		event := sdl.WaitEvent()
 		if event == nil {
 			continue

@@ -2,6 +2,12 @@ package ui
 
 import "github.com/veandco/go-sdl2/sdl"
 
+const (
+	triggerPressThreshold   int16 = 20000
+	triggerReleaseThreshold int16 = 10000
+	analogDeadZone          int16 = 8000
+)
+
 // Action represents a high-level application action triggered by the gamepad.
 type Action int
 
@@ -30,10 +36,10 @@ type TriggerDebouncer struct {
 
 // Update processes a new raw axis value. Returns true if this update represents a new "press" transition.
 func (td *TriggerDebouncer) Update(value int16) bool {
-	if value > 20000 && !td.pressed {
+	if value > triggerPressThreshold && !td.pressed {
 		td.pressed = true
-		return true // New press transition occurred
-	} else if value < 10000 {
+		return true
+	} else if value < triggerReleaseThreshold {
 		td.pressed = false
 	}
 	return false
@@ -65,7 +71,7 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 		}
 
 		// Dead zone
-		if v > -8000 && v < 8000 {
+		if v > -analogDeadZone && v < analogDeadZone {
 			return ActionNone, false
 		}
 
