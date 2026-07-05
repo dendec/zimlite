@@ -354,6 +354,8 @@ func (app *App) Run() {
 			}
 			app.input.ProcessEvent(ev)
 		}
+		app.loader.applyPendingMenuReload()
+		app.loader.applyPendingDownloadCompletion()
 		app.viewer.Render()
 	}
 }

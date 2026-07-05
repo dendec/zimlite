@@ -30,6 +30,9 @@ type DocumentLoader struct {
 	docCache          map[string]*document.Document
 	zimReader         ZimReader
 	internetAvailable atomic.Bool
+	pendingMenuReload atomic.Bool
+	pendingDownload   atomic.Bool
+	downloadFilename  string // set by goroutine before pendingDownload.Store(true)
 	virtualPages      map[string]VirtualPageGenerator
 }
 
@@ -72,15 +75,28 @@ func (l *DocumentLoader) checkInternetAsync() {
 		hasInternet := menu.CheckInternet()
 		if hasInternet != l.internetAvailable.Load() {
 			l.internetAvailable.Store(hasInternet)
-			if l.host.getNavigator().Current() == "virtual:menu" {
-				if doc, err := menu.FileSelector(hasInternet); err == nil {
-					l.host.getViewer().SetDocument(doc)
-					l.host.getViewer().Relayout()
-					_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-				}
-			}
+			l.pendingMenuReload.Store(true)
+			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 		}
 	}()
+}
+
+// applyPendingMenuReload runs on the main SDL thread when the internet check
+// completes. It must NOT be called from background goroutines.
+func (l *DocumentLoader) applyPendingMenuReload() {
+	if !l.pendingMenuReload.CompareAndSwap(true, false) {
+		return
+	}
+	if l.host.getNavigator().Current() != "virtual:menu" {
+		return
+	}
+	doc, err := menu.FileSelector(l.internetAvailable.Load())
+	if err != nil {
+		slog.Error("Failed to generate menu after internet check", "error", err)
+		return
+	}
+	l.host.getViewer().SetDocument(doc)
+	l.host.getViewer().Relayout()
 }
 
 // OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim, and virtual:menu.
@@ -287,7 +303,6 @@ func (l *DocumentLoader) openFileOrFallback(url string) {
 
 func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 	viewer := l.host.getViewer()
-	navigator := l.host.getNavigator()
 	slog.Info("Initiating download", "url", downloadURL, "filename", filename)
 	go func() {
 		err := storage.Download(downloadURL, filename, func(status string) {
@@ -301,14 +316,27 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 			return
 		}
 		slog.Info("Download completed successfully", "filename", filename)
-		time.Sleep(3 * time.Second)
-		viewer.SetStatusOverride("")
-		current := navigator.Current()
-		if current == "virtual:menu" || strings.HasPrefix(current, "virtual:library/download") {
-			if err := l.OpenFile("virtual:menu"); err != nil {
-				slog.Error("Failed to reload menu after download", "error", err)
-			}
-			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-		}
+		// Store filename then signal main thread. All SDL state (SetDocument,
+		// Relayout, sleep, status clear) must happen on the main thread.
+		l.downloadFilename = filename
+		l.pendingDownload.Store(true)
+		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 	}()
+}
+
+// applyPendingDownloadCompletion runs on the main SDL thread after a download
+// finishes. It must NOT be called from background goroutines.
+func (l *DocumentLoader) applyPendingDownloadCompletion() {
+	if !l.pendingDownload.CompareAndSwap(true, false) {
+		return
+	}
+	time.Sleep(3 * time.Second)
+	l.host.getViewer().SetStatusOverride("")
+	current := l.host.getNavigator().Current()
+	if current == "virtual:menu" || strings.HasPrefix(current, "virtual:library/download") {
+		if err := l.OpenFile("virtual:menu"); err != nil {
+			slog.Error("Failed to reload menu after download", "error", err)
+		}
+		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	}
 }
