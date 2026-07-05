@@ -3,21 +3,30 @@ SRC      := ./cmd/kiwix-sdl
 GO       := go
 GOFLAGS  := CGO_ENABLED=1
 
-ZIM_VER  := 9.7.0
-ZIM_URL  := https://download.openzim.org/release/libzim
+ZIM_VER      := 9.7.0
+ZIM_TAG      := x86_64
+ZIM_LIBDIR   := lib/libzim_linux-$(ZIM_TAG)-$(ZIM_VER)
+ZIM_INC      := $(ZIM_LIBDIR)/include
+ZIM_LIB      := $(ZIM_LIBDIR)/lib/x86_64-linux-gnu
+ZIM_URL      := https://download.openzim.org/release/libzim
 
-# Default: use system-installed libzim (dev).
-CGO_CXXFLAGS := -std=c++17 -Iinternal/zim -I/usr/include
-CGO_LDFLAGS  := -L/usr/lib/x86_64-linux-gnu -lzim
+CGO_CXXFLAGS := -std=c++17 -Iinternal/zim -I$(ZIM_INC)
+CGO_LDFLAGS  := -L$(ZIM_LIB) -lzim -Wl,-rpath,'\$$ORIGIN/$(ZIM_LIB)',--disable-new-dtags
 
 .PHONY: build test vet clean run info
-.PHONY: deps deps-all build-linux-arm64 build-linux-armv8 build-linux-amd64
+.PHONY: deps build-linux-arm64 build-linux-armv8 build-linux-amd64
 
-build:
+build: $(ZIM_LIB)/libzim.so
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" \
 		$(GO) build -o $(APP) $(SRC)
 
-# Cross-builds require downloaded libzim (make deps first).
+$(ZIM_LIB)/libzim.so:
+	@mkdir -p $(ZIM_LIBDIR)
+	wget -q "$(ZIM_URL)/libzim_linux-$(ZIM_TAG)-$(ZIM_VER).tar.gz" -O /tmp/libzim.tar.gz
+	tar xzf /tmp/libzim.tar.gz -C lib/
+	@rm -f /tmp/libzim.tar.gz
+
+# Cross-build targets.
 build-linux-amd64:
 	$(GOFLAGS) CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
 		CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ \
@@ -39,20 +48,6 @@ build-linux-armv8:
 		CGO_LDFLAGS="-Llib/libzim_linux-armv8-$(ZIM_VER)/lib/armv8-linux-gnueabihf -lzim" \
 		$(GO) build -o $(APP)-armv8 $(SRC)
 
-deps:
-	@mkdir -p lib
-	@for tag in x86_64 aarch64 armv8; do \
-		dir=lib/libzim_linux-$$tag-$(ZIM_VER); \
-		if [ ! -f $$dir/include/zim/archive.h ]; then \
-			echo "Downloading libzim $$tag..."; \
-			wget -q "$(ZIM_URL)/libzim_linux-$$tag-$(ZIM_VER).tar.gz" -O /tmp/libzim-$$tag.tar.gz; \
-			tar xzf /tmp/libzim-$$tag.tar.gz -C lib/; \
-			rm -f /tmp/libzim-$$tag.tar.gz; \
-		fi; \
-	done
-
-deps-all: deps
-
 test:
 	$(GO) test ./...
 
@@ -63,8 +58,8 @@ clean:
 	rm -f $(APP) $(APP)-*
 
 run: build
-	./$(APP) /tmp/test.md
+	LD_LIBRARY_PATH=$(ZIM_LIB):$$LD_LIBRARY_PATH ./$(APP) /tmp/test.md
+	LD_LIBRARY_PATH=$(ZIM_LIB):$$LD_LIBRARY_PATH ./$(APP) /tmp/test.md
 
 info:
-	@echo "CGO_CXXFLAGS=$(CGO_CXXFLAGS)"
-	@echo "CGO_LDFLAGS=$(CGO_LDFLAGS)"
+	@echo "ZIM_LIB=$(ZIM_LIB)"
