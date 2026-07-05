@@ -21,26 +21,34 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
-// DocRenderer is the interface for rendering documents and tree views.
-type DocRenderer interface {
+// DocViewer is the interface for core rendering operations.
+type DocViewer interface {
 	SetDocument(doc *document.Document)
 	SetResourceLoader(loader renderer.ResourceLoader)
 	Relayout()
 	Render()
+	ToggleTheme()
+	Zoom(delta int) error
+	SetStatusOverride(status string)
+	SetHasTree(has bool)
+}
+
+// LinkBrowser is the interface for navigating hyperlinks in a document.
+type LinkBrowser interface {
 	LinkCount() int
 	SelectPrevLink()
 	SelectNextLink()
 	SelectedLinkURL() string
+	HandleClick(mx, my int32) string
+}
+
+// Scroller is the interface for scrolling and tree-view display.
+type Scroller interface {
 	ScrollBy(delta int32)
 	ScrollPageUp()
 	ScrollPageDown()
 	SetTextLines(lines []string)
 	ScrollToLine(lineIdx int)
-	ToggleTheme()
-	HandleClick(mx, my int32) string
-	SetHasTree(has bool)
-	Zoom(delta int) error
-	SetStatusOverride(status string)
 }
 
 // DocNavigator manages document history (back/forward).
@@ -59,21 +67,25 @@ const (
 
 // App is the top-level application state.
 type App struct {
-	renderer  DocRenderer
+	viewer    DocViewer
+	links     LinkBrowser
+	scroller  Scroller
 	navigator DocNavigator
 	running   bool
 	mode      appMode
 	docCache  map[string]*document.Document
-	zimReader *zim.Reader
+	zimReader ZimReader
 	navState  *trie.NavState
 	gamepad   GamepadState
 	internetAvailable bool
 }
 
 // New creates the app with injected dependencies.
-func New(r DocRenderer, n DocNavigator) *App {
+func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n DocNavigator) *App {
 	return &App{
-		renderer:  r,
+		viewer:    viewer,
+		links:     links,
+		scroller:  scroller,
 		navigator: n,
 		running:   false,
 		mode:      modeDoc,
@@ -95,8 +107,8 @@ func (app *App) checkInternetAsync() {
 			app.internetAvailable = true
 			if app.navigator.Current() == "virtual:menu" {
 				if doc, err := menu.FileSelector(true); err == nil {
-					app.renderer.SetDocument(doc)
-					app.renderer.Relayout()
+					app.viewer.SetDocument(doc)
+					app.viewer.Relayout()
 					sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 				}
 			}
@@ -123,8 +135,8 @@ func (app *App) exitTreeMode() {
 	// Restore last viewed document from history.
 	prevPath := app.navigator.Current()
 	if doc, ok := app.docCache[prevPath]; ok {
-		app.renderer.SetDocument(doc)
-		app.renderer.Relayout()
+		app.viewer.SetDocument(doc)
+		app.viewer.Relayout()
 	}
 }
 
@@ -134,9 +146,9 @@ func (app *App) goHome() {
 		navKey := "zim:" + mainPath
 		if doc, ok := app.docCache[navKey]; ok {
 			app.mode = modeDoc
-			app.renderer.SetDocument(doc)
+			app.viewer.SetDocument(doc)
 			app.navigator.Open(navKey)
-			app.renderer.Relayout()
+			app.viewer.Relayout()
 		}
 	}
 }
@@ -168,9 +180,9 @@ func (app *App) renderTree() {
 		}
 		out = append(out, entry)
 	}
-	app.renderer.SetTextLines(out)
+	app.scroller.SetTextLines(out)
 	if cursorIdx >= 0 {
-		app.renderer.ScrollToLine(cursorIdx)
+		app.scroller.ScrollToLine(cursorIdx)
 	}
 }
 
@@ -230,7 +242,7 @@ func (app *App) OpenFile(path string) error {
 	}
 
 	app.mode = modeDoc
-	app.renderer.SetResourceLoader(func(rawURL string) ([]byte, error) {
+	app.viewer.SetResourceLoader(func(rawURL string) ([]byte, error) {
 		if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
 			client := http.Client{Timeout: 3 * time.Second}
 			resp, err := client.Get(rawURL)
@@ -256,7 +268,7 @@ func (app *App) OpenFile(path string) error {
 		return os.ReadFile(fullPath)
 	})
 
-	app.renderer.SetDocument(doc)
+	app.viewer.SetDocument(doc)
 	if isZIM && app.zimReader != nil {
 		mainPath := app.zimReader.MainPagePath()
 		navKey := "zim:" + mainPath
@@ -267,9 +279,9 @@ func (app *App) OpenFile(path string) error {
 	}
 
 	hasTree := app.zimReader != nil && app.zimReader.ArticleCount() > 1
-	app.renderer.SetHasTree(hasTree)
+	app.viewer.SetHasTree(hasTree)
 
-	app.renderer.Relayout()
+	app.viewer.Relayout()
 	return nil
 }
 
@@ -304,9 +316,9 @@ func (app *App) navigateLink(url string) {
 			navKey := "zim:" + resolved
 			app.docCache[navKey] = doc
 			app.mode = modeDoc
-			app.renderer.SetDocument(doc)
+			app.viewer.SetDocument(doc)
 			app.navigator.Open(navKey)
-			app.renderer.Relayout()
+			app.viewer.Relayout()
 			return
 		}
 		fmt.Fprintf(os.Stderr, "ResolveArticle(%q) failed: %v\n", url, err)
@@ -335,7 +347,7 @@ func (app *App) Run() {
 			}
 			app.processEvent(ev)
 		}
-		app.renderer.Render()
+		app.viewer.Render()
 	}
 }
 
@@ -366,13 +378,13 @@ func (app *App) processEvent(event sdl.Event) {
 			app.toggleMode()
 			return
 		case sdl.SCANCODE_D: // D = toggle dark/light theme
-			app.renderer.ToggleTheme()
+			app.viewer.ToggleTheme()
 			return
 		case sdl.SCANCODE_EQUALS, sdl.SCANCODE_KP_PLUS: // + = zoom in
-			_ = app.renderer.Zoom(1)
+			_ = app.viewer.Zoom(1)
 			return
 		case sdl.SCANCODE_MINUS, sdl.SCANCODE_KP_MINUS: // - = zoom out
-			_ = app.renderer.Zoom(-1)
+			_ = app.viewer.Zoom(-1)
 			return
 		case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
 			// Global back — also works as doc back.
@@ -399,15 +411,15 @@ func (app *App) processEvent(event sdl.Event) {
 	case *sdl.WindowEvent:
 		if e.Event == sdl.WINDOWEVENT_RESIZED ||
 			e.Event == sdl.WINDOWEVENT_SIZE_CHANGED {
-			app.renderer.Relayout()
+			app.viewer.Relayout()
 		}
 
 	case *sdl.MouseWheelEvent:
-		app.renderer.ScrollBy(-scrollStep * e.Y)
+		app.scroller.ScrollBy(-scrollStep * e.Y)
 
 	case *sdl.MouseButtonEvent:
 		if e.Type == sdl.MOUSEBUTTONDOWN && e.Button == sdl.BUTTON_LEFT && app.mode == modeDoc {
-			url := app.renderer.HandleClick(e.X, e.Y)
+			url := app.links.HandleClick(e.X, e.Y)
 			if url != "" {
 				app.navigateLink(url)
 			}
@@ -451,9 +463,9 @@ func (app *App) processTreeKey(sc sdl.Scancode) {
 	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
 		app.navState.ActionLeft()
 	case sdl.SCANCODE_PAGEUP:
-		app.renderer.ScrollPageUp()
+		app.scroller.ScrollPageUp()
 	case sdl.SCANCODE_PAGEDOWN:
-		app.renderer.ScrollPageDown()
+		app.scroller.ScrollPageDown()
 	}
 	if app.mode == modeTree {
 		app.renderTree()
@@ -465,19 +477,19 @@ const scrollStep = 40
 func (app *App) processDocKey(sc sdl.Scancode) {
 	switch sc {
 	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
-		app.renderer.ScrollBy(-scrollStep)
+		app.scroller.ScrollBy(-scrollStep)
 	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
-		app.renderer.ScrollBy(scrollStep)
+		app.scroller.ScrollBy(scrollStep)
 	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4:
-		app.renderer.SelectPrevLink()
+		app.links.SelectPrevLink()
 	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_KP_6:
-		app.renderer.SelectNextLink()
+		app.links.SelectNextLink()
 	case sdl.SCANCODE_PAGEUP:
-		app.renderer.ScrollPageUp()
+		app.scroller.ScrollPageUp()
 	case sdl.SCANCODE_PAGEDOWN:
-		app.renderer.ScrollPageDown()
+		app.scroller.ScrollPageDown()
 	case sdl.SCANCODE_RETURN, sdl.SCANCODE_KP_ENTER:
-		url := app.renderer.SelectedLinkURL()
+		url := app.links.SelectedLinkURL()
 		if url != "" {
 			app.navigateLink(url)
 		}
@@ -485,8 +497,8 @@ func (app *App) processDocKey(sc sdl.Scancode) {
 		if app.navigator.Back() {
 			prevPath := app.navigator.Current()
 			if doc, ok := app.docCache[prevPath]; ok {
-				app.renderer.SetDocument(doc)
-				app.renderer.Relayout()
+				app.viewer.SetDocument(doc)
+				app.viewer.Relayout()
 			}
 		} else if app.zimReader != nil {
 			app.enterTreeMode()
@@ -510,7 +522,7 @@ func (app *App) processJoyA() {
 			app.renderTree()
 		}
 	} else {
-		url := app.renderer.SelectedLinkURL()
+		url := app.links.SelectedLinkURL()
 		if url != "" {
 			app.navigateLink(url)
 		}
@@ -524,8 +536,8 @@ func (app *App) processJoyB() {
 	} else if app.navigator.Back() {
 		prevPath := app.navigator.Current()
 		if doc, ok := app.docCache[prevPath]; ok {
-			app.renderer.SetDocument(doc)
-			app.renderer.Relayout()
+			app.viewer.SetDocument(doc)
+			app.viewer.Relayout()
 		}
 	} else {
 		if app.navigator.Current() != "virtual:menu" {
@@ -546,9 +558,9 @@ func (app *App) executeGamepadAction(action Action, val int16) {
 			app.renderTree()
 		} else {
 			if val != 0 {
-				app.renderer.ScrollBy(-scrollStep * int32(-val/16000))
+				app.scroller.ScrollBy(-scrollStep * int32(-val/16000))
 			} else {
-				app.renderer.ScrollBy(-scrollStep)
+				app.scroller.ScrollBy(-scrollStep)
 			}
 		}
 	case ActionScrollDown:
@@ -557,15 +569,15 @@ func (app *App) executeGamepadAction(action Action, val int16) {
 			app.renderTree()
 		} else {
 			if val != 0 {
-				app.renderer.ScrollBy(scrollStep * int32(val/16000))
+				app.scroller.ScrollBy(scrollStep * int32(val/16000))
 			} else {
-				app.renderer.ScrollBy(scrollStep)
+				app.scroller.ScrollBy(scrollStep)
 			}
 		}
 	case ActionPageUp:
-		app.renderer.ScrollPageUp()
+		app.scroller.ScrollPageUp()
 	case ActionPageDown:
-		app.renderer.ScrollPageDown()
+		app.scroller.ScrollPageDown()
 	case ActionToggleTree:
 		app.toggleMode()
 	case ActionGoHome:
@@ -573,13 +585,13 @@ func (app *App) executeGamepadAction(action Action, val int16) {
 	case ActionQuit:
 		app.running = false
 	case ActionZoomIn:
-		_ = app.renderer.Zoom(1)
+		_ = app.viewer.Zoom(1)
 	case ActionZoomOut:
-		_ = app.renderer.Zoom(-1)
+		_ = app.viewer.Zoom(-1)
 	case ActionSelectPrevLink:
-		app.renderer.SelectPrevLink()
+		app.links.SelectPrevLink()
 	case ActionSelectNextLink:
-		app.renderer.SelectNextLink()
+		app.links.SelectNextLink()
 	}
 }
 
@@ -592,20 +604,20 @@ func debugEvent(kind string, code int, val int) {
 func (app *App) startDownload(downloadURL, filename string) {
 	go func() {
 		err := storage.Download(downloadURL, filename, func(status string) {
-			app.renderer.SetStatusOverride(status)
+			app.viewer.SetStatusOverride(status)
 			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 		})
 		if err != nil {
-			app.renderer.SetStatusOverride("Download failed: " + err.Error())
+			app.viewer.SetStatusOverride("Download failed: " + err.Error())
 			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 			return
 		}
 		time.Sleep(3 * time.Second)
-		app.renderer.SetStatusOverride("")
+		app.viewer.SetStatusOverride("")
 		if app.navigator.Current() == "virtual:menu" {
 			if doc, err := menu.FileSelector(true); err == nil {
-				app.renderer.SetDocument(doc)
-				app.renderer.Relayout()
+				app.viewer.SetDocument(doc)
+				app.viewer.Relayout()
 			}
 		}
 	}()

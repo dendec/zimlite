@@ -35,7 +35,7 @@ func main() {
 	}
 	defer r.Destroy()
 
-	app := ui.New(r, navigation.NewSimpleNavigator())
+	app := ui.New(r, r, r, navigation.NewSimpleNavigator())
 
 	if err := app.OpenFile(filePath); err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening file: %v\n", err)
