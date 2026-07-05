@@ -6,7 +6,6 @@ import (
 )
 
 func TestOpenZIM(t *testing.T) {
-	// Test requires a ZIM file. Skip if not available.
 	path := os.Getenv("KIWIX_ZIM")
 	if path == "" {
 		t.Skip("KIWIX_ZIM not set, skipping ZIM integration test")

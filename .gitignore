@@ -1,14 +1,9 @@
 # Binaries
 /kiwix-sdl
-*.exe
-*.test
-*.out
+/kiwix-sdl-*
+
+# Downloaded libs
+/lib/libzim_*/
 
 # Go
 vendor/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo

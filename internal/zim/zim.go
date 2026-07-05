@@ -1,0 +1,95 @@
+// Package zim reads ZIM archives via libzim C++ library (cgo bridge).
+// Pipeline: ZIM → HTML → Markdown → Document.
+package zim
+
+/*
+#cgo CXXFLAGS: -std=c++17 -I. -I../../lib/libzim_linux-x86_64-9.7.0/include
+#cgo LDFLAGS: -L../../lib/libzim_linux-x86_64-9.7.0/lib/x86_64-linux-gnu -lzim -Wl,-rpath,'$$ORIGIN/../../lib/libzim_linux-x86_64-9.7.0/lib/x86_64-linux-gnu'
+#include <stdlib.h>
+#include "bridge.h"
+*/
+import "C"
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"unsafe"
+
+	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
+)
+
+// Reader wraps a libzim Archive handle.
+type Reader struct {
+	handle C.zim_archive_t
+}
+
+// Open opens a ZIM file. Caller must Close().
+func Open(path string) (*Reader, error) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	h := C.zim_open(cPath)
+	if h == nil {
+		return nil, fmt.Errorf("open zim: %s", path)
+	}
+	return &Reader{handle: h}, nil
+}
+
+// Close releases the archive.
+func (r *Reader) Close() {
+	if r.handle != nil {
+		C.zim_close(r.handle)
+		r.handle = nil
+	}
+}
+
+// MainPage returns the main article as a Document.
+func (r *Reader) MainPage() (*document.Document, error) {
+	entry := C.zim_get_main_entry(r.handle)
+	if entry == nil {
+		return nil, errors.New("main page: no main entry")
+	}
+	defer C.zim_entry_free(entry)
+	return r.entryToDoc(entry)
+}
+
+// GetArticle looks up an article by its ZIM-internal path.
+func (r *Reader) GetArticle(path string) (*document.Document, error) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	entry := C.zim_get_entry_by_path(r.handle, cPath)
+	if entry == nil {
+		return nil, fmt.Errorf("article %q: not found", path)
+	}
+	defer C.zim_entry_free(entry)
+	return r.entryToDoc(entry)
+}
+
+func (r *Reader) entryToDoc(entry C.zim_entry_t) (*document.Document, error) {
+	item := C.zim_entry_get_item(entry, 1) // follow redirects
+	if item == nil {
+		return nil, errors.New("cannot get item")
+	}
+	defer C.zim_item_free(item)
+
+	mime := C.GoString(C.zim_item_get_mimetype(item))
+	if !isHTML(mime) {
+		return nil, fmt.Errorf("unsupported mime type: %s", mime)
+	}
+
+	var size C.int
+	content := C.zim_item_get_content(item, &size)
+	if content == nil {
+		return nil, errors.New("empty content")
+	}
+	data := C.GoBytes(unsafe.Pointer(content), size)
+
+	return html.Parse(bytes.NewReader(data))
+}
+
+func isHTML(mime string) bool {
+	return mime == "text/html" || mime == "text/html; charset=utf-8" ||
+		mime == "text/html;charset=utf-8" || mime == "text/html; charset=UTF-8"
+}
