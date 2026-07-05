@@ -67,16 +67,16 @@ const (
 
 // App is the top-level application state.
 type App struct {
-	viewer    DocViewer
-	links     LinkBrowser
-	scroller  Scroller
-	navigator DocNavigator
-	running   bool
-	mode      appMode
-	docCache  map[string]*document.Document
-	zimReader ZimReader
-	navState  *trie.NavState
-	gamepad   GamepadState
+	viewer            DocViewer
+	links             LinkBrowser
+	scroller          Scroller
+	navigator         DocNavigator
+	running           bool
+	mode              appMode
+	docCache          map[string]*document.Document
+	zimReader         ZimReader
+	navState          *trie.NavState
+	gamepad           GamepadState
 	internetAvailable bool
 }
 

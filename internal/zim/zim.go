@@ -24,9 +24,9 @@ import (
 
 // Reader wraps a libzim Archive handle.
 type Reader struct {
-	handle        C.zim_archive_t
-	rootPrefix    string
-	mainPagePath  string
+	handle       C.zim_archive_t
+	rootPrefix   string
+	mainPagePath string
 }
 
 // Open opens a ZIM file. Caller must Close().
@@ -304,19 +304,19 @@ func (r *Reader) ResolveResource(rawURL string) ([]byte, string, error) {
 	if err != nil {
 		decoded = rawURL
 	}
-	
+
 	clean := decoded
 	for strings.HasPrefix(clean, "../") {
 		clean = clean[3:]
 	}
 	clean = strings.TrimPrefix(clean, "/")
-	
+
 	candidates := []string{
 		clean,
 		"I/" + clean,
 		"images/" + clean,
 	}
-	
+
 	for _, c := range candidates {
 		data, mime, err := r.GetResource(c)
 		if err == nil {

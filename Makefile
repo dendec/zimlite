@@ -13,13 +13,17 @@ ZIM_URL      := https://download.openzim.org/release/libzim
 CGO_CXXFLAGS := -std=c++17 -I$(shell pwd)/internal/zim -I$(shell pwd)/$(ZIM_INC)
 CGO_LDFLAGS  := -L$(shell pwd)/$(ZIM_LIB) -lzim -Wl,-rpath,\$$ORIGIN/$(ZIM_LIB) -Wl,--disable-new-dtags
 
-.PHONY: build test vet lint clean run info
+.PHONY: build test vet lint clean run info fmt
 .PHONY: deps build-linux-arm64 build-linux-armv8 build-linux-amd64
 .PHONY: dist-arm64 deploy dist-portmaster deploy-portmaster
 
-build: $(ZIM_LIB)/libzim.so
+fmt:
+	gofmt -s -w .
+
+build: fmt $(ZIM_LIB)/libzim.so
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" \
 		$(GO) build -o $(APP) $(SRC)
+
 
 $(ZIM_LIB)/libzim.so:
 	@mkdir -p $(ZIM_LIBDIR)

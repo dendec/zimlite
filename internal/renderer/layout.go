@@ -41,7 +41,7 @@ func (r *Renderer) relayout() {
 
 	document.VisitBlocks(r.doc.Blocks, ls)
 
-	if ls.y < r.height - statusBarHeight {
+	if ls.y < r.height-statusBarHeight {
 		ls.y = r.height - statusBarHeight
 	}
 	r.totalHeight = ls.y
@@ -57,7 +57,9 @@ type layoutState struct {
 
 func (s *layoutState) VisitHeading(h *document.Heading) {
 	fidx := headingFontIdx(h.Level)
-	inlines := []document.Inline{&document.Text{Content: h.Content}}
+	inlines := []document.Inline{&document.Strong{
+		Content: []document.Inline{&document.Text{Content: h.Content}},
+	}}
 	s.y = s.r.layoutInlines(inlines, fidx, s.r.headingColor, s.r.headingColor, s.maxW, s.y, 0, "")
 
 	if h.Level == 1 || h.Level == 2 {
@@ -86,7 +88,7 @@ func (s *layoutState) VisitList(l *document.List) {
 			bullets := []string{"• ", "o ", "▪ ", "▫ "}
 			prefix = bullets[l.Indent%len(bullets)]
 		}
-		
+
 		indentX := s.r.listIndent * int32(l.Indent)
 		itemW := s.maxW - indentX - s.r.listIndent
 		if itemW < 50 {
@@ -190,9 +192,9 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 		if len(lineWords) == 0 && prefix == "" {
 			return
 		}
-		
+
 		currX := r.marginX + indentX
-		
+
 		if isFirstLine && prefix != "" {
 			pFont := r.fonts[fidx].font
 			pw, ph := measureText(prefix, pFont, false, false)
@@ -222,22 +224,22 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 			if w.IsLink {
 				wColor = linkColor
 			}
-			
+
 			wordY := y + (maxH - w.PixH)
-			
+
 			r.lines = append(r.lines, lineEntry{
 				text: w.Text, fontIdx: fidx, color: wColor,
 				x: currX, y: wordY, w: w.PixW, h: w.PixH,
 				isBold: w.IsBold, isItalic: w.IsItalic, isCode: w.IsCode,
 			})
-			
+
 			if w.IsCode {
 				r.codeSpans = append(r.codeSpans, codeSpanRange{
 					x: currX - 2, y: wordY - 2,
 					w: w.PixW + 4, h: w.PixH + 4,
 				})
 			}
-			
+
 			if w.IsLink {
 				r.links = append(r.links, linkEntry{
 					rect: sdlRect{X: currX, Y: wordY, W: w.PixW, H: w.PixH},
@@ -247,7 +249,7 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 
 			currX += w.PixW
 		}
-		
+
 		y += maxH + r.lineSpacing
 		lineWords = nil
 		lineWidth = 0
@@ -292,5 +294,3 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 	flushLine(isFirst)
 	return y
 }
-
-

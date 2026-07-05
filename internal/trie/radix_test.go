@@ -119,10 +119,16 @@ func TestAutoDrill(t *testing.T) {
 
 	// Manual expand: drills through single-child chain, absorbing it.
 	x.Expand()
-	if !x.Expanded() { t.Fatal("X should be expanded after manual Expand()") }
+	if !x.Expanded() {
+		t.Fatal("X should be expanded after manual Expand()")
+	}
 	// Should have absorbed "XY" and "XYZ " and directly have the 3 leaf children.
-	if x.prefix != "XYZ " { t.Errorf("expected absorbed prefix %q, got %q", "XYZ ", x.prefix) }
-	if len(x.children) != 3 { t.Fatalf("expected 3 children after absorption, got %d", len(x.children)) }
+	if x.prefix != "XYZ " {
+		t.Errorf("expected absorbed prefix %q, got %q", "XYZ ", x.prefix)
+	}
+	if len(x.children) != 3 {
+		t.Fatalf("expected 3 children after absorption, got %d", len(x.children))
+	}
 	for _, child := range x.children {
 		if !child.IsLeaf() {
 			t.Errorf("child %q should be leaf", child.Label())
@@ -138,7 +144,9 @@ func TestMultiBranchStops(t *testing.T) {
 		{Title: "Gamma", Path: "C"},
 	}
 	root := NewTree(articles)
-	if len(root.children) != 3 { t.Fatalf("3 groups, got %d", len(root.children)) }
+	if len(root.children) != 3 {
+		t.Fatalf("3 groups, got %d", len(root.children))
+	}
 	for _, c := range root.children {
 		if c.Expanded() {
 			t.Errorf("%q should NOT be auto-expanded (3 children at root)", c.Label())
@@ -155,23 +163,39 @@ func TestMultiBranchAfterDrill(t *testing.T) {
 	}
 	root := NewTree(articles)
 	a := root.children[0]
-	if a.Expanded() { t.Fatal("A should NOT be expanded on load") }
+	if a.Expanded() {
+		t.Fatal("A should NOT be expanded on load")
+	}
 
 	// Manually expand — drills through single-child "A " to branching, absorbing "A ".
 	a.Expand()
-	if !a.Expanded() { t.Fatal("A drilled") }
-	if a.prefix != "A " { t.Errorf("expected absorbed prefix %q, got %q", "A ", a.prefix) }
-	if len(a.children) != 2 { t.Fatalf("A should have 2 children (X, Y) after absorbing, got %d", len(a.children)) }
+	if !a.Expanded() {
+		t.Fatal("A drilled")
+	}
+	if a.prefix != "A " {
+		t.Errorf("expected absorbed prefix %q, got %q", "A ", a.prefix)
+	}
+	if len(a.children) != 2 {
+		t.Fatalf("A should have 2 children (X, Y) after absorbing, got %d", len(a.children))
+	}
 
 	// X group has 2 children → stop (not expanded, not leaf)
 	xGrp := a.children[0]
-	if xGrp.IsLeaf() { t.Error("A X should NOT be leaf") }
-	if xGrp.Expanded() { t.Error("A X should NOT be expanded (2 children, stop)") }
-	if xGrp.prefix != "A X" { t.Errorf("expected X prefix %q, got %q", "A X", xGrp.prefix) }
+	if xGrp.IsLeaf() {
+		t.Error("A X should NOT be leaf")
+	}
+	if xGrp.Expanded() {
+		t.Error("A X should NOT be expanded (2 children, stop)")
+	}
+	if xGrp.prefix != "A X" {
+		t.Errorf("expected X prefix %q, got %q", "A X", xGrp.prefix)
+	}
 
 	// Y group has 1 child which is leaf -> since it's a leaf, it was NOT expanded/absorbed as a parent, but it itself is a leaf
 	yLeaf := a.children[1]
-	if !yLeaf.IsLeaf() { t.Error("A Y Gamma should be leaf") }
+	if !yLeaf.IsLeaf() {
+		t.Error("A Y Gamma should be leaf")
+	}
 }
 
 func TestFlatNavigation(t *testing.T) {

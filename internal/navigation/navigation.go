@@ -6,8 +6,8 @@ package navigation
 // Implementations manage history, back/forward, and document opening.
 type Navigator interface {
 	Open(id string)
-	Back() bool  // returns false when no history
-	Forward() bool // returns false when no forward history
+	Back() bool      // returns false when no history
+	Forward() bool   // returns false when no forward history
 	Current() string // returns current document ID
 }
 

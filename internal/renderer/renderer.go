@@ -89,13 +89,13 @@ type Renderer struct {
 	light        bool
 	hasTree      bool
 
-	textureCache map[textureKey]*sdl.Texture
-	imageEntries []imageEntry
+	textureCache  map[textureKey]*sdl.Texture
+	imageEntries  []imageEntry
 	imageTextures map[string]*sdl.Texture
-	loader       ResourceLoader
+	loader        ResourceLoader
 
-	baseFontSize int
-	fontPath     string
+	baseFontSize   int
+	fontPath       string
 	statusOverride string
 }
 
@@ -161,28 +161,28 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	}
 
 	r := &Renderer{
-		window:       window,
-		sdlRenderer:  sdlRend,
-		selectedLink: -1,
-		width:        winW,
-		height:       winH,
-		marginX:      20,
-		marginY:      16,
-		lineSpacing:  6,
-		blockSpacing: 12,
-		listIndent:   24,
-		bgColor:      sdl.Color{R: 245, G: 245, B: 240, A: 255},
-		textColor:    sdl.Color{R: 30, G: 30, B: 30, A: 255},
-		linkColor:    sdl.Color{R: 0, G: 80, B: 180, A: 255},
-		headingColor: sdl.Color{R: 50, G: 50, B: 50, A: 255},
-		selBgColor:   sdl.Color{R: 255, G: 230, B: 150, A: 255},
-		codeBgColor:  sdl.Color{R: 235, G: 235, B: 230, A: 255},
-		ruleColor:    sdl.Color{R: 180, G: 180, B: 170, A: 255},
-		light:        true,
-		textureCache: make(map[textureKey]*sdl.Texture),
+		window:        window,
+		sdlRenderer:   sdlRend,
+		selectedLink:  -1,
+		width:         winW,
+		height:        winH,
+		marginX:       20,
+		marginY:       16,
+		lineSpacing:   6,
+		blockSpacing:  12,
+		listIndent:    24,
+		bgColor:       sdl.Color{R: 245, G: 245, B: 240, A: 255},
+		textColor:     sdl.Color{R: 30, G: 30, B: 30, A: 255},
+		linkColor:     sdl.Color{R: 0, G: 80, B: 180, A: 255},
+		headingColor:  sdl.Color{R: 50, G: 50, B: 50, A: 255},
+		selBgColor:    sdl.Color{R: 255, G: 230, B: 150, A: 255},
+		codeBgColor:   sdl.Color{R: 235, G: 235, B: 230, A: 255},
+		ruleColor:     sdl.Color{R: 180, G: 180, B: 170, A: 255},
+		light:         true,
+		textureCache:  make(map[textureKey]*sdl.Texture),
 		imageTextures: make(map[string]*sdl.Texture),
-		baseFontSize: baseFontSize,
-		fontPath:     fontPath,
+		baseFontSize:  baseFontSize,
+		fontPath:      fontPath,
 	}
 
 	sizes := [fontCount]int{
@@ -353,9 +353,9 @@ func (r *Renderer) ScrollToLine(lineIdx int) {
 
 // --- Link API ---
 
-func (r *Renderer) LinkCount() int          { return len(r.links) }
-func (r *Renderer) SelectNextLink()          { r.moveLink(+1) }
-func (r *Renderer) SelectPrevLink()          { r.moveLink(-1) }
+func (r *Renderer) LinkCount() int  { return len(r.links) }
+func (r *Renderer) SelectNextLink() { r.moveLink(+1) }
+func (r *Renderer) SelectPrevLink() { r.moveLink(-1) }
 func (r *Renderer) SelectedLinkURL() string {
 	if r.selectedLink < 0 || r.selectedLink >= len(r.links) {
 		return ""
@@ -417,8 +417,11 @@ func (r *Renderer) ScrollPageDown() {
 	r.clampScroll()
 }
 
-func (r *Renderer) ScrollToTop()    { r.scrollY = 0 }
-func (r *Renderer) ScrollToBottom() { r.scrollY = r.totalHeight - (r.height - statusBarHeight); r.clampScroll() }
+func (r *Renderer) ScrollToTop() { r.scrollY = 0 }
+func (r *Renderer) ScrollToBottom() {
+	r.scrollY = r.totalHeight - (r.height - statusBarHeight)
+	r.clampScroll()
+}
 
 func (r *Renderer) clampScroll() {
 	maxScroll := r.totalHeight - (r.height - statusBarHeight)
@@ -526,4 +529,3 @@ func (r *Renderer) Zoom(delta int) error {
 func (r *Renderer) SetStatusOverride(status string) {
 	r.statusOverride = status
 }
-

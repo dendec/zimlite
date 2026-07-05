@@ -94,20 +94,34 @@ func (r *Renderer) renderLines() {
 		tex, ok := r.textureCache[key]
 		if !ok {
 			var font *ttf.Font
-			if line.isCode { font = r.fonts[FontMono].font } else { font = r.fonts[line.fontIdx].font }
-			if font == nil { continue }
+			if line.isCode {
+				font = r.fonts[FontMono].font
+			} else {
+				font = r.fonts[line.fontIdx].font
+			}
+			if font == nil {
+				continue
+			}
 			style := ttf.STYLE_NORMAL
-			if line.isBold && line.isItalic { style = ttf.STYLE_BOLD | ttf.STYLE_ITALIC
-			} else if line.isBold { style = ttf.STYLE_BOLD
-			} else if line.isItalic { style = ttf.STYLE_ITALIC }
+			if line.isBold && line.isItalic {
+				style = ttf.STYLE_BOLD | ttf.STYLE_ITALIC
+			} else if line.isBold {
+				style = ttf.STYLE_BOLD
+			} else if line.isItalic {
+				style = ttf.STYLE_ITALIC
+			}
 			oldStyle := font.GetStyle()
 			font.SetStyle(style)
 			surf, err := font.RenderUTF8Blended(line.text, line.color)
 			font.SetStyle(oldStyle)
-			if err != nil { continue }
+			if err != nil {
+				continue
+			}
 			tex, err = r.sdlRenderer.CreateTextureFromSurface(surf)
 			surf.Free()
-			if err != nil { continue }
+			if err != nil {
+				continue
+			}
 			r.textureCache[key] = tex
 		}
 		_, _, tw, th, _ := tex.Query()
@@ -116,10 +130,14 @@ func (r *Renderer) renderLines() {
 }
 
 func (r *Renderer) renderLinkHighlight() {
-	if r.selectedLink < 0 || r.selectedLink >= len(r.links) { return }
+	if r.selectedLink < 0 || r.selectedLink >= len(r.links) {
+		return
+	}
 	link := r.links[r.selectedLink]
 	sy := link.rect.Y - r.scrollY
-	if sy < -link.rect.H || sy > r.height-statusBarHeight { return }
+	if sy < -link.rect.H || sy > r.height-statusBarHeight {
+		return
+	}
 	r.sdlRenderer.SetDrawColor(r.selBgColor.R, r.selBgColor.G, r.selBgColor.B, r.selBgColor.A)
 	r.sdlRenderer.FillRect(&sdl.Rect{X: link.rect.X - 2, Y: sy - 1, W: link.rect.W + 4, H: link.rect.H + 2})
 	key := textureKey{text: link.label, fontIdx: FontBody, color: r.linkColor}
@@ -131,7 +149,9 @@ func (r *Renderer) renderLinkHighlight() {
 			if err == nil {
 				tex, err = r.sdlRenderer.CreateTextureFromSurface(surf)
 				surf.Free()
-				if err == nil { r.textureCache[key] = tex }
+				if err == nil {
+					r.textureCache[key] = tex
+				}
 			}
 		}
 	}

@@ -12,7 +12,7 @@ type Document struct {
 type Block interface{ blockMarker() }
 
 type Heading struct {
-	Level   int    // 1–6
+	Level   int // 1–6
 	Content string
 }
 
@@ -223,7 +223,7 @@ func visitInlinesStyled(inlines []Inline, v *InlineWordVisitor, isBold, isItalic
 		case *HardBreak:
 			v.Words = append(v.Words, Word{
 				IsHardBreak: true,
-				IsBold: isBold, IsItalic: isItalic, IsCode: isCode,
+				IsBold:      isBold, IsItalic: isItalic, IsCode: isCode,
 			})
 		}
 	}

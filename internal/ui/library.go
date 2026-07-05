@@ -138,7 +138,9 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 		lang := u.Query().Get("lang")
 		category := u.Query().Get("category")
 		page, _ := strconv.Atoi(u.Query().Get("page"))
-		if page < 0 { page = 0 }
+		if page < 0 {
+			page = 0
+		}
 		start := page * 50
 		feed, err := fetchFeed(fmt.Sprintf("https://browse.library.kiwix.org/catalog/v2/entries?start=%d&count=50&lang=%s&category=%s", start, lang, category))
 		if err != nil {
@@ -163,18 +165,24 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 						sizeBytes = link.Length
 					}
 				}
-				if downloadURL == "" { continue }
+				if downloadURL == "" {
+					continue
+				}
 				sizeStr := formatSize(sizeBytes)
 				directURL := strings.Replace(downloadURL, ".zim.meta4", ".zim", 1)
 				uDirect, _ := url.Parse(directURL)
 				filename := entry.Title + ".zim"
-				if uDirect != nil { filename = path.Base(uDirect.Path) }
-			fmt.Fprintf(&sb, "### %s\n", entry.Title)
-			if entry.Summary != "" { fmt.Fprintf(&sb, "*Description*: %s\n\n", entry.Summary) }
-			fmt.Fprintf(&sb, "*Size*: %s\n\n", sizeStr)
+				if uDirect != nil {
+					filename = path.Base(uDirect.Path)
+				}
+				fmt.Fprintf(&sb, "### %s\n", entry.Title)
+				if entry.Summary != "" {
+					fmt.Fprintf(&sb, "*Description*: %s\n", entry.Summary)
+				}
+				fmt.Fprintf(&sb, "*Size*: %s\n", sizeStr)
 				escURL := url.QueryEscape(directURL)
 				escFile := url.QueryEscape(filename)
-				fmt.Fprintf(&sb, "[Download Archive](virtual:library/download?url=%s&filename=%s)\n\n", escURL, escFile)
+				fmt.Fprintf(&sb, "[Download Archive](virtual:library/download?url=%s&filename=%s)\n", escURL, escFile)
 				sb.WriteString("---\n\n")
 			}
 			// Pagination nav.
