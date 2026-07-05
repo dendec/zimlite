@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	neturl "net/url"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -167,16 +166,7 @@ func (app *App) renderTree() {
 	out := make([]string, 0, len(lines))
 	cursorIdx := -1
 	for i, l := range lines {
-		indent := strings.Repeat("  ", l.Indent)
-		var prefix string
-		if l.IsLeaf {
-			prefix = "• "
-		} else if l.IsExpanded {
-			prefix = "▾ "
-		} else {
-			prefix = "▸ "
-		}
-		entry := indent + prefix + l.Label
+		entry := l.TreePrefix + l.Label
 		if l.Suffix != "" {
 			entry += " (" + l.Suffix + ")"
 		}

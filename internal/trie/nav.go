@@ -115,7 +115,7 @@ func (ns *NavState) ActionLeft() {
 
 // VisLine describes one line in the tree display.
 type VisLine struct {
-	Indent     int
+	TreePrefix string
 	Label      string
 	Suffix     string
 	IsLeaf     bool
@@ -126,17 +126,21 @@ type VisLine struct {
 // VisibleNodes flattens the currently visible tree for display.
 func (ns *NavState) VisibleNodes() []VisLine {
 	var lines []VisLine
-	ns.walk(ns.Root, 0, &lines)
+	ns.walk(ns.Root, "", &lines, false)
 	return lines
 }
 
-func (ns *NavState) walk(node *RadixNode, depth int, lines *[]VisLine) {
+func (ns *NavState) walk(node *RadixNode, prefix string, lines *[]VisLine, isLast bool) {
 	if node == nil {
 		return
 	}
 	if node.parent != nil {
+		connector := "├── "
+		if isLast {
+			connector = "└── "
+		}
 		*lines = append(*lines, VisLine{
-			Indent:     depth - 1,
+			TreePrefix: prefix + connector,
 			Label:      node.Label(),
 			Suffix:     node.Suffix(),
 			IsLeaf:     node.IsLeaf(),
@@ -145,8 +149,17 @@ func (ns *NavState) walk(node *RadixNode, depth int, lines *[]VisLine) {
 		})
 	}
 	if node.Expanded() {
-		for _, c := range node.children {
-			ns.walk(c, depth+1, lines)
+		for i, c := range node.children {
+			childIsLast := i == len(node.children)-1
+			var childPrefix string
+			if node.parent != nil {
+				if isLast {
+					childPrefix = prefix + "    "
+				} else {
+					childPrefix = prefix + "│   "
+				}
+			}
+			ns.walk(c, childPrefix, lines, childIsLast)
 		}
 	}
 }
