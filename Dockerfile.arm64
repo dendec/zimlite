@@ -1,69 +1,64 @@
-# Cross-build for PortMaster ARM64 (TrimUI Smart Pro, Anbernic RG35XX, etc.)
-#
-# Build & extract:
-#   docker build -t kiwix-arm64 -f Dockerfile.arm64 .
-#   docker create --name extract kiwix-arm64
-#   docker cp extract:/dist/kiwix-sdl ./dist/
-#   docker rm extract
-#
-# Deploy: copy dist/kiwix-sdl/ to device, run kiwix-sdl.sh <zim-file>
+# ARM64 cross-build for TrimUI Smart Pro (glibc 2.33, libstdc++ 6.0.28).
+# Builds libzim from source with GCC 10 for ABI compatibility.
+FROM debian:bullseye-slim
 
-FROM golang:bookworm
+RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
+    && wget -q https://go.dev/dl/go1.25.4.linux-amd64.tar.gz -O /tmp/go.tar.gz \
+    && tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz \
+    && rm -rf /var/lib/apt/lists/*
+ENV PATH=/usr/local/go/bin:$PATH GOPATH=/go
 
-RUN dpkg --add-architecture arm64 && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        g++-aarch64-linux-gnu \
-        libsdl2-dev:arm64 \
-        libsdl2-ttf-dev:arm64 \
-        ca-certificates \
-        wget \
+RUN dpkg --add-architecture arm64 && apt-get update && apt-get install -y --no-install-recommends \
+        g++-aarch64-linux-gnu binutils-aarch64-linux-gnu wget \
+        libsdl2-dev:arm64 libsdl2-ttf-dev:arm64 \
+        liblzma-dev:arm64 libzstd-dev:arm64 zlib1g-dev:arm64 \
+        libicu-dev:arm64 \
+        ninja-build pkg-config python3-pip \
+        xz-utils \
+    && pip3 install meson \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
+# Meson cross-file for aarch64.
+RUN printf "[binaries]\nc='aarch64-linux-gnu-gcc'\ncpp='aarch64-linux-gnu-g++'\nar='aarch64-linux-gnu-ar'\nstrip='aarch64-linux-gnu-strip'\npkgconfig='pkg-config'\n\n[host_machine]\nsystem='linux'\ncpu_family='aarch64'\ncpu='aarch64'\nendian='little'\n" > /cross-arm64.txt
+
 ARG ZIM_VER=9.7.0
-ARG ZIM_ARCH=aarch64
+RUN wget -q "https://download.openzim.org/release/libzim/libzim-${ZIM_VER}.tar.xz" -O /tmp/zim.tar.xz \
+    && mkdir -p /tmp/zim && tar xf /tmp/zim.tar.xz -C /tmp/zim --strip-components=1 && rm /tmp/zim.tar.xz \
+    && cd /tmp/zim \
+    && PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig \
+       meson setup _build --cross-file /cross-arm64.txt \
+         --prefix /usr/local -Ddefault_library=shared \
+         -Dwith_xapian=false \
+    && ninja -C _build \
+    && DESTDIR=/build/zim-install ninja -C _build install \
+    && rm -rf /tmp/zim
 
-ENV ZIM_DIR=/build/lib/libzim_linux-${ZIM_ARCH}-${ZIM_VER}
-
-RUN wget -q "https://download.openzim.org/release/libzim/libzim_linux-${ZIM_ARCH}-${ZIM_VER}.tar.gz" -O /tmp/libzim.tar.gz && \
-    mkdir -p /build/lib && \
-    tar xzf /tmp/libzim.tar.gz -C /build/lib/ && \
-    rm /tmp/libzim.tar.gz && \
-    ZIM_SUBDIR=$(ls ${ZIM_DIR}/lib/) && \
-    ln -s ${ZIM_DIR}/lib/${ZIM_SUBDIR} ${ZIM_DIR}/lib/aarch64-linux-gnu
-
-ENV ZIM_INC=${ZIM_DIR}/include
-ENV ZIM_LIB=${ZIM_DIR}/lib/aarch64-linux-gnu
+ENV ZIM_INC=/build/zim-install/usr/local/include
+ENV ZIM_LIB=/build/zim-install/usr/local/lib
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
     CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ \
     PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
     CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -I${ZIM_INC}" \
     CGO_LDFLAGS="-L${ZIM_LIB} -lzim" \
-    go build -ldflags="-s -w" -o kiwix-sdl ./cmd/kiwix-sdl && \
-    aarch64-linux-gnu-strip kiwix-sdl
+    go build -ldflags="-s -w" -o kiwix-sdl ./cmd/kiwix-sdl \
+    && aarch64-linux-gnu-strip kiwix-sdl
 
-# Package: binary + libzim (SDL2 is on the device).
-RUN mkdir -p /dist/kiwix-sdl && \
-    cp kiwix-sdl /dist/kiwix-sdl/ && \
-    cp ${ZIM_LIB}/libzim.so.9.7.0 /dist/kiwix-sdl/ && \
-    ln -s libzim.so.9.7.0 /dist/kiwix-sdl/libzim.so.9 && \
-    ln -s libzim.so.9 /dist/kiwix-sdl/libzim.so
+RUN mkdir -p /dist/kiwix-sdl/lib \
+    && cp kiwix-sdl /dist/kiwix-sdl/ \
+    && cp ${ZIM_LIB}/libzim.so.9.7.0 /dist/kiwix-sdl/lib/ \
+    && cp ${ZIM_LIB}/libzim.so.9 /dist/kiwix-sdl/lib/ \
+    && cp ${ZIM_LIB}/libzim.so /dist/kiwix-sdl/lib/ \
+    && find /usr/lib/aarch64-linux-gnu/ -name 'liblzma.so*' -exec cp {} /dist/kiwix-sdl/lib/ \; \
+    && find /usr/lib/aarch64-linux-gnu/ -name 'libzstd.so*' -exec cp {} /dist/kiwix-sdl/lib/ \;
 
-# PortMaster launch script.
-RUN printf '#!/bin/sh\nDIR="$(dirname "$0")"\nexport LD_LIBRARY_PATH="$DIR:$LD_LIBRARY_PATH"\n"$DIR/kiwix-sdl" "$@"\n' > /dist/kiwix-sdl/kiwix-sdl.sh && \
-    chmod +x /dist/kiwix-sdl/kiwix-sdl.sh
+RUN printf '#!/bin/sh\nDIR="$(dirname "$0")"\nexport LD_LIBRARY_PATH="$DIR/lib:/usr/lib:$LD_LIBRARY_PATH"\n"$DIR/kiwix-sdl" "$@"\n' > /dist/kiwix-sdl/kiwix-sdl.sh \
+    && chmod +x /dist/kiwix-sdl/kiwix-sdl.sh
 
-# Show what we built.
-RUN echo "=== Binary ===" && file /dist/kiwix-sdl/kiwix-sdl && \
-    ls -lh /dist/kiwix-sdl/kiwix-sdl && \
-    echo "=== Bundled libs ===" && find /dist -name '*.so*' -exec ls -lh {} \; && \
-    echo "=== Needed ===" && \
-    aarch64-linux-gnu-objdump -p /dist/kiwix-sdl/kiwix-sdl 2>/dev/null | grep NEEDED || echo "(no objdump)"
+RUN echo "=== Dist ===" && find /dist -type f -exec ls -lh {} \;
