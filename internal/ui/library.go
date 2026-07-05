@@ -175,7 +175,7 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 				if uDirect != nil {
 					filename = path.Base(uDirect.Path)
 				}
-				fmt.Fprintf(&sb, "### %s\n", entry.Title)
+				fmt.Fprintf(&sb, "### %s\n\n", entry.Title)
 				if entry.Summary != "" {
 					fmt.Fprintf(&sb, "*Description*: %s\n", entry.Summary)
 				}
@@ -195,6 +195,7 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 			}
 			sb.WriteString("\n")
 		}
+		fmt.Println(sb.String())
 		return markdown.Parse(strings.NewReader(sb.String()))
 
 	case "/library/download":
