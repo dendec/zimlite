@@ -36,6 +36,7 @@ type DocRenderer interface {
 	ToggleTheme()
 	HandleClick(mx, my int32) string
 	SetHasTree(has bool)
+	Zoom(delta int) error
 }
 
 // DocNavigator manages document history (back/forward).
@@ -407,6 +408,12 @@ func (app *App) processEvent(event sdl.Event) {
 		case sdl.SCANCODE_D: // D = toggle dark/light theme
 			app.renderer.ToggleTheme()
 			return
+		case sdl.SCANCODE_EQUALS, sdl.SCANCODE_KP_PLUS: // + = zoom in
+			_ = app.renderer.Zoom(1)
+			return
+		case sdl.SCANCODE_MINUS, sdl.SCANCODE_KP_MINUS: // - = zoom out
+			_ = app.renderer.Zoom(-1)
+			return
 		case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
 			// Global back — also works as doc back.
 		}
@@ -474,6 +481,10 @@ func (app *App) processEvent(event sdl.Event) {
 			app.goHome()
 		case 8: // Menu/Guide — quit
 			app.running = false
+		case 9: // L2 — zoom out
+			_ = app.renderer.Zoom(-1)
+		case 10: // R2 — zoom in
+			_ = app.renderer.Zoom(1)
 		}
 
 	case *sdl.JoyHatEvent:

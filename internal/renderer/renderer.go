@@ -93,6 +93,9 @@ type Renderer struct {
 	imageEntries []imageEntry
 	imageTextures map[string]*sdl.Texture
 	loader       ResourceLoader
+
+	baseFontSize int
+	fontPath     string
 }
 
 type lineEntry struct {
@@ -177,6 +180,8 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		light:        true,
 		textureCache: make(map[textureKey]*sdl.Texture),
 		imageTextures: make(map[string]*sdl.Texture),
+		baseFontSize: baseFontSize,
+		fontPath:     fontPath,
 	}
 
 	sizes := [fontCount]int{
@@ -464,3 +469,64 @@ func (r *Renderer) measureHeading(text string, fidx FontKind, isBold, isItalic b
 	font := r.fonts[fidx].font
 	return measureText(text, font, isBold, isItalic)
 }
+
+// Zoom adjusts baseFontSize by delta and re-initializes fonts at runtime.
+func (r *Renderer) Zoom(delta int) error {
+	newSize := r.baseFontSize + delta
+	if newSize < 10 {
+		newSize = 10
+	}
+	if newSize > 32 {
+		newSize = 32
+	}
+	if newSize == r.baseFontSize {
+		return nil
+	}
+	r.baseFontSize = newSize
+
+	// Close old fonts
+	for i := 0; i < int(fontCount); i++ {
+		if r.fonts[i].font != nil {
+			r.fonts[i].font.Close()
+		}
+	}
+
+	// Re-build font sizes map
+	sizes := [fontCount]int{
+		FontKind(FontBody): r.baseFontSize,
+		FontKind(FontH1):   r.baseFontSize + 14,
+		FontKind(FontH2):   r.baseFontSize + 10,
+		FontKind(FontH3):   r.baseFontSize + 6,
+		FontKind(FontH4):   r.baseFontSize + 3,
+		FontKind(FontH5):   r.baseFontSize + 1,
+		FontKind(FontH6):   r.baseFontSize - 1,
+		FontKind(FontMono): r.baseFontSize,
+	}
+
+	for i := FontKind(0); i < fontCount; i++ {
+		var font *ttf.Font
+		var err error
+		if i == FontMono {
+			font, err = loadFontFromBytes(DejaVuSansMono, sizes[i])
+		} else if r.fontPath != "" {
+			font, err = ttf.OpenFont(r.fontPath, sizes[i])
+		} else {
+			font, err = loadFontFromBytes(DejaVuSans, sizes[i])
+		}
+		if err != nil {
+			return fmt.Errorf("zoom load font size %d: %w", sizes[i], err)
+		}
+		r.fonts[i] = fontSlot{font: font, size: sizes[i]}
+	}
+
+	// Destroy cached text textures to prevent stale text sizes/images
+	for _, tex := range r.textureCache {
+		tex.Destroy()
+	}
+	r.textureCache = make(map[textureKey]*sdl.Texture)
+
+	// Recalculate document layout with new font sizes
+	r.relayout()
+	return nil
+}
+

@@ -197,26 +197,26 @@ func (r *Renderer) Render() {
 	if sdl.NumJoysticks() > 0 {
 		if r.doc != nil {
 			if r.hasTree {
-				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Start:home  Select:tree  Menu:exit"
+				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Start:home  Select:tree  L2/R2:zoom  Menu:exit"
 			} else if isMenu {
-				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Menu:exit"
+				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  L2/R2:zoom  Menu:exit"
 			} else {
-				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Select:menu  Menu:exit"
+				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Select:menu  L2/R2:zoom  Menu:exit"
 			}
 		} else {
-			statusText = "↑↓:nav  L1/R1:page  A/→:enter  X/←:back  Select:doc  Menu:exit"
+			statusText = "↑↓:nav  L1/R1:page  A/→:enter  X/←:back  Select:doc  L2/R2:zoom  Menu:exit"
 		}
 	} else {
 		if r.doc != nil {
 			if r.hasTree {
-				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  H:home  T:tree  F:menu  D:theme  Q:exit"
+				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  H:home  T:tree  F:menu  D:theme  +/-:zoom  Q:exit"
 			} else if isMenu {
-				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  D:theme  Q:exit"
+				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  D:theme  +/-:zoom  Q:exit"
 			} else {
-				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  F:menu  D:theme  Q:exit"
+				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  F:menu  D:theme  +/-:zoom  Q:exit"
 			}
 		} else {
-			statusText = "↑↓:nav  PgUp/PgDn:page  ↩→:enter  ←⌫:back  T:doc  D:theme  Q:exit"
+			statusText = "↑↓:nav  PgUp/PgDn:page  ↩→:enter  ←⌫:back  T:doc  D:theme  +/-:zoom  Q:exit"
 		}
 	}
 
@@ -228,9 +228,15 @@ func (r *Renderer) Render() {
 			surf.Free()
 			if err == nil {
 				_, _, tw, th, _ := tex.Query()
+				destW := tw
+				destH := th
+				if destW > r.width-24 {
+					destW = r.width - 24
+					destH = th * destW / tw
+				}
 				r.sdlRenderer.Copy(tex, nil, &sdl.Rect{
-					X: 12, Y: r.height - statusBarHeight + (statusBarHeight-th)/2,
-					W: tw, H: th,
+					X: 12, Y: r.height - statusBarHeight + (statusBarHeight-destH)/2,
+					W: destW, H: destH,
 				})
 				tex.Destroy() // Destroy temporary status text texture to avoid cache bloat
 			}
