@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -240,9 +241,18 @@ func (app *App) navigateLink(url string) {
 		}
 		doc, err := app.zimReader.ResolveArticle(url, referrer)
 		if err == nil {
+			// Store full resolved path so ../ links work across levels.
+			resolved := url
+			if !strings.HasPrefix(url, "A/") && !strings.HasPrefix(url, "C/") &&
+				!strings.HasPrefix(url, "I/") && !strings.HasPrefix(url, "M/") &&
+				!strings.HasPrefix(url, "X/") && !strings.HasPrefix(url, "-/") {
+				if referrer != "" {
+					resolved = path.Join(referrer, url)
+				}
+			}
 			app.mode = modeDoc
 			app.renderer.SetDocument(doc)
-			app.navigator.Open("zim:" + url)
+			app.navigator.Open("zim:" + resolved)
 			app.renderer.Relayout()
 			return
 		}
