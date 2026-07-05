@@ -113,13 +113,7 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		return ast.WalkContinue, nil
 
 	default:
-		// Unknown block — ignore, don't walk children.
-		if n.Kind() == ast.KindBlockquote {
-			return ast.WalkContinue, nil
-		}
-		// For anything else that's a block-level node, skip children to avoid duplicate processing.
-		kind := n.Kind()
-		_ = kind
+		// Unknown block — ignore.
 	}
 
 	return ast.WalkContinue, nil

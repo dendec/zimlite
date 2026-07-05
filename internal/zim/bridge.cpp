@@ -50,16 +50,6 @@ zim_entry_t zim_get_entry_by_path(zim_archive_t archive, const char* path) {
     }
 }
 
-zim_entry_t zim_get_entry_by_title_index(zim_archive_t archive, int idx) {
-    try {
-        auto* a = static_cast<zim::Archive*>(archive);
-        auto* entry = new zim::Entry(a->getEntryByTitle(static_cast<zim::entry_index_type>(idx)));
-        return static_cast<zim_entry_t>(entry);
-    } catch (...) {
-        return nullptr;
-    }
-}
-
 const char* zim_entry_get_path(zim_entry_t entry) {
     if (!entry) return nullptr;
     auto* e = static_cast<zim::Entry*>(entry);

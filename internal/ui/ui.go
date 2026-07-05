@@ -303,19 +303,21 @@ func (app *App) processTreeKey(sc sdl.Scancode) {
 	}
 }
 
+const scrollStep = 40
+
 func (app *App) processDocKey(sc sdl.Scancode) {
 	switch sc {
 	case sdl.SCANCODE_UP, sdl.SCANCODE_W, sdl.SCANCODE_KP_8:
 		if app.renderer.LinkCount() > 0 {
 			app.renderer.SelectPrevLink()
 		} else {
-			app.renderer.ScrollBy(-40)
+			app.renderer.ScrollBy(-scrollStep)
 		}
 	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
 		if app.renderer.LinkCount() > 0 {
 			app.renderer.SelectNextLink()
 		} else {
-			app.renderer.ScrollBy(40)
+			app.renderer.ScrollBy(scrollStep)
 		}
 	case sdl.SCANCODE_PAGEUP:
 		app.renderer.ScrollPageUp()

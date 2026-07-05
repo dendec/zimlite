@@ -17,14 +17,6 @@ func NewNavState(root *RadixNode) *NavState {
 	return ns
 }
 
-// CursorLabel returns the display label of the cursor.
-func (ns *NavState) CursorLabel() string {
-	if ns.Cursor == nil {
-		return ""
-	}
-	return ns.Cursor.Label()
-}
-
 // CursorIsLeaf returns true if cursor is on a leaf article.
 func (ns *NavState) CursorIsLeaf() bool {
 	return ns.Cursor != nil && ns.Cursor.IsLeaf()

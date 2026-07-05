@@ -173,9 +173,6 @@ func (r *Renderer) Destroy() {
 	sdl.Quit()
 }
 
-func (r *Renderer) GetWindow() *sdl.Window { return r.window }
-func (r *Renderer) GetSize() (w, h int32)  { return r.width, r.height }
-
 func (r *Renderer) SetDocument(doc *document.Document) {
 	r.doc = doc
 	r.scrollY = 0
@@ -215,12 +212,6 @@ func (r *Renderer) SetTextLines(lines []string) {
 	r.clampScroll()
 }
 
-// LineHeight returns the height of a single text line (font + spacing).
-func (r *Renderer) LineHeight() int32 {
-	font := r.fonts[FontBody].font
-	return int32(font.Height()) + r.lineSpacing
-}
-
 // ScrollToLine ensures the given line index is visible.
 func (r *Renderer) ScrollToLine(lineIdx int) {
 	if lineIdx < 0 || lineIdx >= len(r.lines) {
@@ -238,29 +229,14 @@ func (r *Renderer) ScrollToLine(lineIdx int) {
 
 // --- Link API ---
 
-func (r *Renderer) LinkCount() int               { return len(r.links) }
-func (r *Renderer) SelectedLink() int             { return r.selectedLink }
-func (r *Renderer) SelectLink(idx int)            { r.clampLinkIndex(idx); r.selectedLink = idx }
-func (r *Renderer) SelectNextLink()               { r.moveLink(+1) }
-func (r *Renderer) SelectPrevLink()               { r.moveLink(-1) }
+func (r *Renderer) LinkCount() int          { return len(r.links) }
+func (r *Renderer) SelectNextLink()          { r.moveLink(+1) }
+func (r *Renderer) SelectPrevLink()          { r.moveLink(-1) }
 func (r *Renderer) SelectedLinkURL() string {
 	if r.selectedLink < 0 || r.selectedLink >= len(r.links) {
 		return ""
 	}
 	return r.links[r.selectedLink].url
-}
-
-func (r *Renderer) clampLinkIndex(idx int) {
-	if len(r.links) == 0 {
-		r.selectedLink = -1
-		return
-	}
-	if idx < 0 {
-		idx = 0
-	}
-	if idx >= len(r.links) {
-		idx = len(r.links) - 1
-	}
 }
 
 func (r *Renderer) moveLink(delta int) {
@@ -301,8 +277,6 @@ func (r *Renderer) clampSelection() {
 }
 
 // --- Scroll API ---
-
-func (r *Renderer) ScrollY() int32 { return r.scrollY }
 
 func (r *Renderer) ScrollBy(delta int32) {
 	r.scrollY += delta
