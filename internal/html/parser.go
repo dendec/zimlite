@@ -3,6 +3,7 @@
 package html
 
 import (
+	"html"
 	"io"
 	"strings"
 
@@ -18,5 +19,8 @@ func Parse(r io.Reader) (*document.Document, error) {
 		return nil, err
 	}
 
-	return markdown.Parse(strings.NewReader(string(mdBytes)))
+	// Decode any remaining HTML entities (&lt; → <, &gt; → >, &amp; → &, ...).
+	md := html.UnescapeString(string(mdBytes))
+
+	return markdown.Parse(strings.NewReader(md))
 }

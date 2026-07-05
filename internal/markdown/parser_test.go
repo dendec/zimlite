@@ -191,3 +191,33 @@ func TestParseEmpty(t *testing.T) {
 		t.Fatal("nil document")
 	}
 }
+
+func TestParseRawHTML(t *testing.T) {
+	// Goldmark parses <tag> as ast.RawHTML — ensure we emit it as text.
+	md := `Price: <100 & >50`
+	doc, err := Parse(strings.NewReader(md))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(doc.Blocks) == 0 {
+		t.Fatal("no blocks")
+	}
+	p, ok := doc.Blocks[0].(*document.Paragraph)
+	if !ok {
+		t.Fatalf("expected paragraph, got %T", doc.Blocks[0])
+	}
+
+	var texts []string
+	for _, inl := range p.Inlines {
+		if t, ok := inl.(*document.Text); ok {
+			texts = append(texts, t.Content)
+		}
+	}
+	joined := strings.Join(texts, "")
+	if !strings.Contains(joined, "<100") {
+		t.Errorf("missing <100 in output: %q", joined)
+	}
+	if !strings.Contains(joined, ">50") {
+		t.Errorf("missing >50 in output: %q", joined)
+	}
+}

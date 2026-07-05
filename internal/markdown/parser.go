@@ -132,6 +132,12 @@ func (c *converter) collectText(n ast.Node) string {
 			if txt, ok := childNode.(*ast.Text); ok {
 				result += c.text(txt)
 			}
+			if raw, ok := childNode.(*ast.RawHTML); ok && raw.Segments != nil {
+				for i := 0; i < raw.Segments.Len(); i++ {
+					seg := raw.Segments.At(i)
+					result += string(seg.Value(c.source))
+				}
+			}
 			if _, ok := childNode.(*ast.CodeSpan); ok {
 				// skip children handled above
 				return ast.WalkSkipChildren, nil
@@ -215,6 +221,16 @@ func (c *converter) convertInline(n ast.Node) []document.Inline {
 	case *ast.CodeSpan:
 		content := c.collectText(node)
 		return []document.Inline{&document.Code{Content: content}}
+
+	case *ast.RawHTML:
+		var inlines []document.Inline
+		if node.Segments != nil {
+			for i := 0; i < node.Segments.Len(); i++ {
+				seg := node.Segments.At(i)
+				inlines = append(inlines, &document.Text{Content: string(seg.Value(c.source))})
+			}
+		}
+		return inlines
 
 	case *ast.String:
 		return []document.Inline{&document.Text{Content: string(node.Value)}}
