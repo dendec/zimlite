@@ -152,29 +152,45 @@ func (app *App) renderTree() {
 	}
 }
 
-// OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim.
+// OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim, and virtual:menu.
 func (app *App) OpenFile(path string) error {
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		absPath = path
-	}
+	var absPath string
+	var isZIM bool
+	var doc *document.Document
+	var err error
 
-	isZIM := strings.ToLower(filepath.Ext(absPath)) == ".zim"
-	if !isZIM {
+	if path == "virtual:menu" {
+		absPath = "virtual:menu"
 		app.shutdown()
-	}
-
-	doc, ok := app.docCache[absPath]
-	if !ok {
-		if isZIM {
-			doc, err = app.openZIM(absPath)
-		} else {
-			doc, err = app.openFile(absPath)
-		}
+		doc, err = app.generateFileSelectorDoc()
 		if err != nil {
 			return err
 		}
 		app.docCache[absPath] = doc
+	} else {
+		absPath, err = filepath.Abs(path)
+		if err != nil {
+			absPath = path
+		}
+
+		isZIM = strings.ToLower(filepath.Ext(absPath)) == ".zim"
+		if !isZIM {
+			app.shutdown()
+		}
+
+		var ok bool
+		doc, ok = app.docCache[absPath]
+		if !ok {
+			if isZIM {
+				doc, err = app.openZIM(absPath)
+			} else {
+				doc, err = app.openFile(absPath)
+			}
+			if err != nil {
+				return err
+			}
+			app.docCache[absPath] = doc
+		}
 	}
 
 	app.mode = modeDoc
@@ -186,6 +202,9 @@ func (app *App) OpenFile(path string) error {
 		docPath := app.navigator.Current()
 		if docPath == "" {
 			docPath = absPath
+		}
+		if strings.HasPrefix(docPath, "virtual:") {
+			return os.ReadFile(rawURL)
 		}
 		dir := filepath.Dir(docPath)
 		fullPath := filepath.Join(dir, rawURL)
@@ -207,6 +226,63 @@ func (app *App) OpenFile(path string) error {
 	
 	app.renderer.Relayout()
 	return nil
+}
+
+func (app *App) generateFileSelectorDoc() (*document.Document, error) {
+	files, err := os.ReadDir(".")
+	if err != nil {
+		return nil, fmt.Errorf("read dir: %w", err)
+	}
+
+	var sb strings.Builder
+	sb.WriteString("# Kiwix SDL Document Menu\n\n")
+	sb.WriteString("Select a document or ZIM archive to open:\n\n")
+
+	var zims []string
+	var mds []string
+
+	for _, entry := range files {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		ext := strings.ToLower(filepath.Ext(name))
+		switch ext {
+		case ".zim":
+			zims = append(zims, name)
+		case ".md", ".html", ".htm":
+			if !strings.HasPrefix(name, ".") {
+				mds = append(mds, name)
+			}
+		}
+	}
+
+	if _, err := os.Stat("portmaster/Welcome.md"); err == nil {
+		mds = append(mds, "portmaster/Welcome.md")
+	}
+
+	if len(zims) > 0 {
+		sb.WriteString("## ZIM Archives\n")
+		for _, f := range zims {
+			sb.WriteString(fmt.Sprintf("* [%s](%s)\n", f, f))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(mds) > 0 {
+		sb.WriteString("## Documents\n")
+		for _, f := range mds {
+			label := filepath.Base(f)
+			sb.WriteString(fmt.Sprintf("* [%s](%s)\n", label, f))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(zims) == 0 && len(mds) == 0 {
+		sb.WriteString("*No ZIM or Markdown files found in the current directory.*\n")
+	}
+
+	return markdown.Parse(strings.NewReader(sb.String()))
 }
 
 func (app *App) openFile(path string) (*document.Document, error) {
@@ -321,6 +397,9 @@ func (app *App) processEvent(event sdl.Event) {
 			return
 		case sdl.SCANCODE_H: // H = go home
 			app.goHome()
+			return
+		case sdl.SCANCODE_F: // F = open file menu
+			_ = app.OpenFile("virtual:menu")
 			return
 		case sdl.SCANCODE_RETURN2, sdl.SCANCODE_T: // T = toggle tree mode
 			app.toggleMode()
@@ -437,7 +516,8 @@ func (app *App) processEvent(event sdl.Event) {
 
 func (app *App) toggleMode() {
 	if app.zimReader == nil {
-		return // no ZIM open, tree unavailable
+		_ = app.OpenFile("virtual:menu")
+		return
 	}
 	if app.mode == modeTree {
 		app.exitTreeMode()
@@ -509,6 +589,10 @@ func (app *App) processDocKey(sc sdl.Scancode) {
 			}
 		} else if app.zimReader != nil {
 			app.enterTreeMode()
+		} else {
+			if app.navigator.Current() != "virtual:menu" {
+				_ = app.OpenFile("virtual:menu")
+			}
 		}
 	}
 }
@@ -537,6 +621,10 @@ func (app *App) processJoyB() {
 		if doc, ok := app.docCache[prevPath]; ok {
 			app.renderer.SetDocument(doc)
 			app.renderer.Relayout()
+		}
+	} else {
+		if app.navigator.Current() != "virtual:menu" {
+			_ = app.OpenFile("virtual:menu")
 		}
 	}
 }

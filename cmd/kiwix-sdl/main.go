@@ -5,9 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/navigation"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/renderer"
@@ -22,31 +20,7 @@ func main() {
 	if len(os.Args) >= 2 {
 		filePath = os.Args[1]
 	} else {
-		// Scan current directory for ZIM files
-		files, err := os.ReadDir(".")
-		if err == nil {
-			for _, entry := range files {
-				if entry.IsDir() {
-					continue
-				}
-				ext := strings.ToLower(filepath.Ext(entry.Name()))
-				if ext == ".zim" {
-					filePath = entry.Name()
-					break
-				}
-			}
-		}
-		// Fallback to Welcome.md if it exists
-		if filePath == "" {
-			if _, err := os.Stat("Welcome.md"); err == nil {
-				filePath = "Welcome.md"
-			}
-		}
-	}
-
-	if filePath == "" {
-		fmt.Fprintf(os.Stderr, "Usage: %s <markdown-file|zim-file>\n", os.Args[0])
-		os.Exit(1)
+		filePath = "virtual:menu"
 	}
 
 	fontPath := findFont()

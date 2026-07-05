@@ -8,6 +8,7 @@ import (
 	_ "image/png"
 	"unsafe"
 
+	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -186,12 +187,21 @@ func (r *Renderer) Render() {
 
 	// Render status bar text.
 	var statusText string
+	isMenu := false
+	if r.doc != nil && len(r.doc.Blocks) > 0 {
+		if h, ok := r.doc.Blocks[0].(*document.Heading); ok {
+			isMenu = h.Level == 1 && h.Content == "Kiwix SDL Document Menu"
+		}
+	}
+
 	if sdl.NumJoysticks() > 0 {
 		if r.doc != nil {
 			if r.hasTree {
 				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Start:home  Select:tree  Menu:exit"
-			} else {
+			} else if isMenu {
 				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Menu:exit"
+			} else {
+				statusText = "←→:links  ↑↓:scroll  L1/R1:page  A:open  X:back  Select:menu  Menu:exit"
 			}
 		} else {
 			statusText = "↑↓:nav  L1/R1:page  A/→:enter  X/←:back  Select:doc  Menu:exit"
@@ -199,9 +209,11 @@ func (r *Renderer) Render() {
 	} else {
 		if r.doc != nil {
 			if r.hasTree {
-				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  H:home  T:tree  D:theme  Q:exit"
-			} else {
+				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  H:home  T:tree  F:menu  D:theme  Q:exit"
+			} else if isMenu {
 				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  D:theme  Q:exit"
+			} else {
+				statusText = "←→:links  ↑↓:scroll  PgUp/PgDn:page  ↩:open  ⌫:back  F:menu  D:theme  Q:exit"
 			}
 		} else {
 			statusText = "↑↓:nav  PgUp/PgDn:page  ↩→:enter  ←⌫:back  T:doc  D:theme  Q:exit"
