@@ -12,6 +12,7 @@ import (
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/menu"
 )
 
 // AtomLink represents a link element in an Atom entry or feed.
@@ -200,7 +201,7 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 		filename := u.Query().Get("filename")
 		if downloadURL != "" && filename != "" {
 			app.startDownload(downloadURL, filename)
-			return app.generateFileSelectorDoc()
+			return menu.FileSelector(app.internetAvailable)
 		}
 	}
 

@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/menu"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/renderer"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
 	"github.com/veandco/go-sdl2/sdl"
@@ -91,18 +91,13 @@ func (app *App) shutdown() {
 
 func (app *App) checkInternetAsync() {
 	go func() {
-		client := http.Client{Timeout: 4 * time.Second}
-		resp, err := client.Get("https://browse.library.kiwix.org/catalog/v2/languages")
-		if err == nil {
-			resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				app.internetAvailable = true
-				if app.navigator.Current() == "virtual:menu" {
-					if doc, err := app.generateFileSelectorDoc(); err == nil {
-						app.renderer.SetDocument(doc)
-						app.renderer.Relayout()
-						sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-					}
+		if menu.CheckInternet() {
+			app.internetAvailable = true
+			if app.navigator.Current() == "virtual:menu" {
+				if doc, err := menu.FileSelector(true); err == nil {
+					app.renderer.SetDocument(doc)
+					app.renderer.Relayout()
+					sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 				}
 			}
 		}
@@ -189,7 +184,7 @@ func (app *App) OpenFile(path string) error {
 	if path == "virtual:menu" {
 		absPath = "virtual:menu"
 		app.shutdown()
-		doc, err = app.generateFileSelectorDoc()
+		doc, err = menu.FileSelector(app.internetAvailable)
 		if err != nil {
 			return err
 		}
@@ -217,12 +212,18 @@ func (app *App) OpenFile(path string) error {
 		doc, ok = app.docCache[absPath]
 		if !ok {
 			if isZIM {
-				doc, err = app.openZIM(absPath)
+				var zr *zim.Reader
+				app.shutdown()
+				zr, doc, err = storage.OpenZIM(absPath)
+				if err != nil {
+					return err
+				}
+				app.zimReader = zr
 			} else {
-				doc, err = app.openFile(absPath)
-			}
-			if err != nil {
-				return err
+				doc, err = storage.OpenFile(absPath)
+				if err != nil {
+					return err
+				}
 			}
 			app.docCache[absPath] = doc
 		}
@@ -270,99 +271,6 @@ func (app *App) OpenFile(path string) error {
 
 	app.renderer.Relayout()
 	return nil
-}
-
-func (app *App) generateFileSelectorDoc() (*document.Document, error) {
-	files, err := os.ReadDir(".")
-	if err != nil {
-		return nil, fmt.Errorf("read dir: %w", err)
-	}
-
-	var sb strings.Builder
-	sb.WriteString("# Kiwix SDL Document Menu\n\n")
-	sb.WriteString("Select a document or ZIM archive to open:\n\n")
-
-	if app.internetAvailable {
-		sb.WriteString("## Online Library\n")
-		sb.WriteString("* [Browse and Download ZIM Archives](virtual:library)\n\n")
-	} else {
-		sb.WriteString("## Online Library\n")
-		sb.WriteString("*Online library is available when internet is connected.*\n\n")
-	}
-
-	var zims []string
-	var mds []string
-
-	for _, entry := range files {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		ext := strings.ToLower(filepath.Ext(name))
-		switch ext {
-		case ".zim":
-			zims = append(zims, name)
-		case ".md", ".html", ".htm":
-			if !strings.HasPrefix(name, ".") {
-				mds = append(mds, name)
-			}
-		}
-	}
-
-	if _, err := os.Stat("portmaster/Welcome.md"); err == nil {
-		mds = append(mds, "portmaster/Welcome.md")
-	}
-
-	if len(zims) > 0 {
-		sb.WriteString("## ZIM Archives\n")
-		for _, f := range zims {
-			fmt.Fprintf(&sb, "* [%s](%s)\n", f, f)
-		}
-		sb.WriteString("\n")
-	}
-
-	if len(mds) > 0 {
-		sb.WriteString("## Documents\n")
-		for _, f := range mds {
-			label := filepath.Base(f)
-			fmt.Fprintf(&sb, "* [%s](%s)\n", label, f)
-		}
-		sb.WriteString("\n")
-	}
-
-	if len(zims) == 0 && len(mds) == 0 {
-		sb.WriteString("*No ZIM or Markdown files found in the current directory.*\n")
-	}
-
-	return markdown.Parse(strings.NewReader(sb.String()))
-}
-
-func (app *App) openFile(path string) (*document.Document, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, fmt.Errorf("open file: %w", err)
-	}
-	defer f.Close()
-
-	ext := strings.ToLower(filepath.Ext(path))
-	switch ext {
-	case ".html", ".htm":
-		return html.Parse(f)
-	default:
-		return markdown.Parse(f)
-	}
-}
-
-func (app *App) openZIM(path string) (*document.Document, error) {
-	app.shutdown()
-
-	zr, err := zim.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	app.zimReader = zr
-
-	return zr.MainPage()
 }
 
 func (app *App) navigateLink(url string) {
@@ -745,7 +653,7 @@ func (app *App) startDownload(downloadURL, filename string) {
 		app.renderer.SetStatusOverride("")
 
 		if app.navigator.Current() == "virtual:menu" {
-			if doc, err := app.generateFileSelectorDoc(); err == nil {
+			if doc, err := menu.FileSelector(true); err == nil {
 				app.renderer.SetDocument(doc)
 				app.renderer.Relayout()
 			}
