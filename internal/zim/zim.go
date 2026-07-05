@@ -135,6 +135,62 @@ func (r *Reader) ResolveArticle(rawURL string) (*document.Document, error) {
 	return nil, fmt.Errorf("article not found: %s", rawURL)
 }
 
+// GetResource retrieves raw bytes and mimetype of any ZIM entry (e.g. images, css).
+func (r *Reader) GetResource(path string) ([]byte, string, error) {
+	cPath := C.CString(path)
+	defer C.free(unsafe.Pointer(cPath))
+
+	entry := C.zim_get_entry_by_path(r.handle, cPath)
+	if entry == nil {
+		return nil, "", fmt.Errorf("resource %q: not found", path)
+	}
+	defer C.zim_entry_free(entry)
+
+	item := C.zim_entry_get_item(entry, 1)
+	if item == nil {
+		return nil, "", errors.New("cannot get item")
+	}
+	defer C.zim_item_free(item)
+
+	mime := C.GoString(C.zim_item_get_mimetype(item))
+
+	var size C.int
+	content := C.zim_item_get_content(item, &size)
+	if content == nil {
+		return nil, "", errors.New("empty content")
+	}
+	data := C.GoBytes(unsafe.Pointer(content), size)
+	return data, mime, nil
+}
+
+// ResolveResource searches namespaces to resolve a relative resource path.
+func (r *Reader) ResolveResource(rawURL string) ([]byte, string, error) {
+	decoded, err := url.PathUnescape(rawURL)
+	if err != nil {
+		decoded = rawURL
+	}
+	
+	clean := decoded
+	for strings.HasPrefix(clean, "../") {
+		clean = clean[3:]
+	}
+	clean = strings.TrimPrefix(clean, "/")
+	
+	candidates := []string{
+		clean,
+		"I/" + clean,
+		"images/" + clean,
+	}
+	
+	for _, c := range candidates {
+		data, mime, err := r.GetResource(c)
+		if err == nil {
+			return data, mime, nil
+		}
+	}
+	return nil, "", fmt.Errorf("resource not found: %s", rawURL)
+}
+
 func (r *Reader) entryToDoc(entry C.zim_entry_t) (*document.Document, error) {
 	item := C.zim_entry_get_item(entry, 1) // follow redirects
 	if item == nil {

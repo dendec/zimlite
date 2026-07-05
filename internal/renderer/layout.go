@@ -1,7 +1,11 @@
 package renderer
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"strings"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
@@ -15,6 +19,7 @@ func (r *Renderer) relayout() {
 	r.links = nil
 	r.codeRanges = nil
 	r.codeSpans = nil
+	r.imageEntries = nil
 	r.totalHeight = 0
 
 	if r.doc == nil {
@@ -84,7 +89,7 @@ func (s *layoutState) VisitParagraph(p *document.Paragraph) {
 
 func (s *layoutState) VisitList(l *document.List) {
 	for idx, item := range l.Items {
-		prefix := "• "
+		var prefix string
 		if l.Ordered {
 			prefix = fmt.Sprintf("%d. ", l.Start+idx)
 		} else {
@@ -140,6 +145,37 @@ func (s *layoutState) VisitImage(i *document.Image) {
 	if alt == "" {
 		alt = "[image]"
 	}
+
+	if s.r.loader != nil && i.URL != "" {
+		data, err := s.r.loader(i.URL)
+		if err == nil {
+			config, _, errConfig := image.DecodeConfig(bytes.NewReader(data))
+			if errConfig == nil && config.Width > 0 && config.Height > 0 {
+				imgW := int32(config.Width)
+				imgH := int32(config.Height)
+
+				// Aspect ratio scale down
+				scale := float64(s.maxW) / float64(imgW)
+				if scale > 1.0 {
+					scale = 1.0 // don't upscale
+				}
+				targetW := int32(float64(imgW) * scale)
+				targetH := int32(float64(imgH) * scale)
+
+				s.r.imageEntries = append(s.r.imageEntries, imageEntry{
+					x:   s.r.marginX + (s.maxW-targetW)/2,
+					y:   s.y,
+					w:   targetW,
+					h:   targetH,
+					url: i.URL,
+				})
+				s.y += targetH + s.r.blockSpacing
+				return
+			}
+		}
+	}
+
+	// Fallback to alt-text if image load/decode fails
 	font := s.r.fonts[FontBody].font
 	tw, th := measureText(alt, font, false, false)
 	s.r.lines = append(s.r.lines, lineEntry{

@@ -39,6 +39,13 @@ type codeSpanRange struct {
 
 const statusBarHeight = 24
 
+type ResourceLoader func(url string) ([]byte, error)
+
+type imageEntry struct {
+	x, y, w, h int32
+	url        string
+}
+
 type fontSlot struct {
 	font *ttf.Font
 	size int
@@ -82,6 +89,9 @@ type Renderer struct {
 	hasTree      bool
 
 	textureCache map[textureKey]*sdl.Texture
+	imageEntries []imageEntry
+	imageTextures map[string]*sdl.Texture
+	loader       ResourceLoader
 }
 
 type lineEntry struct {
@@ -159,6 +169,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		ruleColor:    sdl.Color{R: 180, G: 180, B: 170, A: 255},
 		light:        true,
 		textureCache: make(map[textureKey]*sdl.Texture),
+		imageTextures: make(map[string]*sdl.Texture),
 	}
 
 	sizes := [fontCount]int{
@@ -193,15 +204,26 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 }
 
 func (r *Renderer) ClearCache() {
-	if r.textureCache == nil {
-		return
-	}
-	for k, tex := range r.textureCache {
-		if tex != nil {
-			tex.Destroy()
+	if r.textureCache != nil {
+		for k, tex := range r.textureCache {
+			if tex != nil {
+				tex.Destroy()
+			}
+			delete(r.textureCache, k)
 		}
-		delete(r.textureCache, k)
 	}
+	if r.imageTextures != nil {
+		for k, tex := range r.imageTextures {
+			if tex != nil {
+				tex.Destroy()
+			}
+			delete(r.imageTextures, k)
+		}
+	}
+}
+
+func (r *Renderer) SetResourceLoader(loader ResourceLoader) {
+	r.loader = loader
 }
 
 func (r *Renderer) Destroy() {

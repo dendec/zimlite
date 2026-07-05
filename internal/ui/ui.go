@@ -10,6 +10,7 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/renderer"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
 	"github.com/veandco/go-sdl2/sdl"
@@ -18,6 +19,7 @@ import (
 // DocRenderer is the interface for rendering documents and tree views.
 type DocRenderer interface {
 	SetDocument(doc *document.Document)
+	SetResourceLoader(loader renderer.ResourceLoader)
 	Relayout()
 	Render()
 	LinkCount() int
@@ -111,7 +113,7 @@ func (app *App) renderTree() {
 	cursorIdx := -1
 	for i, l := range lines {
 		indent := strings.Repeat("  ", l.Indent)
-		prefix := "  "
+		var prefix string
 		if l.IsLeaf {
 			prefix = "* "
 		} else if l.IsExpanded {
@@ -161,6 +163,20 @@ func (app *App) OpenFile(path string) error {
 	}
 
 	app.mode = modeDoc
+	app.renderer.SetResourceLoader(func(rawURL string) ([]byte, error) {
+		if app.zimReader != nil {
+			data, _, err := app.zimReader.ResolveResource(rawURL)
+			return data, err
+		}
+		docPath := app.navigator.Current()
+		if docPath == "" {
+			docPath = absPath
+		}
+		dir := filepath.Dir(docPath)
+		fullPath := filepath.Join(dir, rawURL)
+		return os.ReadFile(fullPath)
+	})
+
 	app.renderer.SetDocument(doc)
 	app.navigator.Open(absPath)
 	

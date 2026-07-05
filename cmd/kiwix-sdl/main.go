@@ -24,7 +24,7 @@ func main() {
 
 	fontPath := findFont()
 	if fontPath == "" {
-		fmt.Fprintln(os.Stdout, "Notice: No external TTF font found. Using embedded fonts.")
+		fmt.Println("Notice: No external TTF font found. Using embedded fonts.")
 	}
 
 	r, err := renderer.New("Kiwix-SDL", 640, 480, fontPath, 18)

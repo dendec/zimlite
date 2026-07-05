@@ -48,7 +48,7 @@ func (c *converter) text(node *ast.Text) string {
 	if node.Segment.IsEmpty() {
 		return ""
 	}
-	return string(node.Text(c.source))
+	return string(node.Value(c.source))
 }
 
 func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -114,7 +114,7 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 func (c *converter) collectText(n ast.Node) string {
 	var result string
 	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
-		ast.Walk(child, func(childNode ast.Node, entering bool) (ast.WalkStatus, error) {
+		_ = ast.Walk(child, func(childNode ast.Node, entering bool) (ast.WalkStatus, error) {
 			if !entering {
 				return ast.WalkContinue, nil
 			}
