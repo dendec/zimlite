@@ -591,67 +591,17 @@ func debugEvent(kind string, code int, val int) {
 
 func (app *App) startDownload(downloadURL, filename string) {
 	go func() {
-		client := http.Client{}
-		resp, err := client.Get(downloadURL)
+		err := storage.Download(downloadURL, filename, func(status string) {
+			app.renderer.SetStatusOverride(status)
+			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+		})
 		if err != nil {
 			app.renderer.SetStatusOverride("Download failed: " + err.Error())
 			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 			return
 		}
-		defer resp.Body.Close()
-
-		out, err := os.Create(filename)
-		if err != nil {
-			app.renderer.SetStatusOverride("Create file failed: " + err.Error())
-			sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-			return
-		}
-		defer out.Close()
-
-		totalSize := resp.ContentLength
-		var downloaded int64
-		buf := make([]byte, 32*1024)
-
-		ticker := time.NewTicker(500 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			n, readErr := resp.Body.Read(buf)
-			if n > 0 {
-				_, writeErr := out.Write(buf[:n])
-				if writeErr != nil {
-					app.renderer.SetStatusOverride("Write failed: " + writeErr.Error())
-					sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-					return
-				}
-				downloaded += int64(n)
-			}
-			if readErr != nil {
-				if readErr == io.EOF {
-					break
-				}
-				app.renderer.SetStatusOverride("Download read failed: " + readErr.Error())
-				sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-				return
-			}
-
-			select {
-			case <-ticker.C:
-				percent := 0.0
-				if totalSize > 0 {
-					percent = float64(downloaded) / float64(totalSize) * 100
-				}
-				app.renderer.SetStatusOverride(fmt.Sprintf("Downloading %s: %.1f%%", filename, percent))
-				sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-			default:
-			}
-		}
-
-		app.renderer.SetStatusOverride("Download finished successfully!")
-		sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 		time.Sleep(3 * time.Second)
 		app.renderer.SetStatusOverride("")
-
 		if app.navigator.Current() == "virtual:menu" {
 			if doc, err := menu.FileSelector(true); err == nil {
 				app.renderer.SetDocument(doc)
