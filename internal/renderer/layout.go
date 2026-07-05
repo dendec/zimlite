@@ -63,12 +63,12 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 	inlines := []document.Inline{&document.Strong{
 		Content: []document.Inline{&document.Text{Content: h.Content}},
 	}}
-	s.y = s.r.layoutInlines(inlines, fidx, s.r.headingColor, s.r.headingColor, s.maxW, s.y, 0, "")
+	s.y = s.r.layoutInlines(inlines, fidx, s.r.theme.HeadingColor, s.r.theme.HeadingColor, s.maxW, s.y, 0, "")
 
 	if h.Level == 1 || h.Level == 2 {
 		s.y += 4
 		s.r.lines = append(s.r.lines, lineEntry{
-			fontIdx: FontBody, color: s.r.ruleColor,
+			fontIdx: FontBody, color: s.r.theme.RuleColor,
 			x: s.r.marginX, y: s.y, w: s.maxW, h: 1,
 		})
 		s.y += 1 + s.r.blockSpacing
@@ -78,7 +78,7 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 }
 
 func (s *layoutState) VisitParagraph(p *document.Paragraph) {
-	s.y = s.r.layoutInlines(p.Inlines, FontBody, s.r.textColor, s.r.linkColor, s.maxW, s.y, 0, "")
+	s.y = s.r.layoutInlines(p.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "")
 	s.y += s.r.blockSpacing
 }
 
@@ -101,7 +101,7 @@ func (s *layoutState) VisitList(l *document.List) {
 			s.y += s.r.lineSpacing / 2
 		}
 
-		s.y = s.r.layoutInlines(entry.Item, FontBody, s.r.textColor, s.r.linkColor, itemW, s.y, indentX, prefix)
+		s.y = s.r.layoutInlines(entry.Item, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, itemW, s.y, indentX, prefix)
 	}
 	s.y += s.r.blockSpacing
 }
@@ -119,7 +119,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	for _, cl := range strings.Split(codeText, "\n") {
 		tw, th := measureText(cl, fontMono, false, false)
 		s.r.lines = append(s.r.lines, lineEntry{
-			text: cl, fontIdx: FontMono, color: s.r.textColor,
+			text: cl, fontIdx: FontMono, color: s.r.theme.TextColor,
 			x: s.r.marginX + 12, y: s.y, w: tw, h: th, // Text indent
 			isCode: true,
 		})
@@ -137,7 +137,7 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 
 func (s *layoutState) VisitThematicBreak(_ *document.ThematicBreak) {
 	s.r.lines = append(s.r.lines, lineEntry{
-		fontIdx: FontBody, color: s.r.ruleColor,
+		fontIdx: FontBody, color: s.r.theme.RuleColor,
 		x: s.r.marginX, y: s.y, w: s.maxW, h: 1,
 	})
 	s.y += 1 + s.r.blockSpacing
@@ -172,7 +172,7 @@ func (s *layoutState) VisitBlockquote(b *document.Blockquote) {
 
 func (s *layoutState) VisitLink(l *document.Link) {
 	inlines := []document.Inline{&document.LinkInline{URL: l.URL, Content: []document.Inline{&document.Text{Content: l.Label}}}}
-	s.y = s.r.layoutInlines(inlines, FontBody, s.r.textColor, s.r.linkColor, s.maxW, s.y, 0, "")
+	s.y = s.r.layoutInlines(inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "")
 }
 
 func (s *layoutState) VisitImage(i *document.Image) {

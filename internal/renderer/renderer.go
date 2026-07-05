@@ -80,18 +80,9 @@ type Renderer struct {
 	blockSpacing int32
 	listIndent   int32
 
-	bgColor               sdl.Color
-	textColor             sdl.Color
-	linkColor             sdl.Color
-	headingColor          sdl.Color
-	selBgColor            sdl.Color
-	selImgColor           sdl.Color
-	codeBgColor           sdl.Color
-	ruleColor             sdl.Color
-	blockquoteBgColor     sdl.Color
-	blockquoteBorderColor sdl.Color
-	light                 bool
-	hasTree               bool
+	theme   *Theme
+	light   bool
+	hasTree bool
 
 	textureCache  map[textureKey]*sdl.Texture
 	imageEntries  []imageEntry
@@ -163,58 +154,30 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 	}
 
 	r := &Renderer{
-		window:                window,
-		sdlRenderer:           sdlRend,
-		selectedLink:          -1,
-		width:                 winW,
-		height:                winH,
-		marginX:               20,
-		marginY:               16,
-		lineSpacing:           6,
-		blockSpacing:          12,
-		listIndent:            16,
-		bgColor:               sdl.Color{R: 245, G: 245, B: 240, A: 255},
-		textColor:             sdl.Color{R: 30, G: 30, B: 30, A: 255},
-		linkColor:             sdl.Color{R: 0, G: 80, B: 180, A: 255},
-		headingColor:          sdl.Color{R: 50, G: 50, B: 50, A: 255},
-		selBgColor:            sdl.Color{R: 255, G: 230, B: 150, A: 255},
-		selImgColor:           sdl.Color{R: 255, G: 180, B: 0, A: 60},
-		codeBgColor:           sdl.Color{R: 235, G: 235, B: 230, A: 255},
-		ruleColor:             sdl.Color{R: 180, G: 180, B: 170, A: 255},
-		blockquoteBgColor:     sdl.Color{R: 240, G: 240, B: 240, A: 255},
-		blockquoteBorderColor: sdl.Color{R: 180, G: 180, B: 180, A: 255},
-		light:                 true,
-		textureCache:          make(map[textureKey]*sdl.Texture),
-		imageTextures:         make(map[string]*sdl.Texture),
-		baseFontSize:          baseFontSize,
-		fontPath:              fontPath,
+		window:        window,
+		sdlRenderer:   sdlRend,
+		selectedLink:  -1,
+		width:         winW,
+		height:        winH,
+		marginX:       20,
+		marginY:       16,
+		lineSpacing:   6,
+		blockSpacing:  12,
+		listIndent:    16,
+		theme:         LightTheme(),
+		light:         true,
+		textureCache:  make(map[textureKey]*sdl.Texture),
+		imageTextures: make(map[string]*sdl.Texture),
+		baseFontSize:  baseFontSize,
+		fontPath:      fontPath,
 	}
 
-	sizes := [fontCount]int{
-		FontBody: baseFontSize,
-		FontH1:   baseFontSize + 7,
-		FontH2:   baseFontSize + 5,
-		FontH3:   baseFontSize + 3,
-		FontH4:   baseFontSize + 1,
-		FontH5:   baseFontSize,
-		FontH6:   baseFontSize - 1,
-		FontMono: baseFontSize,
+	fonts, err := loadFonts(baseFontSize, fontPath)
+	if err != nil {
+		r.Destroy()
+		return nil, fmt.Errorf("open fonts: %w", err)
 	}
-
-	for i := FontKind(0); i < fontCount; i++ {
-		var font *ttf.Font
-		var err error
-		if fontPath != "" {
-			font, err = ttf.OpenFont(fontPath, sizes[i])
-		} else {
-			font, err = loadFontFromBytes(unifont, sizes[i])
-		}
-		if err != nil {
-			r.Destroy()
-			return nil, fmt.Errorf("open font size %d: %w", sizes[i], err)
-		}
-		r.fonts[i] = fontSlot{font: font, size: sizes[i]}
-	}
+	r.fonts = fonts
 
 	return r, nil
 }
@@ -274,27 +237,9 @@ func (r *Renderer) SetHasTree(has bool) {
 func (r *Renderer) ToggleTheme() {
 	r.light = !r.light
 	if r.light {
-		r.bgColor = sdl.Color{R: 245, G: 245, B: 240, A: 255}
-		r.textColor = sdl.Color{R: 30, G: 30, B: 30, A: 255}
-		r.linkColor = sdl.Color{R: 0, G: 80, B: 180, A: 255}
-		r.headingColor = sdl.Color{R: 50, G: 50, B: 50, A: 255}
-		r.selBgColor = sdl.Color{R: 255, G: 230, B: 150, A: 255}
-		r.selImgColor = sdl.Color{R: 255, G: 180, B: 0, A: 60}
-		r.codeBgColor = sdl.Color{R: 235, G: 235, B: 230, A: 255}
-		r.ruleColor = sdl.Color{R: 180, G: 180, B: 170, A: 255}
-		r.blockquoteBgColor = sdl.Color{R: 240, G: 240, B: 240, A: 255}
-		r.blockquoteBorderColor = sdl.Color{R: 180, G: 180, B: 180, A: 255}
+		r.theme = LightTheme()
 	} else {
-		r.bgColor = sdl.Color{R: 20, G: 22, B: 28, A: 255}
-		r.textColor = sdl.Color{R: 220, G: 220, B: 220, A: 255}
-		r.linkColor = sdl.Color{R: 100, G: 180, B: 255, A: 255}
-		r.headingColor = sdl.Color{R: 200, G: 210, B: 220, A: 255}
-		r.selBgColor = sdl.Color{R: 80, G: 60, B: 20, A: 255}
-		r.selImgColor = sdl.Color{R: 150, G: 120, B: 30, A: 70}
-		r.codeBgColor = sdl.Color{R: 35, G: 38, B: 45, A: 255}
-		r.ruleColor = sdl.Color{R: 60, G: 65, B: 70, A: 255}
-		r.blockquoteBgColor = sdl.Color{R: 35, G: 38, B: 45, A: 255}
-		r.blockquoteBorderColor = sdl.Color{R: 80, G: 85, B: 90, A: 255}
+		r.theme = DarkTheme()
 	}
 	r.relayout()
 	r.relayoutTextLines()
@@ -327,7 +272,7 @@ func (r *Renderer) SetTextLines(lines []string) {
 		}
 		tw, th := measureText(displayText, font, false, false)
 		r.lines = append(r.lines, lineEntry{
-			text: displayText, fontIdx: FontBody, color: r.textColor,
+			text: displayText, fontIdx: FontBody, color: r.theme.TextColor,
 			x: r.marginX, y: y, w: tw, h: th,
 			isCursor: isCursor,
 		})
@@ -555,31 +500,11 @@ func (r *Renderer) Zoom(delta int) error {
 		}
 	}
 
-	// Re-build font sizes map
-	sizes := [fontCount]int{
-		FontKind(FontBody): r.baseFontSize,
-		FontKind(FontH1):   r.baseFontSize + 8,
-		FontKind(FontH2):   r.baseFontSize + 5,
-		FontKind(FontH3):   r.baseFontSize + 3,
-		FontKind(FontH4):   r.baseFontSize + 1,
-		FontKind(FontH5):   r.baseFontSize,
-		FontKind(FontH6):   r.baseFontSize - 1,
-		FontKind(FontMono): r.baseFontSize,
+	fonts, err := loadFonts(r.baseFontSize, r.fontPath)
+	if err != nil {
+		return fmt.Errorf("zoom load fonts: %w", err)
 	}
-
-	for i := FontKind(0); i < fontCount; i++ {
-		var font *ttf.Font
-		var err error
-		if r.fontPath != "" {
-			font, err = ttf.OpenFont(r.fontPath, sizes[i])
-		} else {
-			font, err = loadFontFromBytes(unifont, sizes[i])
-		}
-		if err != nil {
-			return fmt.Errorf("zoom load font size %d: %w", sizes[i], err)
-		}
-		r.fonts[i] = fontSlot{font: font, size: sizes[i]}
-	}
+	r.fonts = fonts
 
 	// Destroy cached text textures to prevent stale text sizes/images
 	for _, tex := range r.textureCache {

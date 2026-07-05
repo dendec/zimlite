@@ -51,3 +51,39 @@ func measureText(text string, font *ttf.Font, isBold, isItalic bool) (int32, int
 	}
 	return int32(w), int32(h)
 }
+
+func loadFonts(baseSize int, fontPath string) ([fontCount]fontSlot, error) {
+	var fonts [fontCount]fontSlot
+
+	sizes := [fontCount]int{
+		FontBody: baseSize,
+		FontH1:   baseSize + 8,
+		FontH2:   baseSize + 5,
+		FontH3:   baseSize + 3,
+		FontH4:   baseSize + 1,
+		FontH5:   baseSize,
+		FontH6:   baseSize - 1,
+		FontMono: baseSize,
+	}
+
+	for i := FontKind(0); i < fontCount; i++ {
+		var font *ttf.Font
+		var err error
+		if fontPath != "" {
+			font, err = ttf.OpenFont(fontPath, sizes[i])
+		} else {
+			font, err = loadFontFromBytes(unifont, sizes[i])
+		}
+		if err != nil {
+			for j := FontKind(0); j < i; j++ {
+				if fonts[j].font != nil {
+					fonts[j].font.Close()
+				}
+			}
+			return fonts, err
+		}
+		fonts[i] = fontSlot{font: font, size: sizes[i]}
+	}
+
+	return fonts, nil
+}

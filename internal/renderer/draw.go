@@ -15,7 +15,7 @@ import (
 )
 
 func (r *Renderer) Render() {
-	r.sdlRenderer.SetDrawColor(r.bgColor.R, r.bgColor.G, r.bgColor.B, r.bgColor.A)
+	r.sdlRenderer.SetDrawColor(r.theme.BgColor.R, r.theme.BgColor.G, r.theme.BgColor.B, r.theme.BgColor.A)
 	r.sdlRenderer.Clear()
 	r.renderImages()
 	r.renderBlockquotes()
@@ -62,14 +62,14 @@ func (r *Renderer) renderCodeBackgrounds() {
 	for _, cr := range r.codeRanges {
 		screenY := cr.y - r.scrollY
 		if screenY > -cr.h && screenY < r.height-statusBarHeight {
-			r.sdlRenderer.SetDrawColor(r.codeBgColor.R, r.codeBgColor.G, r.codeBgColor.B, r.codeBgColor.A)
+			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: cr.x, Y: screenY, W: cr.w, H: cr.h})
 		}
 	}
 	for _, cs := range r.codeSpans {
 		screenY := cs.y - r.scrollY
 		if screenY > -cs.h && screenY < r.height-statusBarHeight {
-			r.sdlRenderer.SetDrawColor(r.codeBgColor.R, r.codeBgColor.G, r.codeBgColor.B, r.codeBgColor.A)
+			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: cs.x, Y: screenY, W: cs.w, H: cs.h})
 		}
 	}
@@ -80,10 +80,10 @@ func (r *Renderer) renderBlockquotes() {
 		screenY := bq.Y - r.scrollY
 		if screenY > -bq.H && screenY < r.height-statusBarHeight {
 			// Draw background
-			r.sdlRenderer.SetDrawColor(r.blockquoteBgColor.R, r.blockquoteBgColor.G, r.blockquoteBgColor.B, r.blockquoteBgColor.A)
+			r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBgColor.R, r.theme.BlockquoteBgColor.G, r.theme.BlockquoteBgColor.B, r.theme.BlockquoteBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: bq.W, H: bq.H})
 			// Draw thick left border
-			r.sdlRenderer.SetDrawColor(r.blockquoteBorderColor.R, r.blockquoteBorderColor.G, r.blockquoteBorderColor.B, r.blockquoteBorderColor.A)
+			r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBorderColor.R, r.theme.BlockquoteBorderColor.G, r.theme.BlockquoteBorderColor.B, r.theme.BlockquoteBorderColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: 4, H: bq.H})
 		}
 	}
@@ -97,7 +97,7 @@ func (r *Renderer) renderLines() {
 		}
 		if line.isCursor {
 			r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
-			r.sdlRenderer.SetDrawColor(r.selBgColor.R, r.selBgColor.G, r.selBgColor.B, r.selBgColor.A)
+			r.sdlRenderer.SetDrawColor(r.theme.SelBgColor.R, r.theme.SelBgColor.G, r.theme.SelBgColor.B, r.theme.SelBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: screenY, W: r.width, H: line.h})
 			r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
 		}
@@ -190,7 +190,7 @@ func (r *Renderer) renderLinkHighlight() {
 	}
 
 	if len(mergedText) > 0 {
-		r.sdlRenderer.SetDrawColor(r.selBgColor.R, r.selBgColor.G, r.selBgColor.B, r.selBgColor.A)
+		r.sdlRenderer.SetDrawColor(r.theme.SelBgColor.R, r.theme.SelBgColor.G, r.theme.SelBgColor.B, r.theme.SelBgColor.A)
 		for _, rect := range mergedText {
 			r.sdlRenderer.FillRect(&rect)
 		}
@@ -198,7 +198,7 @@ func (r *Renderer) renderLinkHighlight() {
 
 	if len(imgRects) > 0 {
 		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
-		r.sdlRenderer.SetDrawColor(r.selImgColor.R, r.selImgColor.G, r.selImgColor.B, r.selImgColor.A)
+		r.sdlRenderer.SetDrawColor(r.theme.SelImgColor.R, r.theme.SelImgColor.G, r.theme.SelImgColor.B, r.theme.SelImgColor.A)
 		for _, rect := range imgRects {
 			r.sdlRenderer.FillRect(&rect)
 		}
@@ -207,9 +207,9 @@ func (r *Renderer) renderLinkHighlight() {
 }
 
 func (r *Renderer) renderStatusBar() {
-	r.sdlRenderer.SetDrawColor(r.codeBgColor.R, r.codeBgColor.G, r.codeBgColor.B, r.codeBgColor.A)
+	r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
 	r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: r.height - statusBarHeight, W: r.width, H: statusBarHeight})
-	r.sdlRenderer.SetDrawColor(r.ruleColor.R, r.ruleColor.G, r.ruleColor.B, r.ruleColor.A)
+	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
 	r.sdlRenderer.FillRect(&sdl.Rect{X: 0, Y: r.height - statusBarHeight, W: r.width, H: 1})
 
 	var statusText string
@@ -251,7 +251,7 @@ func (r *Renderer) renderStatusBar() {
 
 	font := r.fonts[FontBody].font
 	if font != nil {
-		surf, err := font.RenderUTF8Blended(statusText, r.textColor)
+		surf, err := font.RenderUTF8Blended(statusText, r.theme.TextColor)
 		if err == nil {
 			tex, err := r.sdlRenderer.CreateTextureFromSurface(surf)
 			surf.Free()
