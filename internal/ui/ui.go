@@ -28,6 +28,7 @@ type DocRenderer interface {
 	ScrollPageUp()
 	ScrollPageDown()
 	SetTextLines(lines []string)
+	ScrollToLine(lineIdx int)
 }
 
 // DocNavigator manages document history (back/forward).
@@ -104,7 +105,8 @@ func (app *App) renderTree() {
 	}
 	lines := app.navState.VisibleNodes()
 	out := make([]string, 0, len(lines))
-	for _, l := range lines {
+	cursorIdx := -1
+	for i, l := range lines {
 		indent := strings.Repeat("  ", l.Indent)
 		prefix := "  "
 		if l.IsLeaf {
@@ -120,10 +122,14 @@ func (app *App) renderTree() {
 		}
 		if l.IsCursor {
 			entry = ">" + entry[1:]
+			cursorIdx = i
 		}
 		out = append(out, entry)
 	}
 	app.renderer.SetTextLines(out)
+	if cursorIdx >= 0 {
+		app.renderer.ScrollToLine(cursorIdx)
+	}
 }
 
 // OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim.

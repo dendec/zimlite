@@ -197,7 +197,6 @@ func (r *Renderer) SetTextLines(lines []string) {
 	r.codeRanges = nil
 	r.doc = nil
 	r.selectedLink = -1
-	r.scrollY = 0
 
 	font := r.fonts[FontBody].font
 	y := r.marginY
@@ -213,6 +212,27 @@ func (r *Renderer) SetTextLines(lines []string) {
 		y = r.height
 	}
 	r.totalHeight = y
+	r.clampScroll()
+}
+
+// LineHeight returns the height of a single text line (font + spacing).
+func (r *Renderer) LineHeight() int32 {
+	font := r.fonts[FontBody].font
+	return int32(font.Height()) + r.lineSpacing
+}
+
+// ScrollToLine ensures the given line index is visible.
+func (r *Renderer) ScrollToLine(lineIdx int) {
+	if lineIdx < 0 || lineIdx >= len(r.lines) {
+		return
+	}
+	line := r.lines[lineIdx]
+	screenY := line.y - r.scrollY
+	if screenY < r.marginY {
+		r.scrollY = line.y - r.marginY
+	} else if screenY+line.h > r.height-r.marginY {
+		r.scrollY = line.y + line.h - r.height + r.marginY
+	}
 	r.clampScroll()
 }
 
