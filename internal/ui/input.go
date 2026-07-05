@@ -250,5 +250,7 @@ func (c *InputController) handleTreeSelection() {
 	} else {
 		app.navState.ActionRight()
 	}
-	app.renderTree()
+	if app.mode == modeTree {
+		app.renderTree()
+	}
 }
