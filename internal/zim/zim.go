@@ -13,6 +13,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
 	"unsafe"
 
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
@@ -65,6 +67,38 @@ func (r *Reader) GetArticle(path string) (*document.Document, error) {
 	}
 	defer C.zim_entry_free(entry)
 	return r.entryToDoc(entry)
+}
+
+// ResolveArticle tries multiple path formats to find an article.
+// ZIM links may lose namespace prefix (A/) or extension during HTML→MD conversion.
+func (r *Reader) ResolveArticle(rawURL string) (*document.Document, error) {
+	// Skip external URLs.
+	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") ||
+		strings.HasPrefix(rawURL, "//") {
+		return nil, fmt.Errorf("external URL: %s", rawURL)
+	}
+
+	decoded, err := url.PathUnescape(rawURL)
+	if err != nil {
+		decoded = rawURL
+	}
+
+	candidates := []string{
+		rawURL,                        // as-is
+		decoded,                       // decoded
+		"A/" + decoded,                // old namespace prefix
+		decoded + ".html",             // with extension
+		"A/" + decoded + ".html",      // old namespace + extension
+	}
+
+	for _, c := range candidates {
+		doc, err := r.GetArticle(c)
+		if err == nil {
+			return doc, nil
+		}
+	}
+
+	return nil, fmt.Errorf("article not found: %s", rawURL)
 }
 
 func (r *Reader) entryToDoc(entry C.zim_entry_t) (*document.Document, error) {

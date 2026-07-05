@@ -119,19 +119,19 @@ func (app *App) openZIM(path string) (*document.Document, error) {
 
 // navigateLink follows a link URL. For ZIM archives, resolves internally.
 func (app *App) navigateLink(url string) {
-	// Try ZIM resolver first.
 	if app.zimReader != nil {
-		doc, err := app.zimReader.GetArticle(url)
+		doc, err := app.zimReader.ResolveArticle(url)
 		if err == nil {
 			app.renderer.SetDocument(doc)
 			app.navigator.Open("zim:" + url)
 			app.renderer.Relayout()
 			return
 		}
-		// If not found in ZIM, fall through to file loading.
+		// External URLs or not-found — silent skip.
+		return
 	}
 
-	// Try local file.
+	// No ZIM open: try local file.
 	if err := app.OpenFile(url); err != nil {
 		fmt.Fprintf(os.Stderr, "Cannot open: %s (%v)\n", url, err)
 	}
