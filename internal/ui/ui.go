@@ -297,7 +297,10 @@ func (app *App) processTreeKey(sc sdl.Scancode) {
 			app.navState.ExpandCurrent()
 			app.renderTree()
 		}
-	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4, sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
+	case sdl.SCANCODE_LEFT, sdl.SCANCODE_KP_4:
+		app.navState.GoToParent()
+		app.renderTree()
+	case sdl.SCANCODE_ESCAPE, sdl.SCANCODE_BACKSPACE:
 		app.navState.CollapseCurrent()
 		app.renderTree()
 	case sdl.SCANCODE_PAGEUP:

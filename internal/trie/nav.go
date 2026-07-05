@@ -75,6 +75,18 @@ func (ns *NavState) ExpandCurrent() {
 	}
 }
 
+// GoToParent moves cursor to parent without collapsing.
+func (ns *NavState) GoToParent() {
+	if ns.Cursor == nil {
+		return
+	}
+	parent := ns.Cursor.parent
+	if parent == nil || parent == ns.Root {
+		return
+	}
+	ns.Cursor = parent
+}
+
 // CollapseCurrent collapses cursor's parent and moves cursor up.
 func (ns *NavState) CollapseCurrent() {
 	if ns.Cursor == nil {
