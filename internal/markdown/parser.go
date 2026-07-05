@@ -9,6 +9,8 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	extast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 )
 
@@ -19,7 +21,9 @@ func Parse(r io.Reader) (*document.Document, error) {
 		return nil, err
 	}
 
-	md := goldmark.New()
+	md := goldmark.New(
+		goldmark.WithExtensions(extension.Table),
+	)
 	// Use goldmark's parser directly to get the AST, then walk it.
 	parser := md.Parser()
 	root := parser.Parse(text.NewReader(src))
@@ -126,6 +130,31 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		c.document.Blocks = append(c.document.Blocks, &document.Blockquote{
 			Blocks: subConv.document.Blocks,
 		})
+		return ast.WalkSkipChildren, nil
+
+	case *extast.Table:
+		table := &document.Table{}
+		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+			switch childNode := child.(type) {
+			case *extast.TableHeader:
+				row := document.TableRow{IsHeader: true}
+				for cellNode := childNode.FirstChild(); cellNode != nil; cellNode = cellNode.NextSibling() {
+					if cell, ok := cellNode.(*extast.TableCell); ok {
+						row.Cells = append(row.Cells, document.TableCell{Inlines: c.collectInlines(cell)})
+					}
+				}
+				table.Rows = append(table.Rows, row)
+			case *extast.TableRow:
+				row := document.TableRow{IsHeader: false}
+				for cellNode := childNode.FirstChild(); cellNode != nil; cellNode = cellNode.NextSibling() {
+					if cell, ok := cellNode.(*extast.TableCell); ok {
+						row.Cells = append(row.Cells, document.TableCell{Inlines: c.collectInlines(cell)})
+					}
+				}
+				table.Rows = append(table.Rows, row)
+			}
+		}
+		c.document.Blocks = append(c.document.Blocks, table)
 		return ast.WalkSkipChildren, nil
 
 	default:

@@ -210,6 +210,72 @@ func (s *layoutState) VisitImage(i *document.Image) {
 	s.y += th + s.r.lineSpacing
 }
 
+func (s *layoutState) VisitTable(t *document.Table) {
+	if len(t.Rows) == 0 {
+		return
+	}
+	colCount := len(t.Rows[0].Cells)
+	if colCount == 0 {
+		return
+	}
+	colW := s.maxW / int32(colCount)
+	padding := int32(8)
+
+	var tableGrid tableGridEntry
+
+	for _, row := range t.Rows {
+		maxH := int32(0)
+		yStart := s.y
+
+		// First pass: layout text and find row height
+		// We temporarily redirect lines to avoid drawing them if we need to adjust?
+		// Wait, we can't easily undo layoutInlines. But row height is determined by the tallest cell.
+		// We just let layoutInlines run. It might draw some cells "higher" than others if they have fewer lines, but that's fine for MVP.
+
+		for cIdx, cell := range row.Cells {
+			if int(cIdx) >= colCount {
+				continue // ignore extra cells
+			}
+			cellX := s.r.marginX + int32(cIdx)*colW
+			cellY := s.y + padding
+			cellMaxW := colW - 2*padding
+			if cellMaxW < 10 {
+				cellMaxW = 10
+			}
+
+			// If it's a header row, we might want to use bold, but we can't easily force bold on everything unless we modify layoutInlines or Inlines.
+			// Let's just render normally for now, MVP.
+			bottomY := s.r.layoutInlines(cell.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, cellMaxW, cellY, cellX-s.r.marginX, "")
+
+			h := bottomY - cellY
+			if h > maxH {
+				maxH = h
+			}
+		}
+
+		// Adjust y for next row
+		if maxH == 0 {
+			maxH = s.r.lineSpacing // empty row fallback
+		}
+		rowH := maxH + 2*padding
+
+		// Record cell rects for grid drawing
+		for cIdx := 0; cIdx < colCount; cIdx++ {
+			tableGrid.cellRects = append(tableGrid.cellRects, sdlRect{
+				X: s.r.marginX + int32(cIdx)*colW,
+				Y: yStart,
+				W: colW,
+				H: rowH,
+			})
+		}
+
+		s.y += rowH
+	}
+
+	s.r.layout.tables = append(s.r.layout.tables, tableGrid)
+	s.y += s.r.blockSpacing
+}
+
 func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 	textColor, linkColor sdlColor, maxW int32, startY int32, indentX int32, prefix string) int32 {
 

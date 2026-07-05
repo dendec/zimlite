@@ -12,6 +12,7 @@ func (r *Renderer) Render() {
 	r.renderImages()
 	r.renderBlockquotes()
 	r.renderCodeBackgrounds()
+	r.renderTables()
 	r.renderLinkHighlight()
 	r.renderLines()
 	r.renderStatusBar()
@@ -58,6 +59,18 @@ func (r *Renderer) renderBlockquotes() {
 			// Draw thick left border
 			r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBorderColor.R, r.theme.BlockquoteBorderColor.G, r.theme.BlockquoteBorderColor.B, r.theme.BlockquoteBorderColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: 4, H: bq.H})
+		}
+	}
+}
+
+func (r *Renderer) renderTables() {
+	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
+	for _, table := range r.layout.tables {
+		for _, cellRect := range table.cellRects {
+			screenY := cellRect.Y - r.scrollY
+			if screenY > -cellRect.H && screenY < r.height-statusBarHeight {
+				r.sdlRenderer.DrawRect(&sdl.Rect{X: cellRect.X, Y: screenY, W: cellRect.W, H: cellRect.H})
+			}
 		}
 	}
 }

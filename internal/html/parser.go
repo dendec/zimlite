@@ -9,7 +9,11 @@ import (
 	"os"
 	"strings"
 
-	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
+	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2/converter"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/base"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/commonmark"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/table"
+
 	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
 )
@@ -24,7 +28,15 @@ func Parse(r io.Reader) (*document.Document, error) {
 		}
 	}
 
-	mdBytes, err := htmltomarkdown.ConvertReader(r)
+	conv := htmltomarkdown.NewConverter(
+		htmltomarkdown.WithPlugins(
+			base.NewBasePlugin(),
+			commonmark.NewCommonmarkPlugin(),
+			table.NewTablePlugin(),
+		),
+	)
+
+	mdBytes, err := conv.ConvertReader(r)
 	if err != nil {
 		return nil, err
 	}

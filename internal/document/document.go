@@ -62,7 +62,22 @@ type CodeBlock struct {
 	Code     string
 }
 
-func (*CodeBlock) blockMarker() {}
+func (c *CodeBlock) blockMarker() {}
+
+type Table struct {
+	Rows []TableRow
+}
+
+func (t *Table) blockMarker() {}
+
+type TableRow struct {
+	IsHeader bool
+	Cells    []TableCell
+}
+
+type TableCell struct {
+	Inlines []Inline
+}
 
 type ThematicBreak struct{}
 

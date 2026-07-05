@@ -110,6 +110,10 @@ type codeBlockRange struct {
 	x, y, w, h int32
 }
 
+type tableGridEntry struct {
+	cellRects []sdlRect
+}
+
 type PageLayout struct {
 	lines        []lineEntry
 	links        []linkEntry
@@ -117,6 +121,7 @@ type PageLayout struct {
 	codeSpans    []codeSpanRange
 	blockquotes  []sdlRect
 	imageEntries []imageEntry
+	tables       []tableGridEntry
 	totalHeight  int32
 	contentWidth int32
 }
