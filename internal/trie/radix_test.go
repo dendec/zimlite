@@ -273,19 +273,22 @@ func TestActionLeftRight(t *testing.T) {
 		t.Errorf("expected cursor to enter 'Apple', got %q", ns.Cursor.Label())
 	}
 
-	// 2. Left on leaf -> goes to parent 'Ap' (prefix restored to 'A' on collapse)
-	ns.ActionLeft()
-	if ns.Cursor.Label() != "Ap" {
-		t.Errorf("expected left on leaf to go to parent 'Ap', got %q", ns.Cursor.Label())
-	}
-
-	// 3. Left on expanded node 'Ap' -> collapses it, prefix restores to 'A'
+	// 2. Left from child -> move to parent, collapse parent's branch
 	ns.ActionLeft()
 	if ns.Root.children[0].Expanded() {
-		t.Error("expected left on expanded 'Ap' to collapse it")
+		t.Error("expected 'A' to be collapsed after left")
 	}
 	if ns.Cursor.Label() != "A" {
-		t.Errorf("expected cursor to remain on 'A' after prefix restore, got %q", ns.Cursor.Label())
+		t.Errorf("expected cursor on 'A', got %q", ns.Cursor.Label())
+	}
+
+	// 3. Left at first level -> collapses all branches, cursor stays
+	ns.ActionLeft()
+	if ns.Root.children[0].Expanded() {
+		t.Error("expected 'A' to remain collapsed")
+	}
+	if ns.Cursor.Label() != "A" {
+		t.Errorf("expected cursor to stay on 'A', got %q", ns.Cursor.Label())
 	}
 }
 
@@ -309,14 +312,13 @@ func TestCollapseReExpand(t *testing.T) {
 		t.Fatal("A should have children after expand")
 	}
 
-	// Collapse: Left on leaf goes to parent, Left again collapses
-	ns.ActionLeft() // Apple (leaf) → parent A
-	if ns.Cursor.Label() != "Ap" {
-		t.Errorf("expected cursor on parent 'Ap', got %q", ns.Cursor.Label())
-	}
-	ns.ActionLeft() // A is expanded → collapse
+	// Left from child -> move to parent, collapse it
+	ns.ActionLeft()
 	if aNode.Expanded() {
 		t.Error("A should be collapsed")
+	}
+	if ns.Cursor.Label() != "A" {
+		t.Errorf("expected cursor on 'A', got %q", ns.Cursor.Label())
 	}
 
 	// Re-expand
@@ -363,8 +365,7 @@ func TestCollapseReExpandPreservesPrefix(t *testing.T) {
 		firstChildren[i] = c.Label()
 	}
 
-	// Collapse and check prefix restored.
-	ns.ActionLeft()
+	// Left from child -> collapse A, prefix restores.
 	ns.ActionLeft()
 	if aNode.prefix != originalPrefix {
 		t.Errorf("after collapse, prefix should be %q, got %q", originalPrefix, aNode.prefix)
@@ -450,5 +451,188 @@ func TestSiblingNavigationDeep(t *testing.T) {
 	ns.MoveUp()
 	if ns.Cursor.Label() != "A Alpha" {
 		t.Errorf("expected stay on 'A Alpha', got %q", ns.Cursor.Label())
+	}
+}
+
+func TestActionLeftCollapseParent(t *testing.T) {
+	// Left from a child should move to parent and collapse the parent.
+	articles := []document.ArticleEntry{
+		{Title: "A Alpha", Path: "A/Alpha"},
+		{Title: "A Beta", Path: "A/Beta"},
+		{Title: "A Gamma", Path: "A/Gamma"},
+		{Title: "B Delta", Path: "B/Delta"},
+	}
+	root := NewTree(articles)
+	ns := NewNavState(root)
+
+	// Expand A
+	ns.ActionRight()
+	aNode := root.children[0]
+	if !aNode.Expanded() {
+		t.Fatal("A should be expanded")
+	}
+
+	// Move to second child
+	ns.MoveDown()
+	if ns.Cursor.Label() != "A Beta" {
+		t.Fatalf("expected 'A Beta', got %q", ns.Cursor.Label())
+	}
+
+	// Left: cursor -> A, A collapsed
+	ns.ActionLeft()
+	if aNode.Expanded() {
+		t.Error("A should be collapsed after left")
+	}
+	if ns.Cursor.Label() != "A" {
+		t.Errorf("expected cursor on 'A', got %q", ns.Cursor.Label())
+	}
+}
+
+func TestActionLeftAtFirstLevel(t *testing.T) {
+	// Left at first level collapses all branches, cursor stays.
+	articles := []document.ArticleEntry{
+		{Title: "A Alpha", Path: "A/Alpha"},
+		{Title: "A Beta", Path: "A/Beta"},
+		{Title: "B Gamma", Path: "B/Gamma"},
+		{Title: "B Delta", Path: "B/Delta"},
+	}
+	root := NewTree(articles)
+	ns := NewNavState(root)
+
+	// Expand both A and B
+	root.children[0].Expand()
+	root.children[1].Expand()
+
+	// Verify both expanded
+	if !root.children[0].Expanded() || !root.children[1].Expanded() {
+		t.Fatal("both A and B should be expanded")
+	}
+
+	// Left at first level -> all branches collapse
+	ns.ActionLeft()
+	if root.children[0].Expanded() {
+		t.Error("A should be collapsed after left at first level")
+	}
+	if root.children[1].Expanded() {
+		t.Error("B should be collapsed after left at first level")
+	}
+	if ns.Cursor.Label() != "A" {
+		t.Errorf("cursor should stay on 'A', got %q", ns.Cursor.Label())
+	}
+}
+
+func TestActionLeftDeepThenRight(t *testing.T) {
+	// Deep navigation: Right→Right, then Left→Left, then Right→Right again.
+	articles := []document.ArticleEntry{
+		{Title: "A Alpha", Path: "A/Alpha"},
+		{Title: "A Beta", Path: "A/Beta"},
+		{Title: "A Gamma", Path: "A/Gamma"},
+		{Title: "B Delta", Path: "B/Delta"},
+	}
+	root := NewTree(articles)
+	ns := NewNavState(root)
+
+	// Right: expand A, enter first child
+	ns.ActionRight()
+	aNode := root.children[0]
+	if ns.Cursor.Label() != "A Alpha" {
+		t.Fatalf("expected 'A Alpha', got %q", ns.Cursor.Label())
+	}
+
+	// Left: collapse A, cursor -> A
+	ns.ActionLeft()
+	if aNode.Expanded() {
+		t.Error("A should be collapsed")
+	}
+	if ns.Cursor.Label() != "A" {
+		t.Errorf("expected 'A', got %q", ns.Cursor.Label())
+	}
+
+	// Right: re-expand A, enter first child
+	ns.ActionRight()
+	if !aNode.Expanded() {
+		t.Error("A should be re-expanded")
+	}
+	if ns.Cursor.Label() != "A Alpha" {
+		t.Errorf("expected 'A Alpha' after re-expand, got %q", ns.Cursor.Label())
+	}
+}
+
+// TestHybridNodeExpands verifies that a node whose title exactly matches a
+// branch prefix (e.g. "Cat" alongside "Category"/"Catalog") behaves as a
+// branch: it is Expandable, Right/select expands instead of opening the
+// article, and the exact-match article stays reachable as a leaf child.
+func TestHybridNodeExpands(t *testing.T) {
+	articles := []document.ArticleEntry{
+		{Title: "Cat", Path: "A/Cat"},
+		{Title: "Catalog", Path: "A/Catalog"},
+		{Title: "Category", Path: "A/Category"},
+	}
+	root := NewTree(articles)
+	ns := NewNavState(root)
+
+	// Enter the 'C' first-level group.
+	ns.ActionRight()
+
+	// Locate the hybrid node (prefix "Cat").
+	var cat *RadixNode
+	var findCat func(n *RadixNode)
+	findCat = func(n *RadixNode) {
+		if n.prefix == "Cat" && n.leaf == nil {
+			cat = n
+			return
+		}
+		for _, c := range n.children {
+			findCat(c)
+		}
+	}
+	findCat(root)
+	if cat == nil {
+		t.Fatal("expected a branch node with prefix 'Cat'")
+	}
+
+	// The hybrid node must be a branch, not a leaf.
+	if cat.IsLeaf() {
+		t.Error("hybrid 'Cat' node must not be a leaf")
+	}
+	if !cat.Expandable() {
+		t.Error("hybrid 'Cat' node must be expandable")
+	}
+
+	// The exact-match article "Cat" must remain reachable as a leaf child.
+	cat.Expand()
+	var catArticle *RadixNode
+	for _, c := range cat.children {
+		if c.IsLeaf() && c.FullPath() == "A/Cat" {
+			catArticle = c
+		}
+	}
+	if catArticle == nil {
+		t.Error("exact-match article 'Cat' must be reachable as a leaf child")
+	}
+}
+
+func TestActionLeftCollapseOnlyExpanded(t *testing.T) {
+	// Left at first level only collapses expanded branches.
+	articles := []document.ArticleEntry{
+		{Title: "A Alpha", Path: "A/Alpha"},
+		{Title: "A Beta", Path: "A/Beta"},
+		{Title: "B Gamma", Path: "B/Gamma"},
+	}
+	root := NewTree(articles)
+	ns := NewNavState(root)
+
+	// Only expand A, leave B collapsed
+	aNode := root.children[0]
+	bNode := root.children[1]
+	aNode.Expand()
+
+	// Left at first level
+	ns.ActionLeft()
+	if aNode.Expanded() {
+		t.Error("A should be collapsed")
+	}
+	if bNode.Expanded() {
+		t.Error("B should remain collapsed (was not expanded)")
 	}
 }

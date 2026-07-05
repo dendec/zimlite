@@ -22,6 +22,12 @@ func (ns *NavState) CursorIsLeaf() bool {
 	return ns.Cursor != nil && ns.Cursor.IsLeaf()
 }
 
+// CursorExpandable returns true if the cursor node is a branch that can be
+// expanded (as opposed to a terminal article that should be opened).
+func (ns *NavState) CursorExpandable() bool {
+	return ns.Cursor != nil && ns.Cursor.Expandable()
+}
+
 // CursorPath returns the ZIM path of the leaf article, or "".
 func (ns *NavState) CursorPath() string {
 	if ns.Cursor == nil {
@@ -94,7 +100,7 @@ func (ns *NavState) ActionRight() {
 	if ns.Cursor == nil {
 		return
 	}
-	if ns.Cursor.IsLeaf() {
+	if !ns.Cursor.Expandable() {
 		return
 	}
 	if !ns.Cursor.Expanded() {
@@ -106,18 +112,33 @@ func (ns *NavState) ActionRight() {
 }
 
 // ActionLeft implements the Left-key action:
-// - On an expanded node: collapses it.
-// - On a collapsed node or leaf: moves cursor to the parent node.
+// - At first level (parent == Root): collapses all branches, cursor stays.
+// - Otherwise: moves cursor to parent, then collapses the parent's branch.
 func (ns *NavState) ActionLeft() {
 	if ns.Cursor == nil {
 		return
 	}
-	if ns.Cursor.Expanded() && len(ns.Cursor.children) > 0 {
-		ns.Cursor.Collapse()
+	if ns.Cursor.parent == ns.Root {
+		ns.collapseRoot()
 		return
 	}
-	if ns.Cursor.parent != nil && ns.Cursor.parent != ns.Root {
-		ns.Cursor = ns.Cursor.parent
+	ns.Cursor = ns.Cursor.parent
+	if ns.Cursor.Expanded() {
+		ns.Cursor.Collapse()
+	}
+	// When the cursor lands back on the root level, ensure every branch is
+	// collapsed so the tree returns to its fully-folded state.
+	if ns.Cursor.parent == ns.Root {
+		ns.collapseRoot()
+	}
+}
+
+// collapseRoot collapses all first-level branches.
+func (ns *NavState) collapseRoot() {
+	for _, child := range ns.Root.children {
+		if child.Expanded() {
+			child.Collapse()
+		}
 	}
 }
 
@@ -153,7 +174,7 @@ func (ns *NavState) walk(node *RadixNode, prefix string, lines *[]VisLine, isLas
 			Label:      node.Label(),
 			Suffix:     node.Suffix(),
 			Path:       node.FullPath(),
-			IsLeaf:     node.IsLeaf(),
+			IsLeaf:     !node.Expandable(),
 			IsExpanded: node.Expanded() && len(node.children) > 0,
 			IsCursor:   node == ns.Cursor,
 		})

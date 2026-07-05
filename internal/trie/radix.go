@@ -89,6 +89,7 @@ func (n *RadixNode) Expand() {
 	}
 	groups := make(map[string]*group)
 	var order []string
+	var selfArticle *document.ArticleEntry // article whose title equals this prefix
 
 	for _, a := range n.articles {
 		runes := []rune(a.Title)
@@ -99,8 +100,9 @@ func (n *RadixNode) Expand() {
 			key = ""
 		}
 		if key == "" {
-			if n.leaf == nil {
-				n.leaf = &LeafInfo{Title: a.Title, Path: a.Path}
+			if selfArticle == nil {
+				art := a
+				selfArticle = &art
 			}
 			continue
 		}
@@ -111,6 +113,25 @@ func (n *RadixNode) Expand() {
 			order = append(order, key)
 		}
 		g.arts = append(g.arts, a)
+	}
+
+	// If there are no grouped children, this node is a plain article.
+	if len(order) == 0 {
+		if selfArticle != nil && n.leaf == nil {
+			n.leaf = &LeafInfo{Title: selfArticle.Title, Path: selfArticle.Path}
+		}
+		return
+	}
+
+	// Otherwise this node is a branch. Expose the exact-match article as a
+	// dedicated leaf child so it stays reachable without turning the node
+	// itself into a leaf (which would open it instead of expanding).
+	if selfArticle != nil {
+		n.children = append(n.children, &RadixNode{
+			prefix: selfArticle.Title,
+			parent: n,
+			leaf:   &LeafInfo{Title: selfArticle.Title, Path: selfArticle.Path},
+		})
 	}
 
 	for _, key := range order {
@@ -167,6 +188,16 @@ func (n *RadixNode) Collapse() {
 
 // IsLeaf returns true if this node is a direct article.
 func (n *RadixNode) IsLeaf() bool { return n.leaf != nil }
+
+// Expandable returns true if the node can be expanded into children,
+// i.e. it is a branch rather than a terminal article. A node may be both
+// an article and a branch; in that case it is still expandable.
+func (n *RadixNode) Expandable() bool {
+	if len(n.children) > 0 {
+		return true
+	}
+	return !n.built && len(n.articles) > 1
+}
 
 // Label returns the display label.
 func (n *RadixNode) Label() string {

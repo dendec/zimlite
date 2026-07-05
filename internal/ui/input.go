@@ -121,10 +121,10 @@ func (c *InputController) processTreeKey(sc sdl.Scancode) {
 	case sdl.SCANCODE_DOWN, sdl.SCANCODE_S, sdl.SCANCODE_KP_2:
 		app.navState.MoveDown()
 	case sdl.SCANCODE_RIGHT, sdl.SCANCODE_D, sdl.SCANCODE_KP_6:
-		if app.navState.CursorIsLeaf() {
-			c.handleTreeSelection()
-		} else {
+		if app.navState.CursorExpandable() {
 			app.navState.ActionRight()
+		} else {
+			c.handleTreeSelection()
 		}
 	case sdl.SCANCODE_LEFT, sdl.SCANCODE_A, sdl.SCANCODE_KP_4:
 		app.navState.ActionLeft()
@@ -238,14 +238,14 @@ func debugEvent(kind string, code int, val int) {
 
 func (c *InputController) handleTreeSelection() {
 	app := c.app
-	if app.navState.CursorIsLeaf() {
+	if app.navState.CursorExpandable() {
+		app.navState.ActionRight()
+	} else if app.navState.CursorIsLeaf() {
 		path := app.navState.CursorPath()
 		if path != "" {
 			app.navigator.Open("virtual:tree")
 			app.loader.NavigateLink(path)
 		}
-	} else {
-		app.navState.ActionRight()
 	}
 	if app.mode == modeTree {
 		app.renderTree()
