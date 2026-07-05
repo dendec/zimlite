@@ -24,9 +24,10 @@ func NewInputController(app *App) *InputController {
 		sdl.SCANCODE_Q:         func() { app.running.Store(false) },
 		sdl.SCANCODE_H:         func() { app.goHome() },
 		sdl.SCANCODE_M:         func() { _ = app.loader.OpenFile("virtual:menu") },
+		sdl.SCANCODE_F1:        func() { _ = app.loader.OpenFile("virtual:help") },
+		sdl.SCANCODE_F2:        func() { _ = app.loader.OpenFile("virtual:settings") },
 		sdl.SCANCODE_RETURN2:   func() { app.toggleMode() },
 		sdl.SCANCODE_T:         func() { app.toggleMode() },
-		sdl.SCANCODE_C:         func() { app.viewer.ToggleTheme() },
 		sdl.SCANCODE_EQUALS:    func() { c.zoom(1) },
 		sdl.SCANCODE_KP_PLUS:   func() { c.zoom(1) },
 		sdl.SCANCODE_MINUS:     func() { c.zoom(-1) },
@@ -188,6 +189,11 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 		}
 	case ActionBack:
 		c.processJoyB()
+	case ActionLeft:
+		if app.mode == modeTree {
+			app.navState.ActionLeft()
+			app.renderTree()
+		}
 	case ActionScrollUp:
 		if app.mode == modeTree {
 			app.navState.MoveUp()
@@ -228,8 +234,10 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 		app.links.SelectPrevLink()
 	case ActionSelectNextLink:
 		app.links.SelectNextLink()
-	case ActionToggleTheme:
-		app.viewer.ToggleTheme()
+	case ActionShowHelp:
+		_ = app.loader.OpenFile("virtual:help")
+	case ActionShowSettings:
+		_ = app.loader.OpenFile("virtual:settings")
 	}
 }
 

@@ -212,6 +212,8 @@ func (r *Renderer) renderStatusBar() {
 	if rightText == "" {
 		if r.treeItems != nil {
 			r.renderStatusText("Article tree", 12, r.width-24)
+		} else {
+			r.renderStatusText("F1: Help \u00b7 F2: Settings", 12, r.width-24)
 		}
 		return
 	}
