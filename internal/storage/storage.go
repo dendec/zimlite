@@ -76,9 +76,24 @@ func FormatSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), []string{"KB", "MB", "GB", "TB"}[exp])
 }
 
+const UserAgent = "kiwix-sdl/0.1"
+
 // HTTPClient creates an http.Client with the given timeout.
+// All requests made with this client include a descriptive User-Agent header.
 func HTTPClient(timeout time.Duration) *http.Client {
-	return &http.Client{Timeout: timeout}
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &userAgentTransport{UserAgent: UserAgent},
+	}
+}
+
+type userAgentTransport struct {
+	UserAgent string
+}
+
+func (t *userAgentTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("User-Agent", t.UserAgent)
+	return http.DefaultTransport.RoundTrip(req)
 }
 
 // ProgressFn is called with status updates during download (e.g. "Downloading file: 45.2%").
