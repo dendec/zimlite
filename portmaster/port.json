@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "name": "kiwix-sdl.zip",
+  "items": [
+    "Kiwix SDL.sh",
+    "kiwix-sdl"
+  ],
+  "items_opt": []
+}

@@ -15,7 +15,7 @@ CGO_LDFLAGS  := -L$(shell pwd)/$(ZIM_LIB) -lzim -Wl,-rpath,\$$ORIGIN/$(ZIM_LIB) 
 
 .PHONY: build test vet lint clean run info
 .PHONY: deps build-linux-arm64 build-linux-armv8 build-linux-amd64
-.PHONY: dist-arm64 deploy deploy-full
+.PHONY: dist-arm64 deploy deploy-full dist-portmaster deploy-portmaster
 
 build: $(ZIM_LIB)/libzim.so
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" \
@@ -61,6 +61,7 @@ lint:
 
 clean:
 	rm -f $(APP) $(APP)-*
+	rm -rf dist
 
 run: build
 	LD_LIBRARY_PATH=$(ZIM_LIB):$$LD_LIBRARY_PATH ./$(APP) /tmp/test.md
@@ -78,6 +79,7 @@ PORT_SCRIPT  := Kiwix SDL.sh
 dist-arm64:
 	docker build -t $(DOCKER_IMAGE) -f $(DOCKER_FILE) .
 	@mkdir -p dist
+	@docker rm -f kiwix-extract >/dev/null 2>&1 || true
 	docker create --name kiwix-extract $(DOCKER_IMAGE) >/dev/null 2>&1
 	docker cp kiwix-extract:/dist/kiwix-sdl/. dist/kiwix-sdl/
 	docker rm kiwix-extract >/dev/null 2>&1
@@ -102,3 +104,27 @@ deploy-full: dist-arm64
 	adb push scripts/kiwix-sdl.sh '$(PORTS_DIR)/$(PORT_SCRIPT)'
 	adb shell "chmod +x '$(PORTS_DIR)/$(PORT_SCRIPT)' && rm -f $(PORTS_DIR)/PORTS_cache7.db && killall -9 kiwix-sdl 2>/dev/null; true"
 	@echo "=== Full deployed ==="
+
+dist-portmaster: dist-arm64
+	@rm -rf dist/portmaster_build
+	@mkdir -p dist/portmaster_build/kiwix-sdl/lib
+	cp "portmaster/Kiwix SDL.sh" dist/portmaster_build/
+	cp "portmaster/port.json" dist/portmaster_build/
+	cp "portmaster/screenshot.png" dist/portmaster_build/
+	cp "portmaster/screenshot.png" dist/portmaster_build/kiwix-sdl/cover.png
+	cp "portmaster/gameinfo.xml" dist/portmaster_build/kiwix-sdl/
+	cp "portmaster/Welcome.md" dist/portmaster_build/kiwix-sdl/
+	cp dist/kiwix-sdl/kiwix-sdl dist/portmaster_build/kiwix-sdl/
+	cp dist/kiwix-sdl/lib/* dist/portmaster_build/kiwix-sdl/lib/
+	cd dist/portmaster_build && zip -r ../kiwix-sdl.zip "Kiwix SDL.sh" port.json screenshot.png kiwix-sdl
+	@echo "=== Generated dist/kiwix-sdl.zip ==="
+	@ls -lh dist/kiwix-sdl.zip
+
+deploy-portmaster: dist-portmaster
+	adb shell "rm -rf $(DEVICE_DIR) '$(PORTS_DIR)/$(PORT_SCRIPT)'"
+	adb shell "mkdir -p /mnt/SDCARD/Apps/PortMaster/PortMaster/autoinstall"
+	adb push dist/kiwix-sdl.zip /mnt/SDCARD/Apps/PortMaster/PortMaster/autoinstall/
+	adb shell "mkdir -p /mnt/SDCARD/Imgs/PORTS"
+	adb push portmaster/screenshot.png '/mnt/SDCARD/Imgs/PORTS/Kiwix SDL.png'
+	@echo "=== Zip deployed to autoinstall ==="
+
