@@ -176,13 +176,10 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 			for _, entry := range feed.Entries {
 				var downloadURL string
 				var sizeBytes int64
-				var thumbnailURL string
 				for _, link := range entry.Links {
 					if link.Rel == "http://opds-spec.org/acquisition/open-access" && link.Type == "application/x-zim" {
 						downloadURL = link.Href
 						sizeBytes = link.Length
-					} else if link.Rel == "http://opds-spec.org/image/thumbnail" {
-						thumbnailURL = link.Href
 					}
 				}
 				if downloadURL == "" { continue }
@@ -191,16 +188,9 @@ func (app *App) generateLibraryDoc(pathStr string) (*document.Document, error) {
 				uDirect, _ := url.Parse(directURL)
 				filename := entry.Title + ".zim"
 				if uDirect != nil { filename = path.Base(uDirect.Path) }
-				fmt.Fprintf(&sb, "### %s\n", entry.Title)
-				if thumbnailURL != "" {
-					fullThumbnail := thumbnailURL
-					if !strings.HasPrefix(fullThumbnail, "http") {
-						fullThumbnail = "https://browse.library.kiwix.org" + fullThumbnail
-					}
-					fmt.Fprintf(&sb, "![%s](%s)\n\n", entry.Title, fullThumbnail)
-				}
-				if entry.Summary != "" { fmt.Fprintf(&sb, "*Description*: %s\n\n", entry.Summary) }
-				fmt.Fprintf(&sb, "*Size*: %s\n\n", sizeStr)
+			fmt.Fprintf(&sb, "### %s\n", entry.Title)
+			if entry.Summary != "" { fmt.Fprintf(&sb, "*Description*: %s\n\n", entry.Summary) }
+			fmt.Fprintf(&sb, "*Size*: %s\n\n", sizeStr)
 				escURL := url.QueryEscape(directURL)
 				escFile := url.QueryEscape(filename)
 				fmt.Fprintf(&sb, "[Download Archive](virtual:library/download?url=%s&filename=%s)\n\n", escURL, escFile)
