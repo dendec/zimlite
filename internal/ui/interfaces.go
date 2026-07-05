@@ -31,6 +31,7 @@ type DocViewer interface {
 	HasAnimations() bool
 	HandleMouseMove(mx, my int32)
 	HandleMouseLeave()
+	HandleTouch()
 }
 
 // LinkBrowser is the interface for navigating hyperlinks in a document.

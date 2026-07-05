@@ -89,6 +89,9 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 	case *sdl.MouseMotionEvent:
 		app.viewer.HandleMouseMove(e.X, e.Y)
 
+	case *sdl.TouchFingerEvent:
+		app.viewer.HandleTouch()
+
 	case *sdl.MouseWheelEvent:
 		app.scroller.ScrollBy(-scrollStep * e.Y)
 

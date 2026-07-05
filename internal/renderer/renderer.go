@@ -114,6 +114,7 @@ type Renderer struct {
 	hoveredTreeLine     int // index of hovered tree line (-1 = none)
 	arrowCursor         *sdl.Cursor
 	handCursor          *sdl.Cursor
+	hasPointer          bool // mouse or touch device present
 }
 
 type lineEntry struct {
@@ -468,7 +469,7 @@ func (r *Renderer) clampSelection() {
 		r.selectedLink = -1
 		return
 	}
-	if r.selectedLink < 0 {
+	if r.selectedLink < 0 && !r.hasPointer {
 		r.selectedLink = 0
 	}
 	if r.selectedLink >= len(r.layout.links) {
@@ -703,6 +704,11 @@ func (r *Renderer) HasAnimations() bool {
 
 func (r *Renderer) HandleMouseMove(mx, my int32) {
 	docY := my + r.scrollY
+	// On first mouse event, mark pointer present and deselect.
+	if !r.hasPointer {
+		r.hasPointer = true
+		r.selectedLink = -1
+	}
 	prevLink := r.hoveredLink
 	r.hoveredLink = -1
 	r.hoveredTreeLine = -1
@@ -743,5 +749,12 @@ func (r *Renderer) HandleMouseLeave() {
 	if r.hoveredLink >= 0 {
 		r.hoveredLink = -1
 		sdl.SetCursor(r.arrowCursor)
+	}
+}
+
+func (r *Renderer) HandleTouch() {
+	if !r.hasPointer {
+		r.hasPointer = true
+		r.selectedLink = -1
 	}
 }
