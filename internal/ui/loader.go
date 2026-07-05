@@ -29,8 +29,9 @@ type DocumentLoader struct {
 
 func NewDocumentLoader(app *App) *DocumentLoader {
 	return &DocumentLoader{
-		app:      app,
-		docCache: make(map[string]*document.Document),
+		app:               app,
+		docCache:          make(map[string]*document.Document),
+		internetAvailable: true,
 	}
 }
 
@@ -44,10 +45,11 @@ func (l *DocumentLoader) shutdown() {
 
 func (l *DocumentLoader) checkInternetAsync() {
 	go func() {
-		if menu.CheckInternet() {
-			l.internetAvailable = true
+		hasInternet := menu.CheckInternet()
+		if hasInternet != l.internetAvailable {
+			l.internetAvailable = hasInternet
 			if l.app.navigator.Current() == "virtual:menu" {
-				if doc, err := menu.FileSelector(true); err == nil {
+				if doc, err := menu.FileSelector(hasInternet); err == nil {
 					l.app.viewer.SetDocument(doc)
 					l.app.viewer.Relayout()
 					sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})

@@ -27,9 +27,6 @@ func FileSelector(internetAvailable bool) (*document.Document, error) {
 	if internetAvailable {
 		sb.WriteString("## Online Library\n")
 		sb.WriteString("* [Browse and Download ZIM Archives](virtual:library)\n\n")
-	} else {
-		sb.WriteString("## Online Library\n")
-		sb.WriteString("*Online library is available when internet is connected.*\n\n")
 	}
 
 	var zims []string
