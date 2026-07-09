@@ -31,35 +31,44 @@ Renders Wikipedia ZIM archives, Markdown, and HTML files via SDL2. Supports keyb
 - **Gamepad** — Full controller support for PortMaster devices
 - **Touch/Mouse** — Click links, scroll wheels
 
+## Building
+
+### Linux (AMD64)
+Native build requires SDL2, SDL2_ttf, and libzim dependencies.
+```bash
+# Install dependencies (Ubuntu/Debian)
+sudo apt install libsdl2-dev libsdl2-ttf-dev liblzma-dev libzstd-dev
+
+# Build only the binary
+make build
+
+# Build a complete distribution (zip with libraries)
+make dist-amd64
+# Output: dist/kiwix-sdl-linux-amd64.zip
+```
+
+### Windows (Cross-build via Docker)
+```bash
+make dist-windows
+# Output: dist/kiwix-sdl-windows-amd64.zip
+```
+
+### PortMaster / ARM64 (Cross-build via Docker)
+```bash
+make dist-portmaster
+# Output: dist/kiwix-sdl-portmaster.zip
+```
+
 ## Quick Start
 
-### Linux (native)
-
 ```bash
-# Install dependencies
-sudo apt install libsdl2-dev libsdl2-ttf-dev liblzma-dev libzstd-dev libicu-dev
-
-# Build
-make
+# Install dependencies & build
+sudo apt install libsdl2-dev libsdl2-ttf-dev liblzma-dev libzstd-dev
+make build
 
 # Run with a ZIM archive or markdown file
-./kiwix-sdl wikipedia_ru_top_mini_2026-04.zim
+./kiwix-sdl wikipedia_en_100_maxi_2026-04.zim
 ./kiwix-sdl test.md
-```
-
-### Windows (cross-build)
-
-```bash
-make build-windows-amd64  # requires Docker
-# Output in dist/windows/
-```
-
-### ARM64 / PortMaster
-
-```bash
-make dist-arm64      # Docker cross-build
-make deploy          # Push via ADB to device
-make dist-portmaster # Package for PortMaster
 ```
 
 ## Development
@@ -68,6 +77,16 @@ For architecture details, build targets, and dependencies, see [docs/DEVELOPMENT
 
 ## Configuration
 
+### Fonts
+By default, Kiwix-SDL uses embedded **GNU Unifont** for maximum Unicode compatibility.
+
+To use a custom font, set the `KIWIX_FONT` environment variable:
+```bash
+export KIWIX_FONT="/path/to/your/font.ttf"
+./kiwix-sdl
+```
+
+### Settings
 `config.json` next to the binary:
 
 ```json
@@ -78,7 +97,7 @@ For architecture details, build targets, and dependencies, see [docs/DEVELOPMENT
 }
 ```
 
-Set via `KIWIX_FONT` env var for a custom TTF font path. `KIWIX_DEBUG=1` for debug logging.
+`KIWIX_DEBUG=1` enables debug logging.
 
 ## License
 
