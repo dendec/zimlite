@@ -13,6 +13,9 @@ ZIM_URL      := https://download.openzim.org/release/libzim
 CGO_CXXFLAGS := -std=c++17 -I$(shell pwd)/internal/zim -I$(shell pwd)/$(ZIM_INC)
 CGO_LDFLAGS  := -L$(shell pwd)/$(ZIM_LIB) -lzim -Wl,-rpath,\$$ORIGIN/$(ZIM_LIB) -Wl,--disable-new-dtags
 
+VERSION      ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1")
+LDFLAGS      := -X 'github.com/kiwix-sdl/kiwix-sdl/internal/storage.Version=$(VERSION)'
+
 .PHONY: build test vet lint clean run info fmt
 .PHONY: deps build-linux-arm64 build-linux-armv8 build-linux-amd64 build-windows-amd64
 .PHONY: dist-arm64 dist-windows deploy dist-portmaster deploy-portmaster
@@ -22,7 +25,7 @@ fmt:
 
 build: fmt $(ZIM_LIB)/libzim.so
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" \
-		$(GO) build -o $(APP) $(SRC)
+		$(GO) build -ldflags "$(LDFLAGS)" -o $(APP) $(SRC)
 
 
 $(ZIM_LIB)/libzim.so:
@@ -37,21 +40,21 @@ build-linux-amd64:
 		CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ \
 		CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -Ilib/libzim_linux-x86_64-$(ZIM_VER)/include" \
 		CGO_LDFLAGS="-Llib/libzim_linux-x86_64-$(ZIM_VER)/lib/x86_64-linux-gnu -lzim" \
-		$(GO) build -o $(APP)-amd64 $(SRC)
+		$(GO) build -ldflags "$(LDFLAGS)" -o $(APP)-amd64 $(SRC)
 
 build-linux-arm64:
 	$(GOFLAGS) CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
 		CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ \
 		CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -Ilib/libzim_linux-aarch64-$(ZIM_VER)/include" \
 		CGO_LDFLAGS="-Llib/libzim_linux-aarch64-$(ZIM_VER)/lib/aarch64-linux-gnu -lzim" \
-		$(GO) build -o $(APP)-arm64 $(SRC)
+		$(GO) build -ldflags "$(LDFLAGS)" -o $(APP)-arm64 $(SRC)
 
 build-linux-armv8:
 	$(GOFLAGS) CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 \
 		CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++ \
 		CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -Ilib/libzim_linux-armv8-$(ZIM_VER)/include" \
 		CGO_LDFLAGS="-Llib/libzim_linux-armv8-$(ZIM_VER)/lib/armv8-linux-gnueabihf -lzim" \
-		$(GO) build -o $(APP)-armv8 $(SRC)
+		$(GO) build -ldflags "$(LDFLAGS)" -o $(APP)-armv8 $(SRC)
 
 build-windows-amd64: dist-windows
 

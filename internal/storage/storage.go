@@ -76,14 +76,19 @@ func FormatSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), []string{"KB", "MB", "GB", "TB"}[exp])
 }
 
-const UserAgent = "kiwix-sdl/0.1"
+// Version is the current version of the application, typically set during build.
+var Version = "0.1"
+
+func getUserAgent() string {
+	return "kiwix-sdl/" + Version
+}
 
 // HTTPClient creates an http.Client with the given timeout.
 // All requests made with this client include a descriptive User-Agent header.
 func HTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
-		Timeout: timeout,
-		Transport: &userAgentTransport{UserAgent: UserAgent},
+		Timeout:   timeout,
+		Transport: &userAgentTransport{UserAgent: getUserAgent()},
 	}
 }
 

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"os"
 	"runtime"
@@ -10,6 +11,7 @@ import (
 	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/navigation"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/renderer"
+	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
 	"github.com/kiwix-sdl/kiwix-sdl/internal/ui"
 )
 
@@ -26,6 +28,10 @@ func main() {
 
 	var filePath string
 	if len(os.Args) >= 2 {
+		if os.Args[1] == "--version" || os.Args[1] == "-v" {
+			fmt.Printf("Kiwix-SDL v%s\n", storage.Version)
+			return
+		}
 		filePath = os.Args[1]
 	} else {
 		filePath = "virtual:menu"
@@ -41,7 +47,7 @@ func main() {
 		slog.Info("No external TTF font found. Using embedded fonts.")
 	}
 
-	r, err := renderer.New("Kiwix-SDL", 640, 480, fontPath, cfg.FontSize)
+	r, err := renderer.New(fmt.Sprintf("Kiwix-SDL v%s", storage.Version), 640, 480, fontPath, cfg.FontSize)
 	if err != nil {
 		slog.Error("Error creating renderer", "error", err)
 		// On Windows,Stderr might not be visible easily, so we show a message box if possible
