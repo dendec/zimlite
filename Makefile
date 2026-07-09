@@ -125,7 +125,8 @@ dist-portmaster: dist-arm64
 	cp "portmaster/screenshot.png" dist/portmaster_build/
 	cp "portmaster/screenshot.png" dist/portmaster_build/kiwix-sdl/cover.png
 	cp "portmaster/gameinfo.xml" dist/portmaster_build/kiwix-sdl/
-	cp "portmaster/Welcome.md" dist/portmaster_build/kiwix-sdl/
+	cp "portmaster/README.md" dist/portmaster_build/kiwix-sdl/
+	cp -r "portmaster/licenses" dist/portmaster_build/kiwix-sdl/
 	cp dist/kiwix-sdl/kiwix-sdl dist/portmaster_build/kiwix-sdl/
 	cp dist/kiwix-sdl/lib/* dist/portmaster_build/kiwix-sdl/lib/
 	cd dist/portmaster_build && zip -r ../kiwix-sdl-portmaster.zip "Kiwix SDL.sh" port.json screenshot.png kiwix-sdl
