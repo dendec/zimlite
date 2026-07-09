@@ -17,8 +17,8 @@ VERSION      ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo
 LDFLAGS      := -X 'github.com/kiwix-sdl/kiwix-sdl/internal/storage.Version=$(VERSION)'
 
 .PHONY: build test vet lint clean run info fmt
-.PHONY: deps build-linux-arm64 build-linux-armv8 build-linux-amd64 build-windows-amd64
-.PHONY: dist-arm64 dist-windows deploy dist-portmaster deploy-portmaster
+.PHONY: deps build-linux-arm64 build-linux-amd64 build-windows-amd64
+.PHONY: dist-arm64 dist-windows dist-amd64 deploy dist-portmaster deploy-portmaster
 
 fmt:
 	gofmt -s -w .
@@ -40,21 +40,14 @@ build-linux-amd64:
 		CC=x86_64-linux-gnu-gcc CXX=x86_64-linux-gnu-g++ \
 		CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -Ilib/libzim_linux-x86_64-$(ZIM_VER)/include" \
 		CGO_LDFLAGS="-Llib/libzim_linux-x86_64-$(ZIM_VER)/lib/x86_64-linux-gnu -lzim" \
-		$(GO) build -ldflags "$(LDFLAGS)" -o $(APP)-amd64 $(SRC)
+		$(GO) build -ldflags "$(LDFLAGS)" -o kiwix-sdl-amd64 ./cmd/kiwix-sdl
 
 build-linux-arm64:
 	$(GOFLAGS) CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
 		CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ \
 		CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -Ilib/libzim_linux-aarch64-$(ZIM_VER)/include" \
 		CGO_LDFLAGS="-Llib/libzim_linux-aarch64-$(ZIM_VER)/lib/aarch64-linux-gnu -lzim" \
-		$(GO) build -ldflags "$(LDFLAGS)" -o $(APP)-arm64 $(SRC)
-
-build-linux-armv8:
-	$(GOFLAGS) CGO_ENABLED=1 GOOS=linux GOARCH=arm GOARM=7 \
-		CC=arm-linux-gnueabihf-gcc CXX=arm-linux-gnueabihf-g++ \
-		CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -Ilib/libzim_linux-armv8-$(ZIM_VER)/include" \
-		CGO_LDFLAGS="-Llib/libzim_linux-armv8-$(ZIM_VER)/lib/armv8-linux-gnueabihf -lzim" \
-		$(GO) build -ldflags "$(LDFLAGS)" -o $(APP)-armv8 $(SRC)
+		$(GO) build -ldflags "$(LDFLAGS)" -o kiwix-sdl-arm64 ./cmd/kiwix-sdl
 
 build-windows-amd64: dist-windows
 
@@ -102,8 +95,16 @@ dist-windows:
 	docker create --name kiwix-win-extract kiwix-windows >/dev/null 2>&1
 	docker cp kiwix-win-extract:/dist/kiwix-sdl/. dist/windows/
 	docker rm kiwix-win-extract >/dev/null 2>&1
+	cd dist/windows && zip -r ../kiwix-sdl-windows-amd64.zip .
 	@echo "=== dist/windows/ ==="
 	@ls -lh dist/windows/
+
+dist-amd64: build
+	@mkdir -p dist/linux-amd64/lib
+	cp kiwix-sdl dist/linux-amd64/
+	cp $(ZIM_LIB)/libzim.so.9 dist/linux-amd64/lib/
+	cd dist/linux-amd64 && zip -r ../kiwix-sdl-linux-amd64.zip .
+	@echo "=== Generated dist/kiwix-sdl-linux-amd64.zip ==="
 
 deploy: dist-arm64
 	adb shell "mkdir -p $(DEVICE_DIR)/lib"
@@ -127,14 +128,14 @@ dist-portmaster: dist-arm64
 	cp "portmaster/Welcome.md" dist/portmaster_build/kiwix-sdl/
 	cp dist/kiwix-sdl/kiwix-sdl dist/portmaster_build/kiwix-sdl/
 	cp dist/kiwix-sdl/lib/* dist/portmaster_build/kiwix-sdl/lib/
-	cd dist/portmaster_build && zip -r ../kiwix-sdl.zip "Kiwix SDL.sh" port.json screenshot.png kiwix-sdl
-	@echo "=== Generated dist/kiwix-sdl.zip ==="
-	@ls -lh dist/kiwix-sdl.zip
+	cd dist/portmaster_build && zip -r ../kiwix-sdl-portmaster.zip "Kiwix SDL.sh" port.json screenshot.png kiwix-sdl
+	@echo "=== Generated dist/kiwix-sdl-portmaster.zip ==="
+	@ls -lh dist/kiwix-sdl-portmaster.zip
 
 deploy-portmaster: dist-portmaster
 	adb shell "rm -rf $(DEVICE_DIR) '$(PORTS_DIR)/$(PORT_SCRIPT)'"
 	adb shell "mkdir -p /mnt/SDCARD/Apps/PortMaster/PortMaster/autoinstall"
-	adb push dist/kiwix-sdl.zip /mnt/SDCARD/Apps/PortMaster/PortMaster/autoinstall/
+	adb push dist/kiwix-sdl-portmaster.zip /mnt/SDCARD/Apps/PortMaster/PortMaster/autoinstall/
 	adb shell "mkdir -p /mnt/SDCARD/Imgs/PORTS"
 	adb push portmaster/screenshot.png '/mnt/SDCARD/Imgs/PORTS/Kiwix SDL.png'
 	@echo "=== Zip deployed to autoinstall ==="
