@@ -8,7 +8,7 @@
   "items_opt": null,
   "attr": {
     "title": "Zimlite",
-    "desc": "Offline Wikipedia reader for ZIM archives",
+    "desc": "Lightweight offline ZIM reader",
     "inst": "Copy ZIM files into /roms/ports/zimlite/",
     "genres": ["utility"],
     "porter": ["dendec"],
