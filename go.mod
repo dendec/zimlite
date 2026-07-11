@@ -1,4 +1,4 @@
-module github.com/kiwix-sdl/zimlite
+module github.com/dendec/zimlite
 
 go 1.25.0
 

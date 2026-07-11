@@ -8,11 +8,11 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/kiwix-sdl/zimlite/internal/config"
-	"github.com/kiwix-sdl/zimlite/internal/navigation"
-	"github.com/kiwix-sdl/zimlite/internal/renderer"
-	"github.com/kiwix-sdl/zimlite/internal/storage"
-	"github.com/kiwix-sdl/zimlite/internal/ui"
+	"github.com/dendec/zimlite/internal/config"
+	"github.com/dendec/zimlite/internal/navigation"
+	"github.com/dendec/zimlite/internal/renderer"
+	"github.com/dendec/zimlite/internal/storage"
+	"github.com/dendec/zimlite/internal/ui"
 )
 
 func main() {

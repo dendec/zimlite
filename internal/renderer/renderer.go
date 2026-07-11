@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/kiwix-sdl/zimlite/internal/config"
-	"github.com/kiwix-sdl/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/config"
+	"github.com/dendec/zimlite/internal/document"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )

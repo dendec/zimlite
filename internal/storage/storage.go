@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kiwix-sdl/zimlite/internal/document"
-	"github.com/kiwix-sdl/zimlite/internal/html"
-	"github.com/kiwix-sdl/zimlite/internal/markdown"
-	"github.com/kiwix-sdl/zimlite/internal/zim"
+	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/html"
+	"github.com/dendec/zimlite/internal/markdown"
+	"github.com/dendec/zimlite/internal/zim"
 )
 
 // OpenFile reads a file (.md, .html, .htm) and returns a Document.

@@ -15,8 +15,8 @@ import (
 	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/table"
 	"golang.org/x/net/html"
 
-	"github.com/kiwix-sdl/zimlite/internal/document"
-	"github.com/kiwix-sdl/zimlite/internal/markdown"
+	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/markdown"
 )
 
 // Parse reads HTML from r and returns a Document.

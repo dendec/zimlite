@@ -3,7 +3,7 @@
 package navigation
 
 import (
-	"github.com/kiwix-sdl/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/document"
 )
 
 // Navigator is the abstract navigation interface.

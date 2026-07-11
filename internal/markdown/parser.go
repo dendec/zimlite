@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/kiwix-sdl/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/document"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"

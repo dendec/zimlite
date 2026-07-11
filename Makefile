@@ -14,7 +14,7 @@ CGO_CXXFLAGS := -std=c++17 -I$(shell pwd)/internal/zim -I$(shell pwd)/$(ZIM_INC)
 CGO_LDFLAGS  := -L$(shell pwd)/$(ZIM_LIB) -lzim -Wl,-rpath,\$$ORIGIN/$(ZIM_LIB) -Wl,--disable-new-dtags
 
 VERSION      ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1")
-LDFLAGS      := -X 'github.com/zimlite/zimlite/internal/storage.Version=$(VERSION)'
+LDFLAGS      := -X 'github.com/dendec/zimlite/internal/storage.Version=$(VERSION)'
 
 .PHONY: build test vet lint clean run info fmt
 .PHONY: deps build-linux-arm64 build-linux-amd64 build-windows-amd64

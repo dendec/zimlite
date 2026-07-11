@@ -2,7 +2,7 @@
 
 package zim
 
-import "github.com/kiwix-sdl/zimlite/internal/document"
+import "github.com/dendec/zimlite/internal/document"
 
 type Reader struct {
 	rootPrefix   string

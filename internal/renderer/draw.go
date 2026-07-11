@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kiwix-sdl/zimlite/internal/document"
-	"github.com/kiwix-sdl/zimlite/internal/svg"
+	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/svg"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )

@@ -17,8 +17,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/kiwix-sdl/zimlite/internal/document"
-	"github.com/kiwix-sdl/zimlite/internal/util"
+	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/util"
 )
 
 // Reader wraps a libzim Archive handle.

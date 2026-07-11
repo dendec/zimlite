@@ -3,8 +3,8 @@ package ui
 import (
 	"net/url"
 
-	"github.com/kiwix-sdl/zimlite/internal/config"
-	"github.com/kiwix-sdl/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/config"
+	"github.com/dendec/zimlite/internal/document"
 )
 
 // LoaderHost is the interface DocumentLoader uses to communicate back to the App.

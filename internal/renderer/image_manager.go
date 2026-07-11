@@ -12,7 +12,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/kiwix-sdl/zimlite/internal/svg"
+	"github.com/dendec/zimlite/internal/svg"
 	"github.com/veandco/go-sdl2/sdl"
 	_ "golang.org/x/image/webp"
 )

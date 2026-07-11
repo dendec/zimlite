@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kiwix-sdl/zimlite/internal/document"
-	"github.com/kiwix-sdl/zimlite/internal/menu"
+	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/menu"
 )
 
 func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document, error) {

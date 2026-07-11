@@ -2,8 +2,8 @@
 package ui
 
 import (
-	"github.com/kiwix-sdl/zimlite/internal/document"
-	"github.com/kiwix-sdl/zimlite/internal/renderer"
+	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/renderer"
 )
 
 // ZimReader is the interface for reading ZIM archives. Implemented by zim.Reader.

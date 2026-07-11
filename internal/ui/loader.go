@@ -14,12 +14,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kiwix-sdl/zimlite/internal/document"
-	"github.com/kiwix-sdl/zimlite/internal/html"
-	"github.com/kiwix-sdl/zimlite/internal/menu"
-	"github.com/kiwix-sdl/zimlite/internal/storage"
-	"github.com/kiwix-sdl/zimlite/internal/util"
-	"github.com/kiwix-sdl/zimlite/internal/zim"
+	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/html"
+	"github.com/dendec/zimlite/internal/menu"
+	"github.com/dendec/zimlite/internal/storage"
+	"github.com/dendec/zimlite/internal/util"
+	"github.com/dendec/zimlite/internal/zim"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
