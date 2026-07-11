@@ -4,7 +4,7 @@ Thanks to the [Kiwix Project](https://kiwix.org) for their amazing offline reade
 This port enables offline ZIM/markdown file reading tailored for handheld devices!
 
 ### How to use:
-1. Download ZIM files (e.g. Wikipedia, Wikibooks, Wikivoyage, xkcd) from **kiwix.org**.
+1. Download ZIM files (e.g. Wikipedia, Wikibooks, Wikivoyage, etc.) from **kiwix.org**.
 2. Copy the `.zim` files into the port directory:
    `/roms/ports/zimlite/`
 3. Restart **Zimlite**. It will automatically detect and load the archive!
