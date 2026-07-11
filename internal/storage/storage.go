@@ -15,6 +15,7 @@ import (
 
 	"github.com/dendec/zimlite/internal/document"
 	"github.com/dendec/zimlite/internal/html"
+	"github.com/dendec/zimlite/internal/i18n"
 	"github.com/dendec/zimlite/internal/markdown"
 	"github.com/dendec/zimlite/internal/zim"
 )
@@ -106,7 +107,7 @@ type ProgressFn func(status string)
 
 // Download fetches a file from url, saves to filename, and reports progress via onProgress.
 // Blocks until complete or error. Runs in a goroutine when called with go.
-func Download(url, filename string, onProgress ProgressFn) (err error) {
+func Download(url, filename, lang string, onProgress ProgressFn) (err error) {
 	client := HTTPClient(0)
 
 	tempFilename := filename + ".part"
@@ -183,7 +184,7 @@ func Download(url, filename string, onProgress ProgressFn) (err error) {
 
 	var isIdleTimeout atomic.Bool
 	done := make(chan struct{})
-	go monitorDownload(done, filename, totalSize, &downloaded, &lastRead, cancel, &isIdleTimeout, onProgress)
+	go monitorDownload(done, filename, lang, totalSize, &downloaded, &lastRead, cancel, &isIdleTimeout, onProgress)
 
 	err = copyStream(resp.Body, out, &downloaded, &lastRead)
 	close(done)
@@ -202,11 +203,11 @@ func Download(url, filename string, onProgress ProgressFn) (err error) {
 	}
 	_ = os.Remove(infoFilename)
 
-	onProgress("✅ Download finished successfully!")
+	onProgress(i18n.T(lang, "download.finished"))
 	return nil
 }
 
-func monitorDownload(done <-chan struct{}, filename string, totalSize int64, downloaded, lastRead *atomic.Int64, cancel context.CancelFunc, isIdleTimeout *atomic.Bool, onProgress ProgressFn) {
+func monitorDownload(done <-chan struct{}, filename, lang string, totalSize int64, downloaded, lastRead *atomic.Int64, cancel context.CancelFunc, isIdleTimeout *atomic.Bool, onProgress ProgressFn) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -240,7 +241,7 @@ func monitorDownload(done <-chan struct{}, filename string, totalSize int64, dow
 			if totalSize > 0 {
 				percent = float64(currentBytes) / float64(totalSize) * 100
 			}
-			onProgress(fmt.Sprintf("⬇ Downloading %s: %.1f%% (%s)", filepath.Base(filename), percent, speedStr))
+			onProgress(i18n.Tf(lang, "download.progress", filepath.Base(filename), percent, speedStr))
 
 			lastBytes = currentBytes
 			lastTime = t

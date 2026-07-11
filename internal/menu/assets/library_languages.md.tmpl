@@ -1,8 +1,8 @@
-# 🌐 Archive Library - Languages
+# {{T "library.title_languages"}}
 
-[🔙 Back](virtual:menu)
+[{{T "library.back"}}](virtual:menu)
 
-👇 Select a language:
+{{T "library.select_language"}}
 
-{{range .Entries}}{{if .Language}}* [{{.Title}} ({{.Count}} archives)](virtual:library/categories?lang={{.Language}}&name={{urlquery .Title}})
+{{range .Entries}}{{if .Language}}* [{{.Title}} ({{Tf "library.archives_count" .Count}})](virtual:library/categories?lang={{.Language}}&name={{urlquery .Title}})
 {{end}}{{end}}

@@ -26,6 +26,7 @@ type DocRenderer interface {
 	Render()
 	ToggleTheme()
 	SetTheme(name string)
+	SetLanguage(lang string)
 	Zoom(delta int) error
 	SetHasTree(has bool)
 	FindAnchorY(anchor string) (int32, bool)

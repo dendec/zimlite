@@ -58,6 +58,7 @@ func main() {
 	slog.Info("Renderer initialized successfully", "font", fontPath, "renderer", "sdl")
 
 	r.SetTheme(cfg.Theme)
+	r.SetLanguage(cfg.Language)
 
 	app := ui.New(r, r, r, navigation.NewSimpleNavigator(), config.NewProvider())
 

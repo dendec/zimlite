@@ -16,6 +16,7 @@ import (
 
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/i18n"
 	"github.com/dendec/zimlite/internal/markdown"
 	"github.com/dendec/zimlite/internal/storage"
 )
@@ -41,16 +42,19 @@ var libraryCategoriesTemplate string
 //go:embed assets/library_entries.md.tmpl
 var libraryEntriesTemplate string
 
-var tmpl = template.Must(template.New("menu").Funcs(template.FuncMap{
-	"urlquery": url.QueryEscape,
-}).Parse(menuTemplate))
-
-var helpKeyboardTmpl = template.Must(template.New("help_keyboard").Parse(helpKeyboardTemplate))
-var helpGamepadTmpl = template.Must(template.New("help_gamepad").Parse(helpGamepadTemplate))
-var settingsTmpl = template.Must(template.New("settings").Parse(settingsTemplate))
-var libraryLanguagesTmpl = template.Must(template.New("library_languages").Funcs(template.FuncMap{"urlquery": url.QueryEscape}).Parse(libraryLanguagesTemplate))
-var libraryCategoriesTmpl = template.Must(template.New("library_categories").Funcs(template.FuncMap{"urlquery": url.QueryEscape}).Parse(libraryCategoriesTemplate))
-var libraryEntriesTmpl = template.Must(template.New("library_entries").Funcs(template.FuncMap{"urlquery": url.QueryEscape}).Parse(libraryEntriesTemplate))
+// executeTemplate parses and executes a template text with i18n FuncMap.
+func executeTemplate(tmplText string, lang string, data any) (*bytes.Buffer, error) {
+	t := template.Must(template.New("").Funcs(template.FuncMap{
+		"T":        func(key string) string { return i18n.T(lang, key) },
+		"Tf":       func(key string, args ...any) string { return i18n.Tf(lang, key, args...) },
+		"urlquery": url.QueryEscape,
+	}).Parse(tmplText))
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return nil, fmt.Errorf("execute template: %w", err)
+	}
+	return &buf, nil
+}
 
 // FileEntry represents a file in the menu with formatted details.
 type FileEntry struct {
@@ -81,7 +85,7 @@ var (
 	docExtensions = []string{".md", ".html", ".htm"}
 )
 
-func FileSelector(internetAvailable bool) (*document.Document, error) {
+func FileSelector(lang string, internetAvailable bool) (*document.Document, error) {
 	zims, mds, downloads, err := scanDirectory(".")
 	if err != nil {
 		return nil, fmt.Errorf("read dir: %w", err)
@@ -95,30 +99,29 @@ func FileSelector(internetAvailable bool) (*document.Document, error) {
 		HasContent:        len(zims) > 0 || len(downloads) > 0,
 	}
 
-	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("execute template: %w", err)
+	buf, err := executeTemplate(menuTemplate, lang, data)
+	if err != nil {
+		return nil, err
 	}
 
 	slog.Debug("Generated menu markdown", "markdown", buf.String())
 
-	return markdown.Parse(&buf)
+	return markdown.Parse(buf)
 }
 
 // HelpPage generates the help and shortcuts document.
-func HelpPage(hasGamepad bool) (*document.Document, error) {
-	var buf bytes.Buffer
-	var err error
+func HelpPage(lang string, hasGamepad bool) (*document.Document, error) {
+	tmplText := helpKeyboardTemplate
 	if hasGamepad {
-		err = helpGamepadTmpl.Execute(&buf, nil)
-	} else {
-		err = helpKeyboardTmpl.Execute(&buf, nil)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("execute template: %w", err)
+		tmplText = helpGamepadTemplate
 	}
 
-	return markdown.Parse(&buf)
+	buf, err := executeTemplate(tmplText, lang, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return markdown.Parse(buf)
 }
 
 type settingsData struct {
@@ -131,57 +134,50 @@ type settingsData struct {
 	LangNext  string
 }
 
-var themeOptions = []struct{ id, name string }{
-	{"light", "☀️ Light"},
-	{"dark", "🌙 Dark"},
-	{"sepia", "📜 Sepia"},
-}
-
-var langOptions = []struct{ id, name string }{
-	{"en", "🇬🇧 English"},
-	{"ru", "🇷🇺 Русский"},
-}
+var themeIDs = []string{"light", "dark", "sepia"}
 
 // SettingsPage generates the settings document.
-func SettingsPage(cfg config.Config) (*document.Document, error) {
+func SettingsPage(lang string, cfg config.Config) (*document.Document, error) {
 	themeIdx := 0
-	for i, t := range themeOptions {
-		if t.id == cfg.Theme {
+	for i, id := range themeIDs {
+		if id == cfg.Theme {
 			themeIdx = i
 			break
 		}
 	}
-	n := len(themeOptions)
+	n := len(themeIDs)
+
+	langs := i18n.Languages()
 	langIdx := 0
-	for i, l := range langOptions {
-		if l.id == cfg.Language {
+	for i, l := range langs {
+		if l.Code == cfg.Language {
 			langIdx = i
 			break
 		}
 	}
-	m := len(langOptions)
+	m := len(langs)
 
-	langName := langOptions[langIdx].name
+	langName := langs[langIdx].Name
 	if langName == "" {
 		langName = cfg.Language // fallback to raw ID if unknown
 	}
 
 	data := settingsData{
-		ThemeName: themeOptions[themeIdx].name,
-		ThemePrev: themeOptions[(themeIdx-1+n)%n].id,
-		ThemeNext: themeOptions[(themeIdx+1)%n].id,
+		ThemeName: i18n.T(lang, "theme."+themeIDs[themeIdx]),
+		ThemePrev: themeIDs[(themeIdx-1+n)%n],
+		ThemeNext: themeIDs[(themeIdx+1)%n],
 		FontSize:  cfg.FontSize,
 		LangName:  langName,
-		LangPrev:  langOptions[(langIdx-1+m)%m].id,
-		LangNext:  langOptions[(langIdx+1)%m].id,
+		LangPrev:  langs[(langIdx-1+m)%m].Code,
+		LangNext:  langs[(langIdx+1)%m].Code,
 	}
 
-	var buf bytes.Buffer
-	if err := settingsTmpl.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("execute template: %w", err)
+	buf, err := executeTemplate(settingsTemplate, lang, data)
+	if err != nil {
+		return nil, err
 	}
 
-	return markdown.Parse(&buf)
+	return markdown.Parse(buf)
 }
 
 func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, downloads []DownloadEntry, err error) {

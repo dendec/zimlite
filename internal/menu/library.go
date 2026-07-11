@@ -1,7 +1,6 @@
 package menu
 
 import (
-	"bytes"
 	"encoding/xml"
 	"fmt"
 	"log/slog"
@@ -14,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/i18n"
 	"github.com/dendec/zimlite/internal/markdown"
 	"github.com/dendec/zimlite/internal/storage"
 )
@@ -37,7 +37,7 @@ type AtomEntry struct {
 	Links    []AtomLink `xml:"link"`
 }
 
-// AtomFeed represents the root feed element of an Atom/OPDS catalog.
+// AtomFeed represents the root feed element in an Atom/OPDS catalog.
 type AtomFeed struct {
 	XMLName xml.Name    `xml:"feed"`
 	Title   string      `xml:"title"`
@@ -45,11 +45,12 @@ type AtomFeed struct {
 	Entries []AtomEntry `xml:"entry"`
 }
 
-func renderErrorDoc(section string, err error) (*document.Document, error) {
+func renderErrorDoc(lang, section string, err error) (*document.Document, error) {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "# ❌ Error loading %s\n\n", section)
-	fmt.Fprintf(&sb, "An error occurred while communicating with the Kiwix library catalog:\n\n`%v`\n\n", err)
-	sb.WriteString("[🔙 Back to Menu](virtual:menu)\n")
+	fmt.Fprintf(&sb, "# %s\n\n", i18n.Tf(lang, "library.error_loading", section))
+	fmt.Fprint(&sb, i18n.Tf(lang, "library.error_message", err))
+	sb.WriteString(i18n.T(lang, "library.back_to_menu"))
+	sb.WriteString("\n")
 	return markdown.Parse(strings.NewReader(sb.String()))
 }
 
@@ -68,10 +69,10 @@ func fetchFeed(urlStr string) (*AtomFeed, error) {
 	return &feed, nil
 }
 
-func LibraryLanguagesPage() (*document.Document, error) {
+func LibraryLanguagesPage(lang string) (*document.Document, error) {
 	feed, err := fetchFeed("https://browse.library.kiwix.org/catalog/v2/languages")
 	if err != nil {
-		return renderErrorDoc("languages", err)
+		return renderErrorDoc(lang, i18n.T(lang, "library.section_languages"), err)
 	}
 
 	for i := range feed.Entries {
@@ -92,15 +93,22 @@ func LibraryLanguagesPage() (*document.Document, error) {
 		return feed.Entries[i].Title < feed.Entries[j].Title
 	})
 
-	var buf bytes.Buffer
-	if err := libraryLanguagesTmpl.Execute(&buf, feed); err != nil {
-		return nil, fmt.Errorf("execute template: %w", err)
+	type langData struct {
+		UILang string
+		*AtomFeed
+	}
+	data := langData{UILang: lang, AtomFeed: feed}
+
+	buf, err := executeTemplate(libraryLanguagesTemplate, lang, data)
+	if err != nil {
+		return nil, err
 	}
 
-	return markdown.Parse(&buf)
+	return markdown.Parse(buf)
 }
 
 type LibraryCategoriesData struct {
+	UILang       string
 	Language     string
 	LanguageName string
 	Categories   []LibraryCategory
@@ -111,14 +119,15 @@ type LibraryCategory struct {
 	Category string
 }
 
-func LibraryCategoriesPage(lang, name string) (*document.Document, error) {
+func LibraryCategoriesPage(lang, catalogLang, name string) (*document.Document, error) {
 	categories, err := fetchFeed("https://browse.library.kiwix.org/catalog/v2/categories")
 	if err != nil {
-		return renderErrorDoc("categories", err)
+		return renderErrorDoc(lang, i18n.T(lang, "library.section_categories"), err)
 	}
 
 	data := LibraryCategoriesData{
-		Language:     lang,
+		UILang:       lang,
+		Language:     catalogLang,
 		LanguageName: name,
 	}
 
@@ -140,15 +149,16 @@ func LibraryCategoriesPage(lang, name string) (*document.Document, error) {
 		})
 	}
 
-	var buf bytes.Buffer
-	if err := libraryCategoriesTmpl.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("execute template: %w", err)
+	buf, err := executeTemplate(libraryCategoriesTemplate, lang, data)
+	if err != nil {
+		return nil, err
 	}
 
-	return markdown.Parse(&buf)
+	return markdown.Parse(buf)
 }
 
 type LibraryEntriesData struct {
+	UILang       string
 	Language     string
 	LanguageName string
 	Category     string
@@ -167,18 +177,19 @@ type LibraryEntry struct {
 	DownloadURL string
 }
 
-func LibraryEntriesPage(lang, name, category string, page int) (*document.Document, error) {
+func LibraryEntriesPage(lang, catalogLang, name, category string, page int) (*document.Document, error) {
 	if page < 0 {
 		page = 0
 	}
 	start := page * 50
-	feed, err := fetchFeed(fmt.Sprintf("https://browse.library.kiwix.org/catalog/v2/entries?start=%d&count=50&lang=%s&category=%s", start, lang, category))
+	feed, err := fetchFeed(fmt.Sprintf("https://browse.library.kiwix.org/catalog/v2/entries?start=%d&count=50&lang=%s&category=%s", start, catalogLang, category))
 	if err != nil {
-		return renderErrorDoc("archives", err)
+		return renderErrorDoc(lang, i18n.T(lang, "library.section_archives"), err)
 	}
 
 	data := LibraryEntriesData{
-		Language:     lang,
+		UILang:       lang,
+		Language:     catalogLang,
 		LanguageName: name,
 		Category:     category,
 		Page:         page,
@@ -219,11 +230,11 @@ func LibraryEntriesPage(lang, name, category string, page int) (*document.Docume
 		data.HasNextPage = true
 	}
 
-	var buf bytes.Buffer
-	if err := libraryEntriesTmpl.Execute(&buf, data); err != nil {
-		return nil, fmt.Errorf("execute template: %w", err)
+	buf, err := executeTemplate(libraryEntriesTemplate, lang, data)
+	if err != nil {
+		return nil, err
 	}
 
 	slog.Debug("Generated library menu", "content", buf.String())
-	return markdown.Parse(&buf)
+	return markdown.Parse(buf)
 }

@@ -202,6 +202,7 @@ type Renderer struct {
 
 	theme      *Theme
 	themeIndex int // 0=light 1=dark 2=sepia
+	lang       string
 	hasTree    bool
 
 	textCache  *TextureCache[textureKey]
@@ -407,6 +408,11 @@ func (r *Renderer) SetTheme(name string) {
 		return
 	}
 	r.applyThemeByIndex()
+}
+
+// SetLanguage updates the UI language for status bar text.
+func (r *Renderer) SetLanguage(lang string) {
+	r.lang = lang
 }
 
 // ThemeName returns the name of the current theme.

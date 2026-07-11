@@ -1,9 +1,9 @@
-# 🌐 Archive Library - {{.LanguageName}} - {{.Category}}
+# {{T "library.title_entries"}} {{.LanguageName}} - {{.Category}}
 
-[🔙 Back to Categories](virtual:library/categories?lang={{.Language}}&name={{urlquery .LanguageName}})
+[{{T "library.back_categories"}}](virtual:library/categories?lang={{.Language}}&name={{urlquery .LanguageName}})
 
 {{if not .Entries}}
-{{if gt .Page 0}}*📭 No more archives on this page.*{{else}}*📭 No archives found in this language and category.*{{end}}
+{{if gt .Page 0}}*{{T "library.no_entries"}}*{{else}}*{{T "library.no_archives"}}*{{end}}
 {{else}}
 {{range .Entries}}
 ### {{.Title}}
@@ -11,9 +11,9 @@
 {{if .Summary}}{{.Summary}}
 {{end}}
 
-[⬇ Download {{.Filename}}](virtual:library/download?url={{urlquery .DownloadURL}}&filename={{urlquery .Filename}}) ({{.Size}})
+[⬇ {{T "library.download"}} {{.Filename}}](virtual:library/download?url={{urlquery .DownloadURL}}&filename={{urlquery .Filename}}) ({{.Size}})
 
 ---
 {{end}}
-{{if gt .Page 0}}[◀ Previous Page](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{.Category}}&page={{.PrevPage}})  {{end}}{{if .HasNextPage}}[Next Page ▶](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{.Category}}&page={{.NextPage}}){{end}}
+{{if gt .Page 0}}[{{T "library.prev_page"}}](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{.Category}}&page={{.PrevPage}})  {{end}}{{if .HasNextPage}}[{{T "library.next_page"}}](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{.Category}}&page={{.NextPage}}){{end}}
 {{end}}

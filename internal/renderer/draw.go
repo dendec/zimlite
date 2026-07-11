@@ -1,10 +1,10 @@
 package renderer
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/i18n"
 	"github.com/dendec/zimlite/internal/svg"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
@@ -340,14 +340,14 @@ func (r *Renderer) renderStatusBar() {
 	rightText := r.computeRightStatus()
 	if rightText == "" {
 		if r.treeItems != nil {
-			text := "🌳 Article tree"
+			text := i18n.T(r.lang, "status.tree")
 			if r.docTitle != "" {
 				runes := []rune(r.docTitle)
 				if len(runes) > 0 {
 					if _, _, ok := document.EmojiSequence(runes, 0); ok {
 						text = r.docTitle
 					} else {
-						text = "🌳 " + r.docTitle
+						text = i18n.T(r.lang, "status.tree") + " " + r.docTitle
 					}
 				}
 			}
@@ -411,9 +411,9 @@ func (r *Renderer) computeRightStatus() string {
 		if sel < 1 {
 			sel = 1
 		}
-		return fmt.Sprintf("📜 %d%%  \u00b7  🔗 %d/%d", scrollPct, sel, linkCount)
+		return i18n.Tf(r.lang, "status.scroll_link", scrollPct, sel, linkCount)
 	}
-	return fmt.Sprintf("📜 %d%%", scrollPct)
+	return i18n.Tf(r.lang, "status.scroll_pct", scrollPct)
 }
 
 func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {

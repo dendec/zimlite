@@ -1,32 +1,32 @@
-# 📖 Menu
+# {{T "menu.title"}}
 
-[❓ Help](virtual:help)
+[{{T "menu.help"}}](virtual:help)
 
-[⚙️ Settings](virtual:settings)
+[{{T "menu.settings"}}](virtual:settings)
 
 {{if .InternetAvailable}}
-[📥 Archive Library](virtual:library)
+[{{T "menu.library"}}](virtual:library)
 {{end}}
 
 {{if .Downloads}}
-## ⬇️ Downloads
+## {{T "menu.downloads"}}
 
 | | | | |
 |------|------|--------|--------|
-{{range .Downloads}}| {{.DisplayName}} | {{.Size}} | {{if .Active}}[⏸ Stop](virtual:download/stop?file={{urlquery .Name}}){{else}}[▶ Start](virtual:download/start?file={{urlquery .Name}}){{end}} | [❌ Delete](virtual:download/delete?file={{urlquery .Name}}) |
+{{range .Downloads}}| {{.DisplayName}} | {{.Size}} | {{if .Active}}[⏸ {{T "menu.stop"}}](virtual:download/stop?file={{urlquery .Name}}){{else}}[▶ {{T "menu.start"}}](virtual:download/start?file={{urlquery .Name}}){{end}} | [❌ {{T "menu.delete"}}](virtual:download/delete?file={{urlquery .Name}}) |
 {{end}}
 {{end}}
 
 {{if .ZIMs}}
-## 📦 Archives
+## {{T "menu.archives"}}
 
 | | | |
 |------|------|--------|
-{{range .ZIMs}}| [{{.DisplayName}}]( {{.Name}} ) | {{.Size}} | [❌ Delete](virtual:delete?file={{urlquery .Name}}) |
+{{range .ZIMs}}| [{{.DisplayName}}]( {{.Name}} ) | {{.Size}} | [❌ {{T "menu.delete"}}](virtual:delete?file={{urlquery .Name}}) |
 {{end}}
 {{end}}
 
 
 {{if not .HasContent}}
-*📭 No documents or ZIM archives found in current directory.*
+*{{T "menu.no_content"}}*
 {{end}}

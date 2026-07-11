@@ -333,6 +333,15 @@ func (app *App) HandleSettingsAction(u *neturl.URL) {
 	if themeChanged {
 		app.viewer.SetTheme(sc.Theme)
 	}
+	if sc.HasLang {
+		app.viewer.SetLanguage(sc.Language)
+		// Invalidate all cached virtual pages so they regenerate with the new language.
+		for key := range app.loader.docCache {
+			if strings.HasPrefix(key, "virtual:") {
+				delete(app.loader.docCache, key)
+			}
+		}
+	}
 	if sc.HasFs {
 		if err := app.viewer.Zoom(sc.FontSize); err != nil {
 			slog.Error("Zoom failed", "delta", sc.FontSize, "error", err)
@@ -342,7 +351,8 @@ func (app *App) HandleSettingsAction(u *neturl.URL) {
 		if err := app.config.Save(); err != nil {
 			slog.Error("Config save failed", "error", err)
 		}
-		doc, err := menu.SettingsPage(app.config.Get())
+		lang := app.config.Get().Language
+		doc, err := menu.SettingsPage(lang, app.config.Get())
 		if err != nil {
 			slog.Error("Settings page generation failed", "error", err)
 			return

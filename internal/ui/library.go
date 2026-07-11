@@ -16,14 +16,16 @@ func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document,
 		return nil, err
 	}
 
+	lang := l.uiLang()
+
 	switch u.Path {
 	case "/library":
-		return menu.LibraryLanguagesPage()
+		return menu.LibraryLanguagesPage(lang)
 	case "/library/categories":
-		return menu.LibraryCategoriesPage(u.Query().Get("lang"), u.Query().Get("name"))
+		return menu.LibraryCategoriesPage(lang, u.Query().Get("lang"), u.Query().Get("name"))
 	case "/library/entries":
 		page, _ := strconv.Atoi(u.Query().Get("page"))
-		return menu.LibraryEntriesPage(u.Query().Get("lang"), u.Query().Get("name"), u.Query().Get("category"), page)
+		return menu.LibraryEntriesPage(lang, u.Query().Get("lang"), u.Query().Get("name"), u.Query().Get("category"), page)
 	case "/library/download":
 		return l.libraryDownloadPage(u)
 	}
@@ -36,7 +38,7 @@ func (l *DocumentLoader) libraryDownloadPage(u *url.URL) (*document.Document, er
 	filename := u.Query().Get("filename")
 	if downloadURL != "" && filename != "" {
 		l.startDownload(downloadURL, filename)
-		return menu.FileSelector(l.internetAvailable.Load())
+		return menu.FileSelector(l.uiLang(), l.internetAvailable.Load())
 	}
 	return nil, fmt.Errorf("missing download parameters")
 }

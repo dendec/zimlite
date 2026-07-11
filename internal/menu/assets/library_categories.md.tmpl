@@ -1,8 +1,8 @@
-# 🌐 Archive Library - {{.LanguageName}}
+# {{T "library.title_categories"}} {{.LanguageName}}
 
-[🔙 Back](virtual:library)
+[{{T "library.back"}}](virtual:library)
 
-👇 Select a category:
+{{T "library.select_category"}}
 
 {{range .Categories}}* [{{.Title}}](virtual:library/entries?lang={{$.Language}}&name={{urlquery $.LanguageName}}&category={{.Category}})
 {{end}}

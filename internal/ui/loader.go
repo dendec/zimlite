@@ -16,6 +16,7 @@ import (
 
 	"github.com/dendec/zimlite/internal/document"
 	"github.com/dendec/zimlite/internal/html"
+	"github.com/dendec/zimlite/internal/i18n"
 	"github.com/dendec/zimlite/internal/menu"
 	"github.com/dendec/zimlite/internal/storage"
 	"github.com/dendec/zimlite/internal/util"
@@ -48,18 +49,22 @@ func NewDocumentLoader(host LoaderHost) *DocumentLoader {
 }
 
 func (l *DocumentLoader) registerVirtualPages() {
-	l.virtualPages["virtual:menu"] = func(path string, l *DocumentLoader) (*document.Document, error) {
-		return menu.FileSelector(l.internetAvailable.Load())
+	l.virtualPages["virtual:menu"] = func(path string, ld *DocumentLoader) (*document.Document, error) {
+		return menu.FileSelector(ld.uiLang(), ld.internetAvailable.Load())
 	}
-	l.virtualPages["virtual:help"] = func(path string, l *DocumentLoader) (*document.Document, error) {
-		return menu.HelpPage(sdl.NumJoysticks() > 0)
+	l.virtualPages["virtual:help"] = func(path string, ld *DocumentLoader) (*document.Document, error) {
+		return menu.HelpPage(ld.uiLang(), sdl.NumJoysticks() > 0)
 	}
-	l.virtualPages["virtual:settings"] = func(path string, l *DocumentLoader) (*document.Document, error) {
-		return menu.SettingsPage(l.host.getConfig().Get())
+	l.virtualPages["virtual:settings"] = func(path string, ld *DocumentLoader) (*document.Document, error) {
+		return menu.SettingsPage(ld.uiLang(), ld.host.getConfig().Get())
 	}
-	l.virtualPages["virtual:library"] = func(path string, l *DocumentLoader) (*document.Document, error) {
-		return l.generateLibraryDoc(path)
+	l.virtualPages["virtual:library"] = func(path string, ld *DocumentLoader) (*document.Document, error) {
+		return ld.generateLibraryDoc(path)
 	}
+}
+
+func (l *DocumentLoader) uiLang() string {
+	return l.host.getConfig().Get().Language
 }
 
 func (l *DocumentLoader) shutdown() {
@@ -90,7 +95,7 @@ func (l *DocumentLoader) applyPendingMenuReload() {
 	if l.host.getNavigator().Current() != "virtual:menu" {
 		return
 	}
-	doc, err := menu.FileSelector(l.internetAvailable.Load())
+	doc, err := menu.FileSelector(l.uiLang(), l.internetAvailable.Load())
 	if err != nil {
 		slog.Error("Failed to generate menu after internet check", "error", err)
 		return
@@ -381,10 +386,11 @@ func (l *DocumentLoader) openFileOrFallback(url string) {
 
 func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 	viewer := l.host.getViewer()
+	lang := l.uiLang()
 	slog.Info("Initiating download", "url", downloadURL, "filename", filename)
 
 	// Show immediate feedback
-	viewer.SetStatusOverride("⏳ Connecting... " + util.Truncate(filename, 40))
+	viewer.SetStatusOverride(i18n.Tf(lang, "download.connecting", util.Truncate(filename, 40)))
 	_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 
 	// Pre-register in the manager so the UI instantly shows "Stop" button
@@ -399,7 +405,7 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 		var err error
 
 		for attempt := 1; attempt <= 5; attempt++ {
-			err = storage.Download(downloadURL, filename, func(status string) {
+			err = storage.Download(downloadURL, filename, lang, func(status string) {
 				viewer.SetStatusOverride(status)
 
 				// Refresh menu at most once per 2 seconds to avoid excessive layout calls
@@ -416,7 +422,7 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 			}
 
 			slog.Warn("Download timed out, retrying...", "filename", filename, "attempt", attempt)
-			viewer.SetStatusOverride(fmt.Sprintf("⏳ Connection lost. Retrying... (%d/5)", attempt))
+			viewer.SetStatusOverride(i18n.Tf(lang, "download.retry", attempt))
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 			time.Sleep(2 * time.Second)
 		}
@@ -424,7 +430,7 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 		if err != nil {
 			if strings.Contains(err.Error(), "context canceled") {
 				slog.Info("Download stopped by user", "filename", filename)
-				msg := "🛑 Download stopped"
+				msg := i18n.T(lang, "download.stopped")
 				viewer.SetStatusOverride(msg)
 				l.pendingMenuReload.Store(true) // Ensure UI updates back to "Start" button
 				_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
@@ -449,7 +455,7 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 			}
 
 			errMsg := util.Truncate(errStr, 60)
-			msg := "❌ Download failed: " + errMsg
+			msg := i18n.Tf(lang, "download.failed", errMsg)
 			viewer.SetStatusOverride(msg)
 			l.pendingMenuReload.Store(true) // Ensure UI updates back to "Start" button
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
