@@ -131,15 +131,11 @@ dist-portmaster: dist-arm64
 	cp dist/zimlite/lib/* dist/portmaster_build/zimlite/lib/
 	@RELEASE_DATE=$$(date +%Y%m%d)T000000; \
 	printf '<gameList>\n    <game>\n        <path>./Zimlite.sh</path>\n        <name>Zimlite</name>\n        <desc>Zimlite is a lightweight offline reader for ZIM archives, the format used by Kiwix and Wikipedia. Browse articles, search content, and read without an internet connection on your handheld device.</desc>\n        <image>./zimlite/cover.png</image>\n        <developer>dendec</developer>\n        <publisher>dendec</publisher>\n        <releasedate>%s</releasedate>\n        <genre>Reference</genre>\n    </game>\n</gameList>\n' "$$RELEASE_DATE" > dist/portmaster_build/zimlite/gameinfo.xml
-	cd dist/portmaster_build && zip -r ../zimlite-portmaster.zip "Zimlite.sh" port.json screenshot.png zimlite
-	@echo "=== Generated dist/zimlite-portmaster.zip ==="
-	@ls -lh dist/zimlite-portmaster.zip
+	cd dist/portmaster_build && zip -r ../zimlite.zip "Zimlite.sh" port.json screenshot.png zimlite
+	@echo "=== Generated dist/zimlite.zip ==="
+	@ls -lh dist/zimlite.zip
 
 deploy-portmaster: dist-portmaster
-	adb push dist/zimlite-portmaster.zip $(PM_AUTOINSTALL)/
-	adb shell "mkdir -p $(PORTS_DIR)/images"
-	adb push portmaster/screenshot.png $(PORTS_DIR)/images/PortMaster-image.png
-	adb shell "mkdir -p $(PM_AUTOINSTALL)/../config/images_pm"
-	adb push portmaster/screenshot.png $(PM_AUTOINSTALL)/../config/images_pm/zimlite.screenshot.png
+	adb push dist/zimlite.zip $(PM_AUTOINSTALL)/
 	@echo "=== Zip deployed to autoinstall ==="
 
