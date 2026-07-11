@@ -57,11 +57,7 @@ func main() {
 	defer r.Destroy()
 	slog.Info("Renderer initialized successfully", "font", fontPath, "renderer", "sdl")
 
-	if cfg.Theme == "light" && !r.IsLight() {
-		r.ToggleTheme()
-	} else if cfg.Theme == "dark" && r.IsLight() {
-		r.ToggleTheme()
-	}
+	r.SetTheme(cfg.Theme)
 
 	app := ui.New(r, r, r, navigation.NewSimpleNavigator(), config.NewProvider())
 

@@ -107,6 +107,20 @@ func (r *Renderer) renderBlockquotes() {
 }
 func (r *Renderer) renderTables() {
 	for _, table := range r.layout.tables {
+		// Fill header row background.
+		if table.hasHeader {
+			screenY := table.headerRect.Y - r.scrollY
+			if screenY > -table.headerRect.H && screenY < r.height-r.getStatusBarHeight() {
+				r.sdlRenderer.SetDrawColor(
+					r.theme.TableHeaderBgColor.R, r.theme.TableHeaderBgColor.G,
+					r.theme.TableHeaderBgColor.B, r.theme.TableHeaderBgColor.A)
+				r.sdlRenderer.FillRect(&sdl.Rect{
+					X: table.headerRect.X, Y: screenY,
+					W: table.headerRect.W, H: table.headerRect.H,
+				})
+			}
+		}
+		// Draw cell borders.
 		r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
 		for _, cell := range table.cellRects {
 			screenY := cell.Y - r.scrollY
@@ -260,15 +274,20 @@ func (r *Renderer) renderColoredText(text string, font *ttf.Font, color sdl.Colo
 
 func (r *Renderer) renderLinkUnderline() {
 	if r.selectedLink >= 0 && r.selectedLink < len(r.layout.links) {
-		r.drawLinkUnderline(r.selectedLink)
+		r.drawLinkHighlight(r.selectedLink, true)
 	}
 	if r.hoveredLink >= 0 && r.hoveredLink < len(r.layout.links) && r.hoveredLink != r.selectedLink {
-		r.drawLinkUnderline(r.hoveredLink)
+		r.drawLinkHighlight(r.hoveredLink, false)
 	}
 }
 
-func (r *Renderer) drawLinkUnderline(idx int) {
+// drawLinkHighlight draws an underline under a link. When highlight is true
+// (keyboard/gamepad selection), also draws a translucent background rect.
+func (r *Renderer) drawLinkHighlight(idx int, highlight bool) {
 	link := r.layout.links[idx]
+	if highlight {
+		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
+	}
 	for _, rect := range link.rects {
 		isImg := false
 		for _, img := range r.layout.imageEntries {
@@ -286,10 +305,18 @@ func (r *Renderer) drawLinkUnderline(idx int) {
 			continue
 		}
 
-		underlineY := sy + rect.H
+		if highlight {
+			// Translucent background for keyboard/gamepad selected link.
+			r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, 40)
+			r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X - 2, Y: sy, W: rect.W + 4, H: rect.H})
+		}
 
+		underlineY := sy + rect.H
 		r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
-		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X, Y: underlineY, W: rect.W, H: 1})
+		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X, Y: underlineY, W: rect.W, H: 2})
+	}
+	if highlight {
+		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
 	}
 }
 
@@ -448,13 +475,15 @@ func (r *Renderer) renderScrollbar() {
 		thumbY = int32(float64(r.scrollY) / float64(maxScroll) * float64(vpHeight-thumbH))
 	}
 
-	// Draw track (optional, using theme.CodeBgColor or RuleColor)
-	// r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, 100)
-	// r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - 8, Y: 0, W: 8, H: vpHeight})
+	// Draw track.
+	r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
+	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, 80)
+	r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - 5, Y: 0, W: 5, H: vpHeight})
 
-	// Draw thumb
-	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, 200)
-	r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - 6, Y: thumbY, W: 6, H: thumbH})
+	// Draw thumb.
+	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, 220)
+	r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - 5, Y: thumbY, W: 5, H: thumbH})
+	r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
 }
 
 func (r *Renderer) renderLineTexture(line lineEntry) *sdl.Texture {

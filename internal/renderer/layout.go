@@ -12,6 +12,7 @@ import (
 
 const (
 	minContentWidth         = 100
+	headingTopMargin        = 10
 	headingBottomMargin     = 4
 	minListItemWidth        = 50
 	codeBlockPadding        = 8
@@ -70,6 +71,10 @@ func (s *layoutState) VisitAnchor(a *document.Anchor) {
 }
 
 func (s *layoutState) VisitHeading(h *document.Heading) {
+	// Add top margin when not at the very top of the page.
+	if s.y > s.r.marginY {
+		s.y += headingTopMargin
+	}
 	fidx := headingFontIdx(h.Level)
 	inlines := []document.Inline{&document.Strong{
 		Content: []document.Inline{&document.Text{Content: h.Content}},
@@ -374,7 +379,7 @@ func (s *layoutState) VisitTable(t *document.Table) {
 
 	var tableGrid tableGridEntry
 
-	for _, row := range activeRows {
+	for rowIdx, row := range activeRows {
 		maxH := int32(0)
 		yStart := s.y
 
@@ -414,6 +419,12 @@ func (s *layoutState) VisitTable(t *document.Table) {
 			maxH = s.r.lineSpacing // empty row fallback
 		}
 		rowH := maxH + 2*padding
+
+		// Track header row for background highlight.
+		if rowIdx == 0 && row.IsHeader {
+			tableGrid.hasHeader = true
+			tableGrid.headerRect = sdlRect{X: s.r.marginX, Y: yStart, W: s.maxW, H: rowH}
+		}
 
 		// Record cell rects
 		var cellXOffset int32

@@ -4,6 +4,7 @@ package renderer
 import (
 	"container/list"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"sort"
 	"strings"
@@ -47,15 +48,26 @@ type emojiCacheKey struct {
 }
 
 const (
-	statusBarPadding    = 2
-	defaultMarginX      = 20
-	defaultMarginY      = 16
-	defaultLineSpacing  = 6
-	defaultBlockSpacing = 8
-	defaultListIndent   = 16
-	maxTextCacheSize    = 1500
-	maxEmojiCacheSize   = 512
+	statusBarPadding  = 2
+	defaultMarginX    = 20
+	defaultMarginY    = 16
+	defaultListIndent = 16
+	maxTextCacheSize  = 1500
+	maxEmojiCacheSize = 512
 )
+
+// spacingForSize returns line and block spacing proportional to font size.
+func spacingForSize(baseSize int) (lineSpacing, blockSpacing int32) {
+	ls := int32(baseSize) * 3 / 8
+	if ls < 4 {
+		ls = 4
+	}
+	bs := int32(baseSize) / 2
+	if bs < 6 {
+		bs = 6
+	}
+	return ls, bs
+}
 
 func (r *Renderer) getStatusBarHeight() int32 {
 	if r.fonts[FontBody].font == nil {
@@ -188,9 +200,9 @@ type Renderer struct {
 	blockSpacing int32
 	listIndent   int32
 
-	theme   *Theme
-	light   bool
-	hasTree bool
+	theme      *Theme
+	themeIndex int // 0=light 1=dark 2=sepia
+	hasTree    bool
 
 	textCache  *TextureCache[textureKey]
 	emojiCache *TextureCache[emojiCacheKey]
@@ -239,7 +251,9 @@ type codeBlockRange struct {
 }
 
 type tableGridEntry struct {
-	cellRects []sdlRect
+	cellRects  []sdlRect
+	hasHeader  bool
+	headerRect sdlRect
 }
 
 type PageLayout struct {
@@ -299,11 +313,9 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		height:       winH,
 		marginX:      defaultMarginX,
 		marginY:      defaultMarginY,
-		lineSpacing:  defaultLineSpacing,
-		blockSpacing: defaultBlockSpacing,
 		listIndent:   defaultListIndent,
 		theme:        LightTheme(),
-		light:        true,
+		themeIndex:   0,
 		textCache:    NewTextureCache[textureKey](maxTextCacheSize),
 		emojiCache:   NewTextureCache[emojiCacheKey](maxEmojiCacheSize),
 		imgManager:   NewImageManager(sdlRend),
@@ -319,6 +331,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		return nil, fmt.Errorf("open fonts: %w", err)
 	}
 	r.fonts = fonts
+	r.lineSpacing, r.blockSpacing = spacingForSize(baseFontSize)
 
 	return r, nil
 }
@@ -374,21 +387,56 @@ func (r *Renderer) SetHasTree(has bool) {
 	r.hasTree = has
 }
 
-// ToggleTheme switches between light and dark color schemes.
+// ToggleTheme cycles through light → dark → sepia color schemes.
 func (r *Renderer) ToggleTheme() {
-	r.light = !r.light
-	if r.light {
+	r.themeIndex = (r.themeIndex + 1) % 3
+	r.applyThemeByIndex()
+}
+
+// SetTheme applies a theme by name ("light", "dark", "sepia").
+func (r *Renderer) SetTheme(name string) {
+	switch name {
+	case "light":
+		r.themeIndex = 0
+	case "dark":
+		r.themeIndex = 1
+	case "sepia":
+		r.themeIndex = 2
+	default:
+		slog.Warn("SetTheme: unknown theme name, keeping current", "name", name)
+		return
+	}
+	r.applyThemeByIndex()
+}
+
+// ThemeName returns the name of the current theme.
+func (r *Renderer) ThemeName() string {
+	switch r.themeIndex {
+	case 1:
+		return "dark"
+	case 2:
+		return "sepia"
+	default:
+		return "light"
+	}
+}
+
+func (r *Renderer) applyThemeByIndex() {
+	switch r.themeIndex {
+	case 0:
 		r.theme = LightTheme()
-	} else {
+	case 1:
 		r.theme = DarkTheme()
+	case 2:
+		r.theme = SepiaTheme()
 	}
 	r.relayout()
 	r.relayoutTextLines()
 }
 
-// IsLight returns whether the current theme is light.
+// IsLight returns whether the current theme has a light background (light or sepia).
 func (r *Renderer) IsLight() bool {
-	return r.light
+	return r.themeIndex == 0 || r.themeIndex == 2
 }
 
 func (r *Renderer) Relayout() {
@@ -721,6 +769,7 @@ func (r *Renderer) Zoom(delta int) error {
 		return fmt.Errorf("zoom load fonts: %w", err)
 	}
 	r.fonts = fonts
+	r.lineSpacing, r.blockSpacing = spacingForSize(r.baseFontSize)
 
 	// Destroy cached text textures to prevent stale text sizes/images
 	r.textCache.DestroyAll()

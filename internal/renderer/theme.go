@@ -15,6 +15,7 @@ type Theme struct {
 	BlockquoteBorderColor sdl.Color
 	StatusBarBgColor      sdl.Color
 	StatusBarBorderColor  sdl.Color
+	TableHeaderBgColor    sdl.Color
 }
 
 func LightTheme() *Theme {
@@ -26,27 +27,47 @@ func LightTheme() *Theme {
 
 		SelImgColor:           sdl.Color{R: 26, G: 115, B: 232, A: 60},
 		CodeBgColor:           sdl.Color{R: 245, G: 245, B: 245, A: 255},
-		RuleColor:             sdl.Color{R: 230, G: 230, B: 230, A: 255}, // Subtle light gray separator
+		RuleColor:             sdl.Color{R: 218, G: 220, B: 224, A: 255},
 		BlockquoteBgColor:     sdl.Color{R: 248, G: 249, B: 250, A: 255},
-		BlockquoteBorderColor: sdl.Color{R: 200, G: 200, B: 200, A: 255},
-		StatusBarBgColor:      sdl.Color{R: 240, G: 240, B: 240, A: 255},
-		StatusBarBorderColor:  sdl.Color{R: 200, G: 200, B: 200, A: 255},
+		BlockquoteBorderColor: sdl.Color{R: 26, G: 115, B: 232, A: 255}, // accent blue
+		StatusBarBgColor:      sdl.Color{R: 240, G: 241, B: 244, A: 255},
+		StatusBarBorderColor:  sdl.Color{R: 210, G: 212, B: 216, A: 255},
+		TableHeaderBgColor:    sdl.Color{R: 232, G: 237, B: 246, A: 255},
 	}
 }
 
 func DarkTheme() *Theme {
 	return &Theme{
 		BgColor:      sdl.Color{R: 18, G: 20, B: 24, A: 255}, // Deep dark slate
-		TextColor:    sdl.Color{R: 220, G: 220, B: 220, A: 255},
+		TextColor:    sdl.Color{R: 214, G: 216, B: 220, A: 255},
 		LinkColor:    sdl.Color{R: 100, G: 180, B: 255, A: 255}, // Bright readable blue
-		HeadingColor: sdl.Color{R: 240, G: 240, B: 240, A: 255},
+		HeadingColor: sdl.Color{R: 240, G: 242, B: 246, A: 255},
 
 		SelImgColor:           sdl.Color{R: 100, G: 180, B: 255, A: 60},
-		CodeBgColor:           sdl.Color{R: 28, G: 31, B: 38, A: 255},
-		RuleColor:             sdl.Color{R: 45, G: 50, B: 55, A: 255}, // Subtle dark separator
-		BlockquoteBgColor:     sdl.Color{R: 35, G: 35, B: 35, A: 255},
-		BlockquoteBorderColor: sdl.Color{R: 80, G: 80, B: 80, A: 255},
-		StatusBarBgColor:      sdl.Color{R: 30, G: 30, B: 30, A: 255},
-		StatusBarBorderColor:  sdl.Color{R: 60, G: 60, B: 60, A: 255},
+		CodeBgColor:           sdl.Color{R: 26, G: 28, B: 35, A: 255},
+		RuleColor:             sdl.Color{R: 42, G: 46, B: 54, A: 255},
+		BlockquoteBgColor:     sdl.Color{R: 28, G: 31, B: 38, A: 255},
+		BlockquoteBorderColor: sdl.Color{R: 100, G: 180, B: 255, A: 255}, // accent blue
+		StatusBarBgColor:      sdl.Color{R: 24, G: 26, B: 32, A: 255},
+		StatusBarBorderColor:  sdl.Color{R: 42, G: 46, B: 54, A: 255},
+		TableHeaderBgColor:    sdl.Color{R: 32, G: 38, B: 50, A: 255},
+	}
+}
+
+func SepiaTheme() *Theme {
+	return &Theme{
+		BgColor:      sdl.Color{R: 244, G: 235, B: 212, A: 255}, // warm parchment
+		TextColor:    sdl.Color{R: 52, G: 36, B: 18, A: 255},    // dark brown
+		LinkColor:    sdl.Color{R: 110, G: 65, B: 18, A: 255},   // warm amber
+		HeadingColor: sdl.Color{R: 36, G: 22, B: 6, A: 255},     // deep brown
+
+		SelImgColor:           sdl.Color{R: 110, G: 65, B: 18, A: 60},
+		CodeBgColor:           sdl.Color{R: 232, G: 218, B: 188, A: 255},
+		RuleColor:             sdl.Color{R: 192, G: 170, B: 132, A: 255},
+		BlockquoteBgColor:     sdl.Color{R: 237, G: 225, B: 196, A: 255},
+		BlockquoteBorderColor: sdl.Color{R: 150, G: 100, B: 45, A: 255}, // warm amber accent
+		StatusBarBgColor:      sdl.Color{R: 228, G: 212, B: 180, A: 255},
+		StatusBarBorderColor:  sdl.Color{R: 175, G: 152, B: 110, A: 255},
+		TableHeaderBgColor:    sdl.Color{R: 222, G: 204, B: 166, A: 255},
 	}
 }

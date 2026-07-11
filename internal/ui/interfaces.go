@@ -25,6 +25,7 @@ type DocRenderer interface {
 	Relayout()
 	Render()
 	ToggleTheme()
+	SetTheme(name string)
 	Zoom(delta int) error
 	SetHasTree(has bool)
 	FindAnchorY(anchor string) (int32, bool)

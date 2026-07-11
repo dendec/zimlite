@@ -10,7 +10,7 @@
     "title": "Zimlite",
     "desc": "Lightweight offline ZIM reader",
     "inst": "Copy ZIM files into /roms/ports/zimlite/",
-    "genres": ["utility"],
+    "genres": ["other"],
     "porter": ["dendec"],
     "image": {},
     "rtr": true,

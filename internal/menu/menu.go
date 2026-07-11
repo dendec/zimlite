@@ -121,10 +121,63 @@ func HelpPage(hasGamepad bool) (*document.Document, error) {
 	return markdown.Parse(&buf)
 }
 
+type settingsData struct {
+	ThemeName string
+	ThemePrev string
+	ThemeNext string
+	FontSize  int
+	LangName  string
+	LangPrev  string
+	LangNext  string
+}
+
+var themeOptions = []struct{ id, name string }{
+	{"light", "☀️ Light"},
+	{"dark", "🌙 Dark"},
+	{"sepia", "📜 Sepia"},
+}
+
+var langOptions = []struct{ id, name string }{
+	{"en", "🇬🇧 English"},
+	{"ru", "🇷🇺 Русский"},
+}
+
 // SettingsPage generates the settings document.
 func SettingsPage(cfg config.Config) (*document.Document, error) {
+	themeIdx := 0
+	for i, t := range themeOptions {
+		if t.id == cfg.Theme {
+			themeIdx = i
+			break
+		}
+	}
+	n := len(themeOptions)
+	langIdx := 0
+	for i, l := range langOptions {
+		if l.id == cfg.Language {
+			langIdx = i
+			break
+		}
+	}
+	m := len(langOptions)
+
+	langName := langOptions[langIdx].name
+	if langName == "" {
+		langName = cfg.Language // fallback to raw ID if unknown
+	}
+
+	data := settingsData{
+		ThemeName: themeOptions[themeIdx].name,
+		ThemePrev: themeOptions[(themeIdx-1+n)%n].id,
+		ThemeNext: themeOptions[(themeIdx+1)%n].id,
+		FontSize:  cfg.FontSize,
+		LangName:  langName,
+		LangPrev:  langOptions[(langIdx-1+m)%m].id,
+		LangNext:  langOptions[(langIdx+1)%m].id,
+	}
+
 	var buf bytes.Buffer
-	if err := settingsTmpl.Execute(&buf, cfg); err != nil {
+	if err := settingsTmpl.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("execute template: %w", err)
 	}
 

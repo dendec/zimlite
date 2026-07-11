@@ -331,7 +331,7 @@ func (app *App) HandleSettingsAction(u *neturl.URL) {
 	themeChanged, anyChanged := applySettings(app.config, sc)
 
 	if themeChanged {
-		app.viewer.ToggleTheme()
+		app.viewer.SetTheme(sc.Theme)
 	}
 	if sc.HasFs {
 		if err := app.viewer.Zoom(sc.FontSize); err != nil {

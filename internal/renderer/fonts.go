@@ -107,6 +107,11 @@ func loadFonts(baseSize int, fontPath string) ([fontCount]fontSlot, error) {
 			}
 			return fonts, err
 		}
+		// Monochrome hinting: crisp pixel-perfect edges for the embedded bitmap font.
+		// Skip for user-provided proportional fonts where MONO hinting distorts spacing.
+		if fontPath == "" {
+			font.SetHinting(ttf.HINTING_MONO)
+		}
 		slog.Info("loadFonts: loaded ok", "index", int(i))
 		fonts[i] = fontSlot{font: font, size: sizes[i]}
 	}
