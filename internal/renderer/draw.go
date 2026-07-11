@@ -274,20 +274,16 @@ func (r *Renderer) renderColoredText(text string, font *ttf.Font, color sdl.Colo
 
 func (r *Renderer) renderLinkUnderline() {
 	if r.selectedLink >= 0 && r.selectedLink < len(r.layout.links) {
-		r.drawLinkHighlight(r.selectedLink, true)
+		r.drawLinkUnderline(r.selectedLink)
 	}
 	if r.hoveredLink >= 0 && r.hoveredLink < len(r.layout.links) && r.hoveredLink != r.selectedLink {
-		r.drawLinkHighlight(r.hoveredLink, false)
+		r.drawLinkUnderline(r.hoveredLink)
 	}
 }
 
-// drawLinkHighlight draws an underline under a link. When highlight is true
-// (keyboard/gamepad selection), also draws a translucent background rect.
-func (r *Renderer) drawLinkHighlight(idx int, highlight bool) {
+// drawLinkUnderline draws a 2px underline under a link rect.
+func (r *Renderer) drawLinkUnderline(idx int) {
 	link := r.layout.links[idx]
-	if highlight {
-		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
-	}
 	for _, rect := range link.rects {
 		isImg := false
 		for _, img := range r.layout.imageEntries {
@@ -305,18 +301,9 @@ func (r *Renderer) drawLinkHighlight(idx int, highlight bool) {
 			continue
 		}
 
-		if highlight {
-			// Translucent background for keyboard/gamepad selected link.
-			r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, 40)
-			r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X - 2, Y: sy, W: rect.W + 4, H: rect.H})
-		}
-
 		underlineY := sy + rect.H
 		r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
 		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X, Y: underlineY, W: rect.W, H: 2})
-	}
-	if highlight {
-		r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
 	}
 }
 
