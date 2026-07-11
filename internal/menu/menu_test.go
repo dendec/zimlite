@@ -8,6 +8,31 @@ import (
 	"github.com/dendec/zimlite/internal/document"
 )
 
+// extractInlineText recursively extracts text from any inline type.
+func extractInlineText(inl document.Inline) string {
+	switch v := inl.(type) {
+	case *document.Text:
+		return v.Content
+	case *document.Strong:
+		return extractInlines(v.Content)
+	case *document.Emphasis:
+		return extractInlines(v.Content)
+	case *document.LinkInline:
+		return extractInlines(v.Content)
+	case *document.Code:
+		return v.Content
+	}
+	return ""
+}
+
+func extractInlines(inlines []document.Inline) string {
+	var sb strings.Builder
+	for _, inl := range inlines {
+		sb.WriteString(extractInlineText(inl))
+	}
+	return sb.String()
+}
+
 // docText extracts all text content from a Document for assertion.
 func docText(doc *document.Document) string {
 	var sb strings.Builder
@@ -17,29 +42,17 @@ func docText(doc *document.Document) string {
 			sb.WriteString(v.Content)
 			sb.WriteByte('\n')
 		case *document.Paragraph:
-			for _, inl := range v.Inlines {
-				if t, ok := inl.(*document.Text); ok {
-					sb.WriteString(t.Content)
-				}
-			}
+			sb.WriteString(extractInlines(v.Inlines))
 			sb.WriteByte('\n')
 		case *document.List:
 			for _, entry := range v.Entries {
-				for _, inl := range entry.Item {
-					if t, ok := inl.(*document.Text); ok {
-						sb.WriteString(t.Content)
-					}
-				}
+				sb.WriteString(extractInlines(entry.Item))
 				sb.WriteByte('\n')
 			}
 		case *document.Table:
 			for _, row := range v.Rows {
 				for _, cell := range row.Cells {
-					for _, inl := range cell.Inlines {
-						if t, ok := inl.(*document.Text); ok {
-							sb.WriteString(t.Content)
-						}
-					}
+					sb.WriteString(extractInlines(cell.Inlines))
 				}
 				sb.WriteByte('\n')
 			}

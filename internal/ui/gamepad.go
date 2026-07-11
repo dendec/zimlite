@@ -143,9 +143,9 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 			}
 			switch e.Button {
 			case sdl.CONTROLLER_BUTTON_A:
-				return ActionOpenEnter, true
-			case sdl.CONTROLLER_BUTTON_B:
 				return ActionBack, true
+			case sdl.CONTROLLER_BUTTON_B:
+				return ActionOpenEnter, true
 			case sdl.CONTROLLER_BUTTON_X:
 				return ActionToggleTree, true
 			case sdl.CONTROLLER_BUTTON_Y:
