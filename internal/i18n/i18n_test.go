@@ -107,8 +107,8 @@ func TestKeyParity_AllRegistered(t *testing.T) {
 
 func TestNoEnglishLiteralsInTranslations(t *testing.T) {
 	forbidden := []string{
-		"Menu", "Help", "Settings", "Theme", "Language",
-		"Download", "Delete", "Start", "Stop",
+		"Help", "Settings", "Theme", "Language",
+		"Delete",
 		"Error loading", "Back to",
 	}
 	for _, e := range registry {

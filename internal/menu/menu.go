@@ -44,11 +44,14 @@ var libraryEntriesTemplate string
 
 // executeTemplate parses and executes a template text with i18n FuncMap.
 func executeTemplate(tmplText string, lang string, data any) (*bytes.Buffer, error) {
-	t := template.Must(template.New("").Funcs(template.FuncMap{
+	t, err := template.New("").Funcs(template.FuncMap{
 		"T":        func(key string) string { return i18n.T(lang, key) },
 		"Tf":       func(key string, args ...any) string { return i18n.Tf(lang, key, args...) },
 		"urlquery": url.QueryEscape,
-	}).Parse(tmplText))
+	}).Parse(tmplText)
+	if err != nil {
+		return nil, fmt.Errorf("parse template: %w", err)
+	}
 	var buf bytes.Buffer
 	if err := t.Execute(&buf, data); err != nil {
 		return nil, fmt.Errorf("execute template: %w", err)

@@ -335,12 +335,6 @@ func (app *App) HandleSettingsAction(u *neturl.URL) {
 	}
 	if sc.HasLang {
 		app.viewer.SetLanguage(sc.Language)
-		// Invalidate all cached virtual pages so they regenerate with the new language.
-		for key := range app.loader.docCache {
-			if strings.HasPrefix(key, "virtual:") {
-				delete(app.loader.docCache, key)
-			}
-		}
 	}
 	if sc.HasFs {
 		if err := app.viewer.Zoom(sc.FontSize); err != nil {

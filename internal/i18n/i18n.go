@@ -14,9 +14,23 @@ type langEntry struct {
 var registry []langEntry
 
 func init() {
+	// Sorted by estimated potential user base for this app:
+	// Chinese (TrimUI native), Spanish/Portuguese (PortMaster),
+	// French/Arabic (Kiwix/ZIM adoption), European + Asian markets.
 	registry = []langEntry{
 		{Code: "en", Name: "🇬🇧 English", Translations: enTranslations},
 		{Code: "ru", Name: "🇷🇺 Русский", Translations: ruTranslations},
+		{Code: "zh", Name: "🇨🇳 中文", Translations: zhTranslations},
+		{Code: "es", Name: "🇪🇸 Español", Translations: esTranslations},
+		{Code: "fr", Name: "🇫🇷 Français", Translations: frTranslations},
+		{Code: "pt", Name: "🇧🇷 Português", Translations: ptTranslations},
+		{Code: "de", Name: "🇩🇪 Deutsch", Translations: deTranslations},
+		{Code: "ja", Name: "🇯🇵 日本語", Translations: jaTranslations},
+		{Code: "it", Name: "🇮🇹 Italiano", Translations: itTranslations},
+		{Code: "ko", Name: "🇰🇷 한국어", Translations: koTranslations},
+		{Code: "tr", Name: "🇹🇷 Türkçe", Translations: trTranslations},
+		{Code: "id", Name: "🇮🇩 Bahasa Indonesia", Translations: idTranslations},
+		{Code: "uk", Name: "🇺🇦 Українська", Translations: ukTranslations},
 	}
 
 	// Build lookup map from registry.
