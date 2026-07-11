@@ -1,4 +1,4 @@
-# Welcome to Kiwix-SDL!
+# Welcome to Zimlite!
 
 This is a **test document** to verify that our improvements and optimizations are working as intended.
 
@@ -18,7 +18,7 @@ This is a **test document** to verify that our improvements and optimizations ar
 
 ## Links to Test:
 - [Click here to trigger navigator back (non-existent file, will show error in stderr or just fail)](invalid-link.md)
-- [Check out this other heading](#welcome-to-kiwix-sdl)
+- [Check out this other heading](#welcome-to-zimlite)
 
 ## Emoji Test:
 - Smile: 😀😁😂🤣😃😄😅😆
@@ -28,4 +28,4 @@ This is a **test document** to verify that our improvements and optimizations ar
 - Skin tones: 👍👍🏻👍🏼👍🏽👍🏾👍🏿
 - Symbols: ©®™‼️〰️✔️❌💯🔝
 
-Enjoy using Kiwix-SDL!
+Enjoy using Zimlite!

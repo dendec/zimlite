@@ -1,12 +1,12 @@
-# AGENTS.md — Kiwix SDL Codebase Map
+# AGENTS.md — Zimlite Codebase Map
 
 ## Identity
 
-**kiwix-sdl** — offline ZIM/markdown viewer for game consoles (PortMaster/TrimUI) and desktop. Go + C/C++ (cgo). SDL2 graphics, libzim for ZIM archives, LunaSVG for emoji/SVG.
+**zimlite** — offline ZIM/markdown viewer for game consoles (PortMaster/TrimUI) and desktop. Go + C/C++ (cgo). SDL2 graphics, libzim for ZIM archives, LunaSVG for emoji/SVG.
 
 ## Entry Point
 
-`cmd/kiwix-sdl/main.go` — starts SDL2, loads config, creates renderer, sets up App, runs event loop.
+`cmd/zimlite/main.go` — starts SDL2, loads config, creates renderer, sets up App, runs event loop.
 
 ## Architecture Flow
 
@@ -26,7 +26,7 @@ main.go
 
 ## Package Map
 
-### `cmd/kiwix-sdl/main.go`
+### `cmd/zimlite/main.go`
 - Entry point. Parses CLI arg as file/virtual path. Sets logger. Locks OS thread (SDL requirement).
 - Calls `findFont()` for `$KIWIX_FONT`.
 - Falls back to menu on file open failure.
@@ -168,7 +168,7 @@ trie.VisLine { TreePrefix, Label, Suffix, IsLeaf, IsExpanded, IsCursor }
 - Перед коммитом проверяй код через `make test && make lint`
 - Cross-build targets: `build-linux-amd64`, `build-linux-arm64`, `build-linux-armv8`, `build-windows-amd64`
 - Docker: `Dockerfile.arm64` (cross-build for TrimUI), `Dockerfile.windows`
-- PortMaster packaging: `dist-portmaster` creates `dist/kiwix-sdl.zip`
+- PortMaster packaging: `dist-portmaster` creates `dist/zimlite.zip`
 - CGO required. libzim auto-downloaded or cross-built from source.
 
 ## Known Issues (see ISSUES.md)

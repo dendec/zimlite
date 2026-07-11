@@ -13,9 +13,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
+	"github.com/kiwix-sdl/zimlite/internal/document"
+	"github.com/kiwix-sdl/zimlite/internal/markdown"
+	"github.com/kiwix-sdl/zimlite/internal/storage"
 )
 
 // AtomLink represents a link element in an Atom entry or feed.

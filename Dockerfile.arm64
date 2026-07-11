@@ -47,18 +47,18 @@ RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
     PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
     CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -I${ZIM_INC}" \
     CGO_LDFLAGS="-L${ZIM_LIB} -lzim" \
-    go build -ldflags="-s -w" -o kiwix-sdl ./cmd/kiwix-sdl \
-    && aarch64-linux-gnu-strip kiwix-sdl
+    go build -ldflags="-s -w" -o zimlite ./cmd/zimlite \
+    && aarch64-linux-gnu-strip zimlite
 
-RUN mkdir -p /dist/kiwix-sdl/lib \
-    && cp kiwix-sdl /dist/kiwix-sdl/ \
-    && cp ${ZIM_LIB}/libzim.so.9.7.0 /dist/kiwix-sdl/lib/ \
-    && cp ${ZIM_LIB}/libzim.so.9 /dist/kiwix-sdl/lib/ \
-    && cp ${ZIM_LIB}/libzim.so /dist/kiwix-sdl/lib/ \
-    && find /usr/lib/aarch64-linux-gnu/ -name 'liblzma.so*' -exec cp {} /dist/kiwix-sdl/lib/ \; \
-    && find /usr/lib/aarch64-linux-gnu/ -name 'libzstd.so*' -exec cp {} /dist/kiwix-sdl/lib/ \;
+RUN mkdir -p /dist/zimlite/lib \
+    && cp zimlite /dist/zimlite/ \
+    && cp ${ZIM_LIB}/libzim.so.9.7.0 /dist/zimlite/lib/ \
+    && cp ${ZIM_LIB}/libzim.so.9 /dist/zimlite/lib/ \
+    && cp ${ZIM_LIB}/libzim.so /dist/zimlite/lib/ \
+    && find /usr/lib/aarch64-linux-gnu/ -name 'liblzma.so*' -exec cp {} /dist/zimlite/lib/ \; \
+    && find /usr/lib/aarch64-linux-gnu/ -name 'libzstd.so*' -exec cp {} /dist/zimlite/lib/ \;
 
-RUN printf '#!/bin/sh\nDIR="$(dirname "$0")"\nexport LD_LIBRARY_PATH="$DIR/lib:/usr/lib:$LD_LIBRARY_PATH"\n"$DIR/kiwix-sdl" "$@"\n' > /dist/kiwix-sdl/kiwix-sdl.sh \
-    && chmod +x /dist/kiwix-sdl/kiwix-sdl.sh
+RUN printf '#!/bin/sh\nDIR="$(dirname "$0")"\nexport LD_LIBRARY_PATH="$DIR/lib:/usr/lib:$LD_LIBRARY_PATH"\n"$DIR/zimlite" "$@"\n' > /dist/zimlite/zimlite.sh \
+    && chmod +x /dist/zimlite/zimlite.sh
 
 RUN echo "=== Dist ===" && find /dist -type f -exec ls -lh {} \;

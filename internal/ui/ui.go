@@ -11,12 +11,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/menu"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/renderer"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/trie"
+	"github.com/kiwix-sdl/zimlite/internal/config"
+	"github.com/kiwix-sdl/zimlite/internal/document"
+	"github.com/kiwix-sdl/zimlite/internal/html"
+	"github.com/kiwix-sdl/zimlite/internal/menu"
+	"github.com/kiwix-sdl/zimlite/internal/renderer"
+	"github.com/kiwix-sdl/zimlite/internal/trie"
 	"github.com/veandco/go-sdl2/sdl"
 )
 

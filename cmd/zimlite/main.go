@@ -1,4 +1,4 @@
-// Command kiwix-sdl is a lightweight offline ZIM/markdown reader for game consoles.
+// Command zimlite is a lightweight offline ZIM/markdown reader for game consoles.
 // Stage 1 MVP: read markdown files and render them via SDL2.
 package main
 
@@ -8,11 +8,11 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/navigation"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/renderer"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/ui"
+	"github.com/kiwix-sdl/zimlite/internal/config"
+	"github.com/kiwix-sdl/zimlite/internal/navigation"
+	"github.com/kiwix-sdl/zimlite/internal/renderer"
+	"github.com/kiwix-sdl/zimlite/internal/storage"
+	"github.com/kiwix-sdl/zimlite/internal/ui"
 )
 
 func main() {
@@ -29,7 +29,7 @@ func main() {
 	var filePath string
 	if len(os.Args) >= 2 {
 		if os.Args[1] == "--version" || os.Args[1] == "-v" {
-			fmt.Printf("Kiwix-SDL %s\n", storage.Version)
+			fmt.Printf("Zimlite %s\n", storage.Version)
 			return
 		}
 		filePath = os.Args[1]
@@ -40,14 +40,14 @@ func main() {
 	config.Load()
 	cfg := config.Get()
 
-	slog.Info("Starting Kiwix-SDL", "filePath", filePath)
+	slog.Info("Starting Zimlite", "filePath", filePath)
 
 	fontPath := findFont()
 	if fontPath == "" {
 		slog.Info("No external TTF font found. Using embedded fonts.")
 	}
 
-	r, err := renderer.New(fmt.Sprintf("Kiwix-SDL %s", storage.Version), 640, 480, fontPath, cfg.FontSize)
+	r, err := renderer.New(fmt.Sprintf("Zimlite %s", storage.Version), 640, 480, fontPath, cfg.FontSize)
 	if err != nil {
 		slog.Error("Error creating renderer", "error", err)
 		// On Windows,Stderr might not be visible easily, so we show a message box if possible

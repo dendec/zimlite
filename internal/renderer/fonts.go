@@ -4,7 +4,7 @@ import (
 	_ "embed"
 	"log/slog"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/zimlite/internal/document"
 	"github.com/veandco/go-sdl2/ttf"
 )
 

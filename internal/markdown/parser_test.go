@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/zimlite/internal/document"
 )
 
 func TestParseHeadings(t *testing.T) {

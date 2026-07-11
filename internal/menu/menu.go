@@ -14,10 +14,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/config"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/storage"
+	"github.com/kiwix-sdl/zimlite/internal/config"
+	"github.com/kiwix-sdl/zimlite/internal/document"
+	"github.com/kiwix-sdl/zimlite/internal/markdown"
+	"github.com/kiwix-sdl/zimlite/internal/storage"
 )
 
 //go:embed assets/menu.md.tmpl

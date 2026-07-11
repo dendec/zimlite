@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/zimlite/internal/document"
 )
 
 // LeafInfo holds metadata for a terminal (article) node.

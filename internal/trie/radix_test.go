@@ -3,7 +3,7 @@ package trie
 import (
 	"testing"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
+	"github.com/kiwix-sdl/zimlite/internal/document"
 )
 
 func TestNewTree(t *testing.T) {

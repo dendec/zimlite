@@ -56,11 +56,11 @@ RUN wget -q "https://download.openzim.org/release/libzim/libzim-${ZIM_VER}.tar.x
     && rm -rf /tmp/zim
 
 # Copy libzim DLL to dist (not needed for static, but keeping structure)
-RUN mkdir -p /dist/kiwix-sdl
+RUN mkdir -p /dist/zimlite
 
 # Copy SDL2 DLLs and other dependencies to dist
-RUN mkdir -p /dist/kiwix-sdl \
-    && cp ${WIN_SYSROOT}/bin/*.dll /dist/kiwix-sdl/
+RUN mkdir -p /dist/zimlite \
+    && cp ${WIN_SYSROOT}/bin/*.dll /dist/zimlite/
 
 # Build the Go application
 COPY go.mod go.sum ./
@@ -74,6 +74,6 @@ RUN CGO_ENABLED=1 GOOS=windows GOARCH=amd64 \
     CGO_CFLAGS="-fno-sanitize=undefined -Wno-error=unused-command-line-argument -I${WIN_SYSROOT}/include" \
     CGO_CXXFLAGS="-std=c++17 -fno-sanitize=undefined -Wno-error=unused-command-line-argument -I${WIN_SYSROOT}/include" \
     CGO_LDFLAGS="-L${WIN_SYSROOT}/lib -lzim -lzstd -llzma -lSDL2_ttf -lSDL2 -lgdi32 -lwinmm -lsetupapi -lole32 -loleaut32 -limm32 -lversion -lws2_32 -lshlwapi -ldinput8 -ldxguid -luser32 -lshell32 -luuid -lrpcrt4" \
-    go build -ldflags="-s -w -H windowsgui -extldflags=-Wl,--stack,0x4000000" -o /dist/kiwix-sdl/kiwix-sdl.exe ./cmd/kiwix-sdl
+    go build -ldflags="-s -w -H windowsgui -extldflags=-Wl,--stack,0x4000000" -o /dist/zimlite/zimlite.exe ./cmd/zimlite
 
-RUN echo "=== Dist ===" && ls -lh /dist/kiwix-sdl/
+RUN echo "=== Dist ===" && ls -lh /dist/zimlite/

@@ -1,4 +1,4 @@
-# Kiwix SDL
+# Zimlite
 
 **Lightweight offline ZIM/Markdown reader for game consoles and desktop.**
 
@@ -44,19 +44,19 @@ make build
 
 # Build a complete distribution (zip with libraries)
 make dist-amd64
-# Output: dist/kiwix-sdl-linux-amd64.zip
+# Output: dist/zimlite-linux-amd64.zip
 ```
 
 ### Windows (Cross-build via Docker)
 ```bash
 make dist-windows
-# Output: dist/kiwix-sdl-windows-amd64.zip
+# Output: dist/zimlite-windows-amd64.zip
 ```
 
 ### PortMaster / ARM64 (Cross-build via Docker)
 ```bash
 make dist-portmaster
-# Output: dist/kiwix-sdl-portmaster.zip
+# Output: dist/zimlite-portmaster.zip
 ```
 
 ## Quick Start
@@ -67,8 +67,8 @@ sudo apt install libsdl2-dev libsdl2-ttf-dev liblzma-dev libzstd-dev
 make build
 
 # Run with a ZIM archive or markdown file
-./kiwix-sdl wikipedia_en_100_maxi_2026-04.zim
-./kiwix-sdl test.md
+./zimlite wikipedia_en_100_maxi_2026-04.zim
+./zimlite test.md
 ```
 
 ## Development
@@ -78,12 +78,12 @@ For architecture details, build targets, and dependencies, see [docs/DEVELOPMENT
 ## Configuration
 
 ### Fonts
-By default, Kiwix-SDL uses embedded **GNU Unifont** for maximum Unicode compatibility.
+By default, Zimlite uses embedded **GNU Unifont** for maximum Unicode compatibility.
 
 To use a custom font, set the `KIWIX_FONT` environment variable:
 ```bash
 export KIWIX_FONT="/path/to/your/font.ttf"
-./kiwix-sdl
+./zimlite
 ```
 
 ### Settings

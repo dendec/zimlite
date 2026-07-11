@@ -1,4 +1,4 @@
-module github.com/kiwix-sdl/kiwix-sdl
+module github.com/kiwix-sdl/zimlite
 
 go 1.25.0
 

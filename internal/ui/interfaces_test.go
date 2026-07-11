@@ -3,7 +3,7 @@ package ui
 import (
 	"testing"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
+	"github.com/kiwix-sdl/zimlite/internal/zim"
 )
 
 // TestInterfaceCompliance verifies that concrete types satisfy the injected interfaces.

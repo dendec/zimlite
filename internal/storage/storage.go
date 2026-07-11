@@ -13,10 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kiwix-sdl/kiwix-sdl/internal/document"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/html"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/markdown"
-	"github.com/kiwix-sdl/kiwix-sdl/internal/zim"
+	"github.com/kiwix-sdl/zimlite/internal/document"
+	"github.com/kiwix-sdl/zimlite/internal/html"
+	"github.com/kiwix-sdl/zimlite/internal/markdown"
+	"github.com/kiwix-sdl/zimlite/internal/zim"
 )
 
 // OpenFile reads a file (.md, .html, .htm) and returns a Document.
@@ -80,7 +80,7 @@ func FormatSize(bytes int64) string {
 var Version = "0.1"
 
 func getUserAgent() string {
-	return "kiwix-sdl/" + Version
+	return "zimlite/" + Version
 }
 
 // HTTPClient creates an http.Client with the given timeout.

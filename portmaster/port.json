@@ -1,15 +1,15 @@
 {
   "version": 2,
-  "name": "kiwix-sdl.zip",
+  "name": "zimlite.zip",
   "items": [
-    "Kiwix SDL.sh",
-    "kiwix-sdl"
+    "Zimlite.sh",
+    "zimlite"
   ],
   "items_opt": null,
   "attr": {
-    "title": "Kiwix SDL",
+    "title": "Zimlite",
     "desc": "Offline Wikipedia reader for ZIM archives",
-    "inst": "Copy ZIM files into /roms/ports/kiwix-sdl/",
+    "inst": "Copy ZIM files into /roms/ports/zimlite/",
     "genres": ["utility"],
     "porter": ["dendec"],
     "image": {},

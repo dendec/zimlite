@@ -1,6 +1,6 @@
 # Binaries
-/kiwix-sdl
-/kiwix-sdl-*
+/zimlite
+/zimlite-*
 
 # Downloaded libs
 /lib/libzim_*/
@@ -22,3 +22,4 @@ vendor/
 *.zim.part
 config.json
 TODO.md
+kiwix-sdl

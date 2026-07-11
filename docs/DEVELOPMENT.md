@@ -3,7 +3,7 @@
 ## Project Architecture
 
 ```
-cmd/kiwix-sdl/main.go    — Entry point, wires dependencies
+cmd/zimlite/main.go    — Entry point, wires dependencies
 internal/
   config/                — JSON config (theme, font, lang)
   document/              — Document model (Blocks/Inlines/Visitor)

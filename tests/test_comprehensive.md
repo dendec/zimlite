@@ -1,6 +1,6 @@
 # Markdown Rendering Test Suite
 
-This document contains a comprehensive set of markdown test cases to verify all supported blocks and inline formatting elements in `kiwix-sdl`.
+This document contains a comprehensive set of markdown test cases to verify all supported blocks and inline formatting elements in `zimlite`.
 
 ## 1. Headings
 
@@ -110,7 +110,7 @@ This image does not exist, so it should render the fallback alt text:
 😀😁😂🤣😃😄😅😆😇😈😉😊😋😌😍😎😏
 
 ### 8.2 Emoji in Sentences
-This is **awesome** 🚀! I love kiwix-sdl ❤️. Click here ✅ to continue.
+This is **awesome** 🚀! I love zimlite ❤️. Click here ✅ to continue.
 The weather is ☀️⛅🌧️❄️. Let's go ⛰️🏖️🌋!
 
 ### 8.3 Emoji Mixed with Bold/Italic
