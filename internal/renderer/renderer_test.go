@@ -2,7 +2,127 @@ package renderer
 
 import (
 	"testing"
+
+	"github.com/dendec/zimlite/internal/document"
+	"github.com/veandco/go-sdl2/ttf"
 )
+
+func TestTruncateRunesToWidth(t *testing.T) {
+	if err := ttf.Init(); err != nil {
+		t.Skipf("ttf.Init: %v", err)
+	}
+	defer ttf.Quit()
+
+	font, err := openFontFromMem(unifont, 16)
+	if err != nil {
+		t.Skipf("openFontFromMem: %v", err)
+	}
+	defer font.Close()
+
+	runes := []rune("abcdefghij")
+	fullWidth, _ := measureText(string(runes), font, false, false, false)
+	if fullWidth <= 1 {
+		t.Skip("font returned an unusable width")
+	}
+
+	maxW := fullWidth / 2
+	count := truncateRunesToWidth(runes, font, maxW)
+	if count < 1 || count >= len(runes) {
+		t.Fatalf("truncateRunesToWidth count = %d, want 1..%d", count, len(runes)-1)
+	}
+
+	chunkWidth, _ := measureText(string(runes[:count]), font, false, false, false)
+	if chunkWidth > maxW {
+		t.Errorf("chunk width = %d, want <= %d", chunkWidth, maxW)
+	}
+
+	if nextWidth, _ := measureText(string(runes[:count+1]), font, false, false, false); nextWidth <= maxW {
+		t.Errorf("next chunk width = %d, want > %d", nextWidth, maxW)
+	}
+}
+
+// --- flushInlineLine alignment ---
+
+func TestFlushInlineLine_Alignment(t *testing.T) {
+	marginX := int32(10)
+
+	tests := []struct {
+		name       string
+		align      document.Alignment
+		availW     int32
+		words      []document.Word
+		wantFirstX int32 // expected x of first word
+	}{
+		{
+			name:       "left",
+			align:      document.AlignLeft,
+			availW:     200,
+			words:      []document.Word{{Text: "hello", PixW: 50, PixH: 16}},
+			wantFirstX: marginX, // currX = marginX + 0
+		},
+		{
+			name:       "center",
+			align:      document.AlignCenter,
+			availW:     200,
+			words:      []document.Word{{Text: "hello", PixW: 50, PixH: 16}},
+			wantFirstX: marginX + (200-50)/2, // marginX + 75
+		},
+		{
+			name:       "right",
+			align:      document.AlignRight,
+			availW:     200,
+			words:      []document.Word{{Text: "hello", PixW: 50, PixH: 16}},
+			wantFirstX: marginX + 200 - 50, // marginX + 150
+		},
+		{
+			name:       "center multi-word",
+			align:      document.AlignCenter,
+			availW:     300,
+			words:      []document.Word{{Text: "a", PixW: 20, PixH: 16}, {Text: "b", PixW: 30, PixH: 16}},
+			wantFirstX: marginX + (300-50)/2, // marginX + 125
+		},
+		{
+			name:       "right multi-word",
+			align:      document.AlignRight,
+			availW:     300,
+			words:      []document.Word{{Text: "a", PixW: 20, PixH: 16}, {Text: "b", PixW: 30, PixH: 16}},
+			wantFirstX: marginX + 300 - 50, // marginX + 250
+		},
+		{
+			name:       "left no align shift when text fills width",
+			align:      document.AlignLeft,
+			availW:     50,
+			words:      []document.Word{{Text: "hello", PixW: 50, PixH: 16}},
+			wantFirstX: marginX, // no shift, content fills availW
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := &Renderer{
+				marginX:     marginX,
+				lineSpacing: 2,
+				layout:      PageLayout{},
+			}
+			s := &layoutState{r: r}
+			v := &document.InlineWordVisitor{SpaceH: 16}
+			var prefix string
+			var y int32
+			activeLinks := make(map[int]int)
+
+			s.flushInlineLine(tt.words, true, FontBody, sdlColor{}, sdlColor{},
+				0, &prefix, &y, v, activeLinks, tt.align, tt.availW)
+
+			if len(r.layout.lines) == 0 {
+				t.Fatal("no lines produced")
+			}
+			got := r.layout.lines[0].x
+			if got != tt.wantFirstX {
+				t.Errorf("first word x: got %d, want %d", got, tt.wantFirstX)
+			}
+		})
+	}
+}
 
 // --- linkHasVisibleRect ---
 

@@ -16,6 +16,7 @@ type Theme struct {
 	StatusBarBgColor      sdl.Color
 	StatusBarBorderColor  sdl.Color
 	TableHeaderBgColor    sdl.Color
+	TableBorderColor      sdl.Color
 }
 
 func LightTheme() *Theme {
@@ -33,6 +34,7 @@ func LightTheme() *Theme {
 		StatusBarBgColor:      sdl.Color{R: 240, G: 241, B: 244, A: 255},
 		StatusBarBorderColor:  sdl.Color{R: 210, G: 212, B: 216, A: 255},
 		TableHeaderBgColor:    sdl.Color{R: 232, G: 237, B: 246, A: 255},
+		TableBorderColor:      sdl.Color{R: 225, G: 227, B: 231, A: 255},
 	}
 }
 
@@ -51,6 +53,7 @@ func DarkTheme() *Theme {
 		StatusBarBgColor:      sdl.Color{R: 24, G: 26, B: 32, A: 255},
 		StatusBarBorderColor:  sdl.Color{R: 42, G: 46, B: 54, A: 255},
 		TableHeaderBgColor:    sdl.Color{R: 32, G: 38, B: 50, A: 255},
+		TableBorderColor:      sdl.Color{R: 35, G: 39, B: 47, A: 255},
 	}
 }
 
@@ -69,5 +72,6 @@ func SepiaTheme() *Theme {
 		StatusBarBgColor:      sdl.Color{R: 228, G: 212, B: 180, A: 255},
 		StatusBarBorderColor:  sdl.Color{R: 175, G: 152, B: 110, A: 255},
 		TableHeaderBgColor:    sdl.Color{R: 222, G: 204, B: 166, A: 255},
+		TableBorderColor:      sdl.Color{R: 210, G: 190, B: 153, A: 255},
 	}
 }

@@ -82,8 +82,18 @@ type TableRow struct {
 	Cells    []TableCell
 }
 
+type Alignment int
+
+const (
+	AlignLeft Alignment = iota + 1
+	AlignRight
+	AlignCenter
+	AlignNone
+)
+
 type TableCell struct {
-	Inlines []Inline
+	Inlines   []Inline
+	Alignment Alignment
 }
 
 type ThematicBreak struct{}

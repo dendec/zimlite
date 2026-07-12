@@ -20,7 +20,7 @@ const (
 	defaultCodeLineHeight   = 18
 	blockquoteIndent        = 16
 	blockquotePadding       = 8
-	tableCellPadding        = 4
+	tableCellPadding        = 3
 	minTableCellWidth       = 10
 	fallbackImageColorValue = 150
 	codeSpanPadding         = 2
@@ -80,7 +80,7 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 		Content: []document.Inline{&document.Text{Content: h.Content}},
 	}}
 	startY := s.y
-	s.y = s.r.layoutInlines(inlines, fidx, s.r.theme.HeadingColor, s.r.theme.HeadingColor, s.maxW, s.y, 0, "")
+	s.y = s.r.layoutInlines(inlines, fidx, s.r.theme.HeadingColor, s.r.theme.HeadingColor, s.maxW, s.y, 0, "", document.AlignLeft, 0)
 
 	if h.ID != "" {
 		s.r.layout.anchorPositions[h.ID] = startY
@@ -103,7 +103,7 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 }
 
 func (s *layoutState) VisitParagraph(p *document.Paragraph) {
-	s.y = s.r.layoutInlines(p.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "")
+	s.y = s.r.layoutInlines(p.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "", document.AlignLeft, 0)
 	s.y += s.r.blockSpacing
 }
 
@@ -126,7 +126,7 @@ func (s *layoutState) VisitList(l *document.List) {
 			s.y += s.r.lineSpacing / 2
 		}
 
-		s.y = s.r.layoutInlines(entry.Item, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, itemW, s.y, indentX, prefix)
+		s.y = s.r.layoutInlines(entry.Item, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, itemW, s.y, indentX, prefix, document.AlignLeft, 0)
 	}
 	s.y += s.r.blockSpacing
 }
@@ -257,7 +257,7 @@ func (s *layoutState) VisitBlockquote(b *document.Blockquote) {
 
 func (s *layoutState) VisitLink(l *document.Link) {
 	inlines := []document.Inline{&document.LinkInline{URL: l.URL, Content: []document.Inline{&document.Text{Content: l.Label}}}}
-	s.y = s.r.layoutInlines(inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "")
+	s.y = s.r.layoutInlines(inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "", document.AlignLeft, 0)
 }
 
 func scaleToFit(imgW, imgH, maxW, maxH int32) (int32, int32) {
@@ -374,7 +374,14 @@ func (s *layoutState) VisitTable(t *document.Table) {
 			colWidths[i] = int32(float64(colWidths[i]) * scale)
 		}
 	} else if totalW < s.maxW && colCount > 0 {
-		colWidths[0] += s.maxW - totalW
+		extra := s.maxW - totalW
+		rem := extra
+		for i := range colWidths {
+			add := int32(float64(extra) * float64(colWidths[i]) / float64(totalW))
+			colWidths[i] += add
+			rem -= add
+		}
+		colWidths[colCount-1] += rem // leftover pixels from rounding
 	}
 
 	var tableGrid tableGridEntry
@@ -406,7 +413,7 @@ func (s *layoutState) VisitTable(t *document.Table) {
 			spaceW, _ := measureText(" ", s.r.fonts[FontBody].font, false, false, false)
 
 			// Render cell text with spaceW added to indentX
-			bottomY := s.r.layoutInlines(cell.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, cellMaxW-spaceW, cellY, cellX-s.r.marginX+spaceW, "")
+			bottomY := s.r.layoutInlines(cell.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, cellMaxW-spaceW, cellY, cellX-s.r.marginX+spaceW, "", cell.Alignment, cellMaxW-spaceW)
 
 			h := bottomY - cellY
 			if h > maxH {
@@ -477,12 +484,26 @@ func (s *layoutState) flushInlineLine(
 	fidx FontKind, textColor, linkColor sdlColor,
 	indentX int32, prefix *string, y *int32,
 	v *document.InlineWordVisitor, activeLinks map[int]int,
+	alignment document.Alignment, availWidth int32,
 ) {
 	if len(lineWords) == 0 && *prefix == "" {
 		return
 	}
 
 	currX := s.r.marginX + indentX
+
+	if alignment != document.AlignLeft && len(lineWords) > 0 {
+		totalW := int32(0)
+		for _, w := range lineWords {
+			totalW += w.PixW
+		}
+		switch alignment {
+		case document.AlignCenter:
+			currX += (availWidth - totalW) / 2
+		case document.AlignRight:
+			currX += availWidth - totalW
+		}
+	}
 
 	if isFirstLine && *prefix != "" {
 		pFont := s.r.fonts[fidx].font
@@ -570,7 +591,8 @@ func (s *layoutState) flushInlineLine(
 }
 
 func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
-	textColor, linkColor sdlColor, maxW int32, startY int32, indentX int32, prefix string) int32 {
+	textColor, linkColor sdlColor, maxW int32, startY int32, indentX int32, prefix string,
+	alignment document.Alignment, availWidth int32) int32 {
 
 	measureImg := func(url string) (int32, int32) {
 		if w, h, ok := r.imgManager.GetDimensions(url); ok && w > 0 && h > 0 {
@@ -597,7 +619,7 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 		if len(lineWords) == 0 && prefix == "" {
 			return
 		}
-		ls.flushInlineLine(lineWords, isFirstLine, fidx, textColor, linkColor, indentX, &prefix, &y, v, activeLinks)
+		ls.flushInlineLine(lineWords, isFirstLine, fidx, textColor, linkColor, indentX, &prefix, &y, v, activeLinks, alignment, maxW)
 		lineWords = nil
 		lineWidth = 0
 	}
@@ -619,6 +641,29 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 			if w.IsSpace {
 				continue
 			}
+		}
+
+		// Break long unbreakable token into chunks that fit within maxW.
+		if w.PixW > maxW && len(lineWords) == 0 && !w.IsImage && !w.IsEmoji {
+			runes := []rune(w.Text)
+			pos := 0
+			for pos < len(runes) {
+				n := truncateRunesToWidth(runes[pos:], r.fonts[fidx].font, maxW)
+				if n <= 0 {
+					n = 1
+				}
+				chunk := string(runes[pos : pos+n])
+				cw, _ := measureText(chunk, r.fonts[fidx].font, w.IsBold, w.IsItalic, w.IsCode)
+				chunkWord := w
+				chunkWord.Text = chunk
+				chunkWord.PixW = cw
+				lineWords = append(lineWords, chunkWord)
+				lineWidth += cw
+				flush(isFirst)
+				isFirst = false
+				pos += n
+			}
+			continue
 		}
 
 		lineWords = append(lineWords, w)

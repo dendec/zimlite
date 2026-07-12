@@ -140,7 +140,10 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 				row := document.TableRow{IsHeader: true}
 				for cellNode := childNode.FirstChild(); cellNode != nil; cellNode = cellNode.NextSibling() {
 					if cell, ok := cellNode.(*extast.TableCell); ok {
-						row.Cells = append(row.Cells, document.TableCell{Inlines: c.collectInlines(cell)})
+						row.Cells = append(row.Cells, document.TableCell{
+							Inlines:   c.collectInlines(cell),
+							Alignment: alignFromGoldmark(cell.Alignment),
+						})
 					}
 				}
 				table.Rows = append(table.Rows, row)
@@ -148,7 +151,10 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 				row := document.TableRow{IsHeader: false}
 				for cellNode := childNode.FirstChild(); cellNode != nil; cellNode = cellNode.NextSibling() {
 					if cell, ok := cellNode.(*extast.TableCell); ok {
-						row.Cells = append(row.Cells, document.TableCell{Inlines: c.collectInlines(cell)})
+						row.Cells = append(row.Cells, document.TableCell{
+							Inlines:   c.collectInlines(cell),
+							Alignment: alignFromGoldmark(cell.Alignment),
+						})
 					}
 				}
 				table.Rows = append(table.Rows, row)
@@ -162,6 +168,19 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 	}
 
 	return ast.WalkContinue, nil
+}
+
+func alignFromGoldmark(a extast.Alignment) document.Alignment {
+	switch a {
+	case extast.AlignLeft:
+		return document.AlignLeft
+	case extast.AlignRight:
+		return document.AlignRight
+	case extast.AlignCenter:
+		return document.AlignCenter
+	default:
+		return document.AlignNone
+	}
 }
 
 // collectText gathers all text content from a node's descendants (plain text only, no formatting).

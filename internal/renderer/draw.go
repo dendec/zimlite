@@ -120,14 +120,24 @@ func (r *Renderer) renderTables() {
 				})
 			}
 		}
-		// Draw cell borders.
-		r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, r.theme.RuleColor.A)
+		// Draw subtle horizontal row separators without vertical grid lines.
+		r.sdlRenderer.SetDrawColor(r.theme.TableBorderColor.R, r.theme.TableBorderColor.G, r.theme.TableBorderColor.B, r.theme.TableBorderColor.A)
+		seenLines := make(map[int32]struct{}, len(table.cellRects)*2)
 		for _, cell := range table.cellRects {
-			screenY := cell.Y - r.scrollY
-			if screenY <= -cell.H || screenY >= r.height-r.getStatusBarHeight() {
-				continue
+			for _, lineY := range []int32{cell.Y, cell.Y + cell.H} {
+				if _, seen := seenLines[lineY]; seen {
+					continue
+				}
+				seenLines[lineY] = struct{}{}
+				screenY := lineY - r.scrollY
+				if screenY < 0 || screenY >= r.height-r.getStatusBarHeight() {
+					continue
+				}
+				r.sdlRenderer.DrawLine(
+					table.cellRects[0].X, screenY,
+					table.cellRects[len(table.cellRects)-1].X+table.cellRects[len(table.cellRects)-1].W-1, screenY,
+				)
 			}
-			r.sdlRenderer.DrawRect(&sdl.Rect{X: cell.X, Y: screenY, W: cell.W, H: cell.H})
 		}
 	}
 }

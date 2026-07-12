@@ -188,6 +188,105 @@ func TestParseThematicBreak(t *testing.T) {
 	}
 }
 
+func TestParseTableAlignment(t *testing.T) {
+	md := `| left | center | right |
+|:-----|:------:|------:|
+| a    | b      | c     |`
+
+	doc, err := Parse(strings.NewReader(md))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	if len(doc.Blocks) != 1 {
+		t.Fatalf("got %d blocks, want 1", len(doc.Blocks))
+	}
+
+	tbl, ok := doc.Blocks[0].(*document.Table)
+	if !ok {
+		t.Fatalf("block 0: got %T, want *document.Table", doc.Blocks[0])
+	}
+
+	// goldmark: TableHeader + TableRow (separator not emitted as node)
+	if len(tbl.Rows) != 2 {
+		t.Fatalf("got %d rows, want 2 (header + data)", len(tbl.Rows))
+	}
+
+	header := tbl.Rows[0]
+	if !header.IsHeader {
+		t.Fatal("row 0: expected header")
+	}
+	if len(header.Cells) != 3 {
+		t.Fatalf("header: got %d cells, want 3", len(header.Cells))
+	}
+
+	data := tbl.Rows[1]
+	if data.IsHeader {
+		t.Fatal("row 1: expected data row")
+	}
+	if len(data.Cells) != 3 {
+		t.Fatalf("data: got %d cells, want 3", len(data.Cells))
+	}
+
+	want := []document.Alignment{
+		document.AlignLeft,
+		document.AlignCenter,
+		document.AlignRight,
+	}
+
+	// Both rows should carry column alignment from the specifier
+	for _, label := range []string{"header", "data"} {
+		row := tbl.Rows[0]
+		if label == "data" {
+			row = tbl.Rows[1]
+		}
+		for i, cell := range row.Cells {
+			if cell.Alignment != want[i] {
+				t.Errorf("%s cell %d alignment: got %v, want %v", label, i, cell.Alignment, want[i])
+			}
+		}
+	}
+
+	// Data cell 1 should contain text "b"
+	if len(tbl.Rows[1].Cells[1].Inlines) == 0 {
+		t.Fatal("data cell 1 has no inlines")
+	}
+	text, ok := tbl.Rows[1].Cells[1].Inlines[0].(*document.Text)
+	if !ok {
+		t.Fatalf("data cell 1 inline 0: got %T, want *document.Text", tbl.Rows[1].Cells[1].Inlines[0])
+	}
+	if text.Content != "b" {
+		t.Errorf("data cell 1 content: got %q, want %q", text.Content, "b")
+	}
+}
+
+func TestParseTableDefaultAlign(t *testing.T) {
+	md := `| a | b |
+| -- | -- |
+| x | y |`
+
+	doc, err := Parse(strings.NewReader(md))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+
+	tbl, ok := doc.Blocks[0].(*document.Table)
+	if !ok {
+		t.Fatalf("block 0: got %T, want *document.Table", doc.Blocks[0])
+	}
+
+	if len(tbl.Rows) < 1 || len(tbl.Rows[0].Cells) < 2 {
+		t.Fatal("expected at least 2 cells")
+	}
+
+	// Default alignment should be AlignNone (no specifier)
+	for i, cell := range tbl.Rows[0].Cells {
+		if cell.Alignment != document.AlignNone {
+			t.Errorf("cell %d alignment: got %v, want AlignNone", i, cell.Alignment)
+		}
+	}
+}
+
 func TestParseEmpty(t *testing.T) {
 	doc, err := Parse(strings.NewReader(""))
 	if err != nil {
