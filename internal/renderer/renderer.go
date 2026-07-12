@@ -540,24 +540,89 @@ func (r *Renderer) SetSelectedLinkIndex(idx int) {
 	r.clampSelection()
 }
 
+// linkHasVisibleRect returns true when any rect of the link overlaps the viewport.
+func linkHasVisibleRect(link linkEntry, top, bottom int32) bool {
+	for _, rect := range link.rects {
+		if rect.Y+rect.H > top && rect.Y < bottom {
+			return true
+		}
+	}
+	return false
+}
+
+// forwardLinkIdx finds the best link index when navigating forward and the
+// current selection is outside the viewport: first visible, then closest below,
+// then the last link.
+func forwardLinkIdx(links []linkEntry, top, bottom int32) int {
+	for i, link := range links {
+		if linkHasVisibleRect(link, top, bottom) {
+			return i
+		}
+	}
+	for i, link := range links {
+		for _, rect := range link.rects {
+			if rect.Y >= top {
+				return i
+			}
+		}
+	}
+	return len(links) - 1
+}
+
+// backwardLinkIdx finds the best link index when navigating backward and the
+// current selection is outside the viewport: last visible, then closest above,
+// then the first link.
+func backwardLinkIdx(links []linkEntry, top, bottom int32) int {
+	for i := len(links) - 1; i >= 0; i-- {
+		if linkHasVisibleRect(links[i], top, bottom) {
+			return i
+		}
+	}
+	for i := len(links) - 1; i >= 0; i-- {
+		for _, rect := range links[i].rects {
+			if rect.Y+rect.H <= top {
+				return i
+			}
+		}
+	}
+	return 0
+}
+
 func (r *Renderer) moveLink(delta int) {
 	if len(r.layout.links) == 0 {
 		return
 	}
-	r.selectedLink += delta
-	if r.selectedLink < 0 {
-		r.selectedLink = 0
+
+	visibleTop := r.scrollY + r.marginY
+	visibleBottom := r.scrollY + r.height - r.marginY - r.getStatusBarHeight()
+
+	// check if current selection is in the viewport
+	selVisible := r.selectedLink >= 0 && r.selectedLink < len(r.layout.links) &&
+		linkHasVisibleRect(r.layout.links[r.selectedLink], visibleTop, visibleBottom)
+
+	if !selVisible && r.selectedLink >= 0 {
+		if delta > 0 {
+			r.selectedLink = forwardLinkIdx(r.layout.links, visibleTop, visibleBottom)
+		} else {
+			r.selectedLink = backwardLinkIdx(r.layout.links, visibleTop, visibleBottom)
+		}
+	} else {
+		// normal incremental navigation
+		r.selectedLink += delta
+		if r.selectedLink < 0 {
+			r.selectedLink = 0
+		}
+		if r.selectedLink >= len(r.layout.links) {
+			r.selectedLink = len(r.layout.links) - 1
+		}
 	}
-	if r.selectedLink >= len(r.layout.links) {
-		r.selectedLink = len(r.layout.links) - 1
-	}
+
+	// scroll to make selection visible
 	if r.selectedLink >= 0 && r.selectedLink < len(r.layout.links) {
 		link := r.layout.links[r.selectedLink]
 		if len(link.rects) > 0 {
 			first := link.rects[0]
 			last := link.rects[len(link.rects)-1]
-			visibleTop := r.scrollY + r.marginY
-			visibleBottom := r.scrollY + r.height - r.marginY - r.getStatusBarHeight()
 			if first.Y < visibleTop {
 				r.scrollY = first.Y - r.marginY
 			} else if last.Y+last.H > visibleBottom {
