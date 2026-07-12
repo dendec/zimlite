@@ -88,6 +88,8 @@ dist-arm64:
 	docker rm zimlite-extract >/dev/null 2>&1
 	@echo "=== dist/zimlite/ ==="
 	@ls -lh dist/zimlite/
+	cd dist/zimlite && zip -r ../zimlite-linux-arm64.zip .
+	@echo "=== Generated dist/zimlite-linux-arm64.zip ==="
 
 dist-windows:
 	docker build -t zimlite-windows -f Dockerfile.windows .
