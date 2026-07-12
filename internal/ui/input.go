@@ -2,6 +2,7 @@ package ui
 
 import (
 	"log/slog"
+	"strings"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -76,8 +77,16 @@ func NewInputController(app *App) *InputController {
 func (c *InputController) openSelectedLink() {
 	url := c.app.links.SelectedLinkURL()
 	if url != "" {
+		c.markLinkVisited(url)
 		c.app.loader.NavigateLink(url)
 	}
+}
+
+func (c *InputController) markLinkVisited(url string) {
+	if strings.HasPrefix(c.app.navigator.Current(), "virtual:") {
+		return
+	}
+	c.app.viewer.MarkLinkVisited(url)
 }
 
 func (c *InputController) treeActionRight() {
@@ -158,6 +167,7 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 				case modeDoc:
 					url := app.links.HandleClick(e.X, e.Y)
 					if url != "" {
+						c.markLinkVisited(url)
 						app.loader.NavigateLink(url)
 					}
 				case modeTree:

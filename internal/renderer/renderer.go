@@ -219,6 +219,8 @@ type Renderer struct {
 	arrowCursor         *sdl.Cursor
 	handCursor          *sdl.Cursor
 	hasPointer          bool // mouse or touch device present
+
+	visited map[string]struct{} // visited link URLs, session-only
 }
 
 type lineEntry struct {
@@ -324,6 +326,7 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		fontPath:     fontPath,
 		arrowCursor:  sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_ARROW),
 		handCursor:   sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_HAND),
+		visited:      make(map[string]struct{}),
 	}
 
 	fonts, err := loadFonts(baseFontSize, fontPath)
@@ -538,6 +541,15 @@ func (r *Renderer) SelectedLinkIndex() int {
 func (r *Renderer) SetSelectedLinkIndex(idx int) {
 	r.selectedLink = idx
 	r.clampSelection()
+}
+
+// MarkLinkVisited records a URL (exact match) as visited and triggers relayout for immediate color update.
+func (r *Renderer) MarkLinkVisited(url string) {
+	if url == "" {
+		return
+	}
+	r.visited[url] = struct{}{}
+	r.relayout() // update line colors immediately
 }
 
 // linkHasVisibleRect returns true when any rect of the link overlaps the viewport.

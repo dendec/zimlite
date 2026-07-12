@@ -9,6 +9,7 @@ linters:
         - "(*github.com/veandco/go-sdl2/sdl.Renderer).FillRect"
         - "(*github.com/veandco/go-sdl2/sdl.Renderer).DrawRect"
         - "(*github.com/veandco/go-sdl2/sdl.Renderer).Clear"
+        - "(*github.com/veandco/go-sdl2/sdl.Renderer).DrawLine"
         - "(*github.com/veandco/go-sdl2/sdl.Renderer).Copy"
         - "(*github.com/veandco/go-sdl2/sdl.Renderer).Present"
         - "(*github.com/veandco/go-sdl2/sdl.Texture).Destroy"

@@ -22,4 +22,4 @@ vendor/
 *.zim.part
 config.json
 TODO.md
-kiwix-sdl
+testdata

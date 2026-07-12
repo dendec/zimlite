@@ -31,6 +31,7 @@ type DocRenderer interface {
 	SetHasTree(has bool)
 	FindAnchorY(anchor string) (int32, bool)
 	HasAnimations() bool
+	MarkLinkVisited(url string)
 }
 
 // DocInput handles mouse and touch input on the document view.

@@ -80,7 +80,7 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 		Content: []document.Inline{&document.Text{Content: h.Content}},
 	}}
 	startY := s.y
-	s.y = s.r.layoutInlines(inlines, fidx, s.r.theme.HeadingColor, s.r.theme.HeadingColor, s.maxW, s.y, 0, "", document.AlignLeft, 0)
+	s.y = s.r.layoutInlines(inlines, fidx, s.r.theme.HeadingColor, s.r.theme.HeadingColor, s.maxW, s.y, 0, "", document.AlignLeft)
 
 	if h.ID != "" {
 		s.r.layout.anchorPositions[h.ID] = startY
@@ -103,7 +103,7 @@ func (s *layoutState) VisitHeading(h *document.Heading) {
 }
 
 func (s *layoutState) VisitParagraph(p *document.Paragraph) {
-	s.y = s.r.layoutInlines(p.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "", document.AlignLeft, 0)
+	s.y = s.r.layoutInlines(p.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "", document.AlignLeft)
 	s.y += s.r.blockSpacing
 }
 
@@ -126,7 +126,7 @@ func (s *layoutState) VisitList(l *document.List) {
 			s.y += s.r.lineSpacing / 2
 		}
 
-		s.y = s.r.layoutInlines(entry.Item, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, itemW, s.y, indentX, prefix, document.AlignLeft, 0)
+		s.y = s.r.layoutInlines(entry.Item, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, itemW, s.y, indentX, prefix, document.AlignLeft)
 	}
 	s.y += s.r.blockSpacing
 }
@@ -257,7 +257,7 @@ func (s *layoutState) VisitBlockquote(b *document.Blockquote) {
 
 func (s *layoutState) VisitLink(l *document.Link) {
 	inlines := []document.Inline{&document.LinkInline{URL: l.URL, Content: []document.Inline{&document.Text{Content: l.Label}}}}
-	s.y = s.r.layoutInlines(inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "", document.AlignLeft, 0)
+	s.y = s.r.layoutInlines(inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, s.maxW, s.y, 0, "", document.AlignLeft)
 }
 
 func scaleToFit(imgW, imgH, maxW, maxH int32) (int32, int32) {
@@ -373,6 +373,13 @@ func (s *layoutState) VisitTable(t *document.Table) {
 		for i := range colWidths {
 			colWidths[i] = int32(float64(colWidths[i]) * scale)
 		}
+		// enforce minimum column width to prevent text overflow
+		minColW := int32(minTableCellWidth + 2*tableCellPadding)
+		for i := range colWidths {
+			if colWidths[i] < minColW {
+				colWidths[i] = minColW
+			}
+		}
 	} else if totalW < s.maxW && colCount > 0 {
 		extra := s.maxW - totalW
 		rem := extra
@@ -405,15 +412,15 @@ func (s *layoutState) VisitTable(t *document.Table) {
 			cellX := s.r.marginX + cellXOffset
 			cellY := s.y + padding
 			cellMaxW := cellW - 2*padding
-			if cellMaxW < minTableCellWidth {
-				cellMaxW = minTableCellWidth
+			if cellMaxW < 1 {
+				cellMaxW = 1
 			}
 
 			// Measure a space to use as left padding for the cell content
 			spaceW, _ := measureText(" ", s.r.fonts[FontBody].font, false, false, false)
 
 			// Render cell text with spaceW added to indentX
-			bottomY := s.r.layoutInlines(cell.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, cellMaxW-spaceW, cellY, cellX-s.r.marginX+spaceW, "", cell.Alignment, cellMaxW-spaceW)
+			bottomY := s.r.layoutInlines(cell.Inlines, FontBody, s.r.theme.TextColor, s.r.theme.LinkColor, cellMaxW-spaceW, cellY, cellX-s.r.marginX+spaceW, "", cell.Alignment)
 
 			h := bottomY - cellY
 			if h > maxH {
@@ -540,7 +547,11 @@ func (s *layoutState) flushInlineLine(
 		} else if w.IsEmoji {
 			wColor := textColor
 			if w.LinkID != 0 {
-				wColor = linkColor
+				if _, ok := s.r.visited[v.LinkURLs[w.LinkID]]; ok {
+					wColor = s.r.theme.VisitedLinkColor
+				} else {
+					wColor = linkColor
+				}
 			}
 			s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 				text: w.Text, fontIdx: fidx, color: wColor,
@@ -550,7 +561,11 @@ func (s *layoutState) flushInlineLine(
 		} else {
 			wColor := textColor
 			if w.LinkID != 0 {
-				wColor = linkColor
+				if _, ok := s.r.visited[v.LinkURLs[w.LinkID]]; ok {
+					wColor = s.r.theme.VisitedLinkColor
+				} else {
+					wColor = linkColor
+				}
 			}
 			s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 				text: w.Text, fontIdx: fidx, color: wColor,
@@ -592,7 +607,7 @@ func (s *layoutState) flushInlineLine(
 
 func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 	textColor, linkColor sdlColor, maxW int32, startY int32, indentX int32, prefix string,
-	alignment document.Alignment, availWidth int32) int32 {
+	alignment document.Alignment) int32 {
 
 	measureImg := func(url string) (int32, int32) {
 		if w, h, ok := r.imgManager.GetDimensions(url); ok && w > 0 && h > 0 {

@@ -3,10 +3,11 @@ package renderer
 import "github.com/veandco/go-sdl2/sdl"
 
 type Theme struct {
-	BgColor      sdl.Color
-	TextColor    sdl.Color
-	LinkColor    sdl.Color
-	HeadingColor sdl.Color
+	BgColor          sdl.Color
+	TextColor        sdl.Color
+	LinkColor        sdl.Color
+	VisitedLinkColor sdl.Color
+	HeadingColor     sdl.Color
 
 	SelImgColor           sdl.Color
 	CodeBgColor           sdl.Color
@@ -21,10 +22,11 @@ type Theme struct {
 
 func LightTheme() *Theme {
 	return &Theme{
-		BgColor:      sdl.Color{R: 255, G: 255, B: 255, A: 255}, // Clean white
-		TextColor:    sdl.Color{R: 32, G: 33, B: 36, A: 255},    // Dark grey for readability
-		LinkColor:    sdl.Color{R: 26, G: 115, B: 232, A: 255},  // Vibrant modern blue
-		HeadingColor: sdl.Color{R: 0, G: 0, B: 0, A: 255},       // Pure black for contrast
+		BgColor:          sdl.Color{R: 255, G: 255, B: 255, A: 255}, // Clean white
+		TextColor:        sdl.Color{R: 32, G: 33, B: 36, A: 255},    // Dark grey for readability
+		LinkColor:        sdl.Color{R: 26, G: 115, B: 232, A: 255},  // Vibrant modern blue
+		VisitedLinkColor: sdl.Color{R: 120, G: 80, B: 180, A: 255},  // muted purple
+		HeadingColor:     sdl.Color{R: 0, G: 0, B: 0, A: 255},       // Pure black for contrast
 
 		SelImgColor:           sdl.Color{R: 26, G: 115, B: 232, A: 60},
 		CodeBgColor:           sdl.Color{R: 245, G: 245, B: 245, A: 255},
@@ -40,10 +42,11 @@ func LightTheme() *Theme {
 
 func DarkTheme() *Theme {
 	return &Theme{
-		BgColor:      sdl.Color{R: 18, G: 20, B: 24, A: 255}, // Deep dark slate
-		TextColor:    sdl.Color{R: 214, G: 216, B: 220, A: 255},
-		LinkColor:    sdl.Color{R: 100, G: 180, B: 255, A: 255}, // Bright readable blue
-		HeadingColor: sdl.Color{R: 240, G: 242, B: 246, A: 255},
+		BgColor:          sdl.Color{R: 18, G: 20, B: 24, A: 255}, // Deep dark slate
+		TextColor:        sdl.Color{R: 214, G: 216, B: 220, A: 255},
+		LinkColor:        sdl.Color{R: 100, G: 180, B: 255, A: 255}, // Bright readable blue
+		VisitedLinkColor: sdl.Color{R: 180, G: 140, B: 220, A: 255}, // lavender
+		HeadingColor:     sdl.Color{R: 240, G: 242, B: 246, A: 255},
 
 		SelImgColor:           sdl.Color{R: 100, G: 180, B: 255, A: 60},
 		CodeBgColor:           sdl.Color{R: 26, G: 28, B: 35, A: 255},
@@ -59,10 +62,11 @@ func DarkTheme() *Theme {
 
 func SepiaTheme() *Theme {
 	return &Theme{
-		BgColor:      sdl.Color{R: 244, G: 235, B: 212, A: 255}, // warm parchment
-		TextColor:    sdl.Color{R: 52, G: 36, B: 18, A: 255},    // dark brown
-		LinkColor:    sdl.Color{R: 110, G: 65, B: 18, A: 255},   // warm amber
-		HeadingColor: sdl.Color{R: 36, G: 22, B: 6, A: 255},     // deep brown
+		BgColor:          sdl.Color{R: 244, G: 235, B: 212, A: 255}, // warm parchment
+		TextColor:        sdl.Color{R: 52, G: 36, B: 18, A: 255},    // dark brown
+		LinkColor:        sdl.Color{R: 110, G: 65, B: 18, A: 255},   // warm amber
+		VisitedLinkColor: sdl.Color{R: 140, G: 90, B: 60, A: 255},   // muted brown-purple
+		HeadingColor:     sdl.Color{R: 36, G: 22, B: 6, A: 255},     // deep brown
 
 		SelImgColor:           sdl.Color{R: 110, G: 65, B: 18, A: 60},
 		CodeBgColor:           sdl.Color{R: 232, G: 218, B: 188, A: 255},
