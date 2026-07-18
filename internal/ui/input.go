@@ -31,6 +31,7 @@ type InputController struct {
 	treeKeys      map[sdl.Scancode]func()
 	upHold        scrollHold
 	downHold      scrollHold
+	axisHold      scrollHold
 	axisRemainder float64
 	lastAxisTime  time.Time
 }
@@ -226,17 +227,24 @@ func (c *InputController) Update(now time.Time) {
 	c.updateDocumentHold(&c.upHold, upHeld, -1, 1, now)
 	c.updateDocumentHold(&c.downHold, downHeld, 1, 1, now)
 	if axisDirection == 0 {
+		c.axisHold.active = false
 		c.lastAxisTime = time.Time{}
 		c.axisRemainder = 0
 		return
 	}
-	if c.lastAxisTime.IsZero() {
+	if !c.axisHold.active || c.axisHold.direction != axisDirection {
+		c.axisHold = scrollHold{active: true, started: now, lastStep: now, direction: axisDirection}
 		c.lastAxisTime = now
+		c.axisRemainder = 0
 		return
 	}
 	seconds := now.Sub(c.lastAxisTime).Seconds()
 	c.lastAxisTime = now
-	c.axisRemainder += analogMaxSpeed * axisStrength * seconds
+	speed := analogMaxSpeed * axisStrength
+	if now.Sub(c.axisHold.started) >= holdDelay {
+		speed *= math.Pow(2, math.Floor(now.Sub(c.axisHold.started).Seconds()))
+	}
+	c.axisRemainder += speed * seconds
 	delta := int32(c.axisRemainder)
 	if delta == 0 {
 		return
