@@ -84,6 +84,7 @@ dist-arm64:
 	@mkdir -p dist
 	@docker rm -f zimlite-extract >/dev/null 2>&1 || true
 	docker create --name zimlite-extract $(DOCKER_IMAGE) >/dev/null 2>&1
+	rm -rf dist/zimlite
 	docker cp zimlite-extract:/dist/zimlite/. dist/zimlite/
 	docker rm zimlite-extract >/dev/null 2>&1
 	@echo "=== dist/zimlite/ ==="
