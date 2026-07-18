@@ -56,7 +56,7 @@ make dist-windows
 ### PortMaster / ARM64 (Cross-build via Docker)
 ```bash
 make dist-portmaster
-# Output: dist/zimlite-portmaster.zip
+# Output: dist/zimlite.zip
 ```
 
 ## Quick Start

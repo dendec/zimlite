@@ -3,15 +3,19 @@ SRC      := ./cmd/zimlite
 GO       := go
 GOFLAGS  := CGO_ENABLED=1
 
-ZIM_VER      := 9.7.0
-ZIM_TAG      := x86_64
-ZIM_LIBDIR   := lib/libzim_linux-$(ZIM_TAG)-$(ZIM_VER)
-ZIM_INC      := $(ZIM_LIBDIR)/include
-ZIM_LIB      := $(ZIM_LIBDIR)/lib/x86_64-linux-gnu
-ZIM_URL      := https://download.openzim.org/release/libzim
+ZIM_VER       := 9.7.0
+ZIM_STATIC    := lib/libzim_static
+ZIM_INC       := $(ZIM_STATIC)/include
+ZIM_LIB       := $(ZIM_STATIC)/lib
+ZIM_SRC_URL   := https://download.openzim.org/release/libzim/libzim-$(ZIM_VER).tar.xz
+
+# Prebuilt download vars (for cross-build targets only)
+ZIM_TAG       := x86_64
+ZIM_LIBDIR    := lib/libzim_linux-$(ZIM_TAG)-$(ZIM_VER)
+ZIM_URL       := https://download.openzim.org/release/libzim
 
 CGO_CXXFLAGS := -std=c++17 -I$(shell pwd)/internal/zim -I$(shell pwd)/$(ZIM_INC)
-CGO_LDFLAGS  := -L$(shell pwd)/$(ZIM_LIB) -lzim -Wl,-rpath,\$$ORIGIN/$(ZIM_LIB) -Wl,--disable-new-dtags
+CGO_LDFLAGS  := -L$(shell pwd)/$(ZIM_LIB) -Wl,-Bstatic -lzim -lzstd -llzma -Wl,-Bdynamic -lz -lpthread
 
 VERSION      ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "0.1")
 LDFLAGS      := -X 'github.com/dendec/zimlite/internal/storage.Version=$(VERSION)'
@@ -25,12 +29,25 @@ fmt:
 
 dist-all: dist-arm64 dist-amd64 dist-windows dist-portmaster
 
-build: fmt $(ZIM_LIB)/libzim.so
+build: fmt $(ZIM_LIB)/libzim.a
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" \
-		$(GO) build -ldflags "$(LDFLAGS)" -o $(APP) $(SRC)
+		$(GO) build -ldflags "-s -w $(LDFLAGS)" -o $(APP) $(SRC)
 
 
-$(ZIM_LIB)/libzim.so:
+$(ZIM_LIB)/libzim.a:
+	@mkdir -p $(ZIM_STATIC)/include $(ZIM_STATIC)/lib
+	wget -q "$(ZIM_SRC_URL)" -O /tmp/libzim-src.tar.xz
+	mkdir -p /tmp/libzim-src && tar xf /tmp/libzim-src.tar.xz -C /tmp/libzim-src --strip-components=1 && rm /tmp/libzim-src.tar.xz
+	cd /tmp/libzim-src && meson setup _build --default-library=static -Dwith_xapian=false -Dexamples=false -Dtests=false -Dzstd:zlib=disabled -Dwerror=false
+	cd /tmp/libzim-src && ninja -C _build
+	cd /tmp/libzim-src && DESTDIR=/tmp/zim-install ninja -C _build install
+	cp -r /tmp/zim-install/usr/local/include/* $(ZIM_STATIC)/include/
+	find /tmp/zim-install/usr/local/lib -name "*.a" -exec cp {} $(ZIM_STATIC)/lib/ \;
+	rm -rf /tmp/libzim-src /tmp/zim-install
+
+# Prebuilt libzim download (for cross-build targets that need it).
+.PHONY: download-libzim-prebuilt
+download-libzim-prebuilt:
 	@mkdir -p $(ZIM_LIBDIR)
 	wget -q "$(ZIM_URL)/libzim_linux-$(ZIM_TAG)-$(ZIM_VER).tar.gz" -O /tmp/libzim.tar.gz
 	tar xzf /tmp/libzim.tar.gz -C lib/
@@ -53,7 +70,7 @@ build-linux-arm64:
 
 build-windows-amd64: dist-windows
 
-test:
+test: $(ZIM_LIB)/libzim.a
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" $(GO) test ./...
 
 vet:
@@ -68,7 +85,7 @@ clean:
 	rm -rf dist
 
 run: build
-	LD_LIBRARY_PATH=$(ZIM_LIB):$$LD_LIBRARY_PATH ./$(APP) /tmp/test.md
+	./$(APP) /tmp/test.md
 
 info:
 	@echo "ZIM_LIB=$(ZIM_LIB)"
@@ -91,7 +108,7 @@ dist-arm64:
 	docker rm zimlite-extract >/dev/null 2>&1
 	@echo "=== dist/zimlite/ ==="
 	@ls -lh dist/zimlite/
-	cd dist/zimlite && zip -r ../zimlite-linux-arm64.zip .
+	rm -f dist/zimlite-linux-arm64.zip && cd dist/zimlite && zip -r ../zimlite-linux-arm64.zip .
 	@echo "=== Generated dist/zimlite-linux-arm64.zip ==="
 
 dist-windows:
@@ -101,31 +118,26 @@ dist-windows:
 	docker create --name zimlite-win-extract zimlite-windows >/dev/null 2>&1
 	docker cp zimlite-win-extract:/dist/zimlite/. dist/windows/
 	docker rm zimlite-win-extract >/dev/null 2>&1
-	cd dist/windows && zip -r ../zimlite-windows-amd64.zip .
+	rm -f dist/zimlite-windows-amd64.zip && cd dist/windows && zip -r ../zimlite-windows-amd64.zip .
 	@echo "=== dist/windows/ ==="
 	@ls -lh dist/windows/
 
 dist-amd64: build
-	@mkdir -p dist/linux-amd64/lib
+	@rm -rf dist/linux-amd64
+	@mkdir -p dist/linux-amd64
 	cp zimlite dist/linux-amd64/
-	cp $(ZIM_LIB)/libzim.so.9 dist/linux-amd64/lib/
-	cd dist/linux-amd64 && zip -r ../zimlite-linux-amd64.zip .
+	rm -f dist/zimlite-linux-amd64.zip && cd dist/linux-amd64 && zip -r ../zimlite-linux-amd64.zip .
 	@echo "=== Generated dist/zimlite-linux-amd64.zip ==="
 
 deploy: dist-arm64
-	adb shell "mkdir -p $(DEVICE_DIR)/lib"
 	adb push dist/zimlite/zimlite $(DEVICE_DIR)/
-	adb push dist/zimlite/lib/libzim.so.9.7.0 $(DEVICE_DIR)/lib/
-	adb push dist/zimlite/lib/libzim.so.9 $(DEVICE_DIR)/lib/
-	adb push dist/zimlite/lib/liblzma.so.5 $(DEVICE_DIR)/lib/
-	adb push dist/zimlite/lib/libzstd.so.1 $(DEVICE_DIR)/lib/
 	adb push portmaster/Zimlite.sh '$(PORTS_DIR)/$(PORT_SCRIPT)'
 	adb shell "chmod +x '$(PORTS_DIR)/$(PORT_SCRIPT)' && killall -9 zimlite 2>/dev/null; true"
 	@echo "=== Deployed ==="
 
 dist-portmaster: dist-arm64
 	@rm -rf dist/portmaster_build
-	@mkdir -p dist/portmaster_build/zimlite/lib
+	@mkdir -p dist/portmaster_build/zimlite
 	cp "portmaster/Zimlite.sh" dist/portmaster_build/
 	cp "portmaster/port.json" dist/portmaster_build/
 	cp "portmaster/README.md" dist/portmaster_build/
@@ -134,8 +146,7 @@ dist-portmaster: dist-arm64
 	cp "portmaster/screenshot.png" dist/portmaster_build/zimlite/cover.png
 	cp -r "portmaster/licenses" dist/portmaster_build/zimlite/
 	cp dist/zimlite/zimlite dist/portmaster_build/zimlite/
-	cp dist/zimlite/lib/* dist/portmaster_build/zimlite/lib/
-	cd dist/portmaster_build && zip -r ../zimlite.zip "Zimlite.sh" README.md gameinfo.xml port.json screenshot.png zimlite
+	rm -f dist/zimlite.zip && cd dist/portmaster_build && zip -r ../zimlite.zip "Zimlite.sh" README.md gameinfo.xml port.json screenshot.png zimlite
 	@echo "=== Generated dist/zimlite.zip ==="
 	@ls -lh dist/zimlite.zip
 
