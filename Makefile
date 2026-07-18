@@ -119,7 +119,7 @@ deploy: dist-arm64
 	adb push dist/zimlite/lib/libzim.so.9 $(DEVICE_DIR)/lib/
 	adb push dist/zimlite/lib/liblzma.so.5 $(DEVICE_DIR)/lib/
 	adb push dist/zimlite/lib/libzstd.so.1 $(DEVICE_DIR)/lib/
-	adb push scripts/zimlite.sh '$(PORTS_DIR)/$(PORT_SCRIPT)'
+	adb push portmaster/Zimlite.sh '$(PORTS_DIR)/$(PORT_SCRIPT)'
 	adb shell "chmod +x '$(PORTS_DIR)/$(PORT_SCRIPT)' && killall -9 zimlite 2>/dev/null; true"
 	@echo "=== Deployed ==="
 
