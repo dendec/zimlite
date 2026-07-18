@@ -18,10 +18,12 @@ LDFLAGS      := -X 'github.com/dendec/zimlite/internal/storage.Version=$(VERSION
 
 .PHONY: build test vet lint clean run info fmt
 .PHONY: deps build-linux-arm64 build-linux-amd64 build-windows-amd64
-.PHONY: dist-arm64 dist-windows dist-amd64 deploy dist-portmaster deploy-portmaster
+.PHONY: dist-all dist-arm64 dist-windows dist-amd64 dist-portmaster deploy deploy-portmaster
 
 fmt:
 	gofmt -s -w .
+
+dist-all: dist-arm64 dist-amd64 dist-windows dist-portmaster
 
 build: fmt $(ZIM_LIB)/libzim.so
 	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" \
