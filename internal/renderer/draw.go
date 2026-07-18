@@ -10,6 +10,38 @@ import (
 	"github.com/veandco/go-sdl2/ttf"
 )
 
+const (
+	blockquoteBorderWidth = 4
+	linkUnderlineHeight   = 2
+	scrollbarMinThumb     = 20
+	scrollbarWidth        = 5
+	scrollbarTrackAlpha   = 80
+	scrollbarThumbAlpha   = 220
+	statusTextXPadding    = 12
+	statusTextMaxW        = 24
+)
+
+// viewportEach iterates items within the visible viewport.
+// getYH returns (y, h) for item at index i. fn is called with index and screenY.
+func (r *Renderer) viewportEach(n int, getYH func(i int) (int32, int32), fn func(i int, screenY int32)) {
+	if n == 0 {
+		return
+	}
+	startIdx := sort.Search(n, func(i int) bool {
+		y, h := getYH(i)
+		return y+h > r.scrollY
+	})
+	vpBottom := r.height - r.getStatusBarHeight()
+	for i := startIdx; i < n; i++ {
+		y, _ := getYH(i)
+		screenY := y - r.scrollY
+		if screenY >= vpBottom {
+			break
+		}
+		fn(i, screenY)
+	}
+}
+
 func (r *Renderer) Render() {
 	r.hasActiveAnimations = false
 	r.sdlRenderer.SetDrawColor(r.theme.BgColor.R, r.theme.BgColor.G, r.theme.BgColor.B, r.theme.BgColor.A)
@@ -26,84 +58,48 @@ func (r *Renderer) Render() {
 }
 
 func (r *Renderer) renderImages() {
-	if len(r.layout.imageEntries) == 0 {
-		return
-	}
-	startIdx := sort.Search(len(r.layout.imageEntries), func(i int) bool {
-		img := r.layout.imageEntries[i]
-		return img.y+img.h >= r.scrollY
-	})
-	for i := startIdx; i < len(r.layout.imageEntries); i++ {
-		img := r.layout.imageEntries[i]
-		screenY := img.y - r.scrollY
-		if screenY >= r.height-r.getStatusBarHeight() {
-			break
-		}
-		tex, isAnim := r.imgManager.GetTexture(img.url)
-		if isAnim {
-			r.hasActiveAnimations = true
-		}
-		if tex != nil {
-			r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: img.x, Y: screenY, W: img.w, H: img.h})
-		}
-	}
+	r.viewportEach(len(r.layout.imageEntries),
+		func(i int) (int32, int32) { return r.layout.imageEntries[i].y, r.layout.imageEntries[i].h },
+		func(i int, screenY int32) {
+			img := r.layout.imageEntries[i]
+			tex, isAnim := r.imgManager.GetTexture(img.url)
+			if isAnim {
+				r.hasActiveAnimations = true
+			}
+			if tex != nil {
+				r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: img.x, Y: screenY, W: img.w, H: img.h})
+			}
+		})
 }
 
 func (r *Renderer) renderCodeBackgrounds() {
-	if len(r.layout.codeRanges) > 0 {
-		startIdx := sort.Search(len(r.layout.codeRanges), func(i int) bool {
+	r.viewportEach(len(r.layout.codeRanges),
+		func(i int) (int32, int32) { return r.layout.codeRanges[i].y, r.layout.codeRanges[i].h },
+		func(i int, screenY int32) {
 			cr := r.layout.codeRanges[i]
-			return cr.y+cr.h > r.scrollY
-		})
-		for i := startIdx; i < len(r.layout.codeRanges); i++ {
-			cr := r.layout.codeRanges[i]
-			screenY := cr.y - r.scrollY
-			if screenY >= r.height-r.getStatusBarHeight() {
-				break
-			}
 			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: cr.x, Y: screenY, W: cr.w, H: cr.h})
-		}
-	}
-
-	if len(r.layout.codeSpans) > 0 {
-		startIdx := sort.Search(len(r.layout.codeSpans), func(i int) bool {
-			cs := r.layout.codeSpans[i]
-			return cs.y+cs.h > r.scrollY
 		})
-		for i := startIdx; i < len(r.layout.codeSpans); i++ {
+
+	r.viewportEach(len(r.layout.codeSpans),
+		func(i int) (int32, int32) { return r.layout.codeSpans[i].y, r.layout.codeSpans[i].h },
+		func(i int, screenY int32) {
 			cs := r.layout.codeSpans[i]
-			screenY := cs.y - r.scrollY
-			if screenY >= r.height-r.getStatusBarHeight() {
-				break
-			}
 			r.sdlRenderer.SetDrawColor(r.theme.CodeBgColor.R, r.theme.CodeBgColor.G, r.theme.CodeBgColor.B, r.theme.CodeBgColor.A)
 			r.sdlRenderer.FillRect(&sdl.Rect{X: cs.x, Y: screenY, W: cs.w, H: cs.h})
-		}
-	}
+		})
 }
 
 func (r *Renderer) renderBlockquotes() {
-	if len(r.layout.blockquotes) == 0 {
-		return
-	}
-	startIdx := sort.Search(len(r.layout.blockquotes), func(i int) bool {
-		bq := r.layout.blockquotes[i]
-		return bq.Y+bq.H > r.scrollY
-	})
-	for i := startIdx; i < len(r.layout.blockquotes); i++ {
-		bq := r.layout.blockquotes[i]
-		screenY := bq.Y - r.scrollY
-		if screenY >= r.height-r.getStatusBarHeight() {
-			break
-		}
-		// Draw background
-		r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBgColor.R, r.theme.BlockquoteBgColor.G, r.theme.BlockquoteBgColor.B, r.theme.BlockquoteBgColor.A)
-		r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: bq.W, H: bq.H})
-		// Draw thick left border
-		r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBorderColor.R, r.theme.BlockquoteBorderColor.G, r.theme.BlockquoteBorderColor.B, r.theme.BlockquoteBorderColor.A)
-		r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: 4, H: bq.H})
-	}
+	r.viewportEach(len(r.layout.blockquotes),
+		func(i int) (int32, int32) { return r.layout.blockquotes[i].Y, r.layout.blockquotes[i].H },
+		func(i int, screenY int32) {
+			bq := r.layout.blockquotes[i]
+			r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBgColor.R, r.theme.BlockquoteBgColor.G, r.theme.BlockquoteBgColor.B, r.theme.BlockquoteBgColor.A)
+			r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: bq.W, H: bq.H})
+			r.sdlRenderer.SetDrawColor(r.theme.BlockquoteBorderColor.R, r.theme.BlockquoteBorderColor.G, r.theme.BlockquoteBorderColor.B, r.theme.BlockquoteBorderColor.A)
+			r.sdlRenderer.FillRect(&sdl.Rect{X: bq.X, Y: screenY, W: blockquoteBorderWidth, H: bq.H})
+		})
 }
 func (r *Renderer) renderTables() {
 	for _, table := range r.layout.tables {
@@ -143,45 +139,34 @@ func (r *Renderer) renderTables() {
 }
 
 func (r *Renderer) renderLines() {
-	if len(r.layout.lines) == 0 {
-		return
-	}
-	startIdx := sort.Search(len(r.layout.lines), func(i int) bool {
-		line := r.layout.lines[i]
-		return line.y+line.h >= r.scrollY
-	})
-	for i := startIdx; i < len(r.layout.lines); i++ {
-		line := r.layout.lines[i]
-		screenY := line.y - r.scrollY
-		if screenY > r.height-r.getStatusBarHeight() {
-			break
-		}
-		if line.text == "" {
-			if line.h <= 2 {
-				r.sdlRenderer.SetDrawColor(line.color.R, line.color.G, line.color.B, line.color.A)
-				r.sdlRenderer.FillRect(&sdl.Rect{X: line.x, Y: screenY, W: line.w, H: line.h})
+	r.viewportEach(len(r.layout.lines),
+		func(i int) (int32, int32) { return r.layout.lines[i].y, r.layout.lines[i].h },
+		func(i int, screenY int32) {
+			line := r.layout.lines[i]
+			if line.text == "" {
+				if line.h <= 2 {
+					r.sdlRenderer.SetDrawColor(line.color.R, line.color.G, line.color.B, line.color.A)
+					r.sdlRenderer.FillRect(&sdl.Rect{X: line.x, Y: screenY, W: line.w, H: line.h})
+				}
+				return
 			}
-			continue
-		}
-		if line.labelW > 0 {
-			// Tree line: render prefix, label, suffix as separate colored parts.
-			r.renderTreeLineParts(line, screenY)
-		} else {
-			tex := r.renderLineTexture(line)
-			if tex != nil {
-				_, _, tw, th, _ := tex.Query()
-				r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: line.x, Y: screenY, W: tw, H: th})
-			}
-		}
-		// Draw underline for cursor or hover in tree mode.
-		if line.isCursor || r.hoveredTreeLine >= 0 && r.isTreeLineHovered(i) {
 			if line.labelW > 0 {
-				underlineY := screenY + line.h
-				r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
-				r.sdlRenderer.FillRect(&sdl.Rect{X: line.labelX, Y: underlineY, W: line.labelW, H: 1})
+				r.renderTreeLineParts(line, screenY)
+			} else {
+				tex := r.renderLineTexture(line)
+				if tex != nil {
+					_, _, tw, th, _ := tex.Query()
+					r.sdlRenderer.Copy(tex, nil, &sdl.Rect{X: line.x, Y: screenY, W: tw, H: th})
+				}
 			}
-		}
-	}
+			if line.isCursor || r.hoveredTreeLine >= 0 && r.isTreeLineHovered(i) {
+				if line.labelW > 0 {
+					underlineY := screenY + line.h
+					r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
+					r.sdlRenderer.FillRect(&sdl.Rect{X: line.labelX, Y: underlineY, W: line.labelW, H: 1})
+				}
+			}
+		})
 }
 
 // renderTreeLineParts draws a tree line with prefix in TextColor, label in LinkColor, suffix in TextColor.
@@ -199,14 +184,14 @@ func (r *Renderer) renderTreeLineParts(line lineEntry, screenY int32) {
 	suffixText := string(runes[labelEnd:])
 
 	if prefixText != "" {
-		r.renderColoredText(prefixText, font, r.theme.TextColor, line.x, screenY)
+		r.renderColoredText(prefixText, font, line.fontIdx, r.theme.TextColor, line.x, screenY)
 	}
 	if labelText != "" {
-		r.renderColoredText(labelText, font, r.theme.LinkColor, line.labelX, screenY)
+		r.renderColoredText(labelText, font, line.fontIdx, r.theme.LinkColor, line.labelX, screenY)
 	}
 	if suffixText != "" {
 		suffixX := line.labelX + line.labelW
-		r.renderColoredText(suffixText, font, r.theme.TextColor, suffixX, screenY)
+		r.renderColoredText(suffixText, font, line.fontIdx, r.theme.TextColor, suffixX, screenY)
 	}
 }
 
@@ -216,7 +201,7 @@ type textSegment struct {
 	isEmoji bool
 }
 
-func (r *Renderer) createTextSegments(text string, font *ttf.Font, color sdl.Color) ([]textSegment, int32) {
+func (r *Renderer) createTextSegments(text string, font *ttf.Font, fontIdx FontKind, color sdl.Color) ([]textSegment, int32) {
 	var segments []textSegment
 	var totalW int32
 	if text == "" || font == nil {
@@ -254,14 +239,19 @@ func (r *Renderer) createTextSegments(text string, font *ttf.Font, color sdl.Col
 			i++
 		}
 		textStr := string(runes[start:i])
-		surf, err := font.RenderUTF8Blended(textStr, color)
-		if err != nil {
-			continue
-		}
-		texText, err := r.sdlRenderer.CreateTextureFromSurface(surf)
-		surf.Free()
-		if err != nil {
-			continue
+		key := textureKey{text: textStr, fontIdx: fontIdx, color: color}
+		texText := r.textCache.Get(key)
+		if texText == nil {
+			surf, err := font.RenderUTF8Blended(textStr, color)
+			if err != nil {
+				continue
+			}
+			texText, err = r.sdlRenderer.CreateTextureFromSurface(surf)
+			surf.Free()
+			if err != nil {
+				continue
+			}
+			r.textCache.Set(key, texText)
 		}
 		_, _, tw, th, _ := texText.Query()
 		segments = append(segments, textSegment{tex: texText, w: tw, h: th})
@@ -270,14 +260,11 @@ func (r *Renderer) createTextSegments(text string, font *ttf.Font, color sdl.Col
 	return segments, totalW
 }
 
-func (r *Renderer) renderColoredText(text string, font *ttf.Font, color sdl.Color, x, y int32) {
-	segments, _ := r.createTextSegments(text, font, color)
+func (r *Renderer) renderColoredText(text string, font *ttf.Font, fontIdx FontKind, color sdl.Color, x, y int32) {
+	segments, _ := r.createTextSegments(text, font, fontIdx, color)
 	cx := x
 	for _, s := range segments {
 		r.sdlRenderer.Copy(s.tex, nil, &sdl.Rect{X: cx, Y: y, W: s.w, H: s.h})
-		if !s.isEmoji {
-			s.tex.Destroy()
-		}
 		cx += s.w
 	}
 }
@@ -293,16 +280,14 @@ func (r *Renderer) renderLinkUnderline() {
 
 // drawLinkUnderline draws a 2px underline under a link rect.
 func (r *Renderer) drawLinkUnderline(idx int) {
+	// Build image rect set for O(1) lookup.
+	imgSet := make(map[[4]int32]struct{}, len(r.layout.imageEntries))
+	for _, img := range r.layout.imageEntries {
+		imgSet[[4]int32{img.x, img.y, img.w, img.h}] = struct{}{}
+	}
 	link := r.layout.links[idx]
 	for _, rect := range link.rects {
-		isImg := false
-		for _, img := range r.layout.imageEntries {
-			if img.x == rect.X && img.y == rect.Y && img.w == rect.W && img.h == rect.H {
-				isImg = true
-				break
-			}
-		}
-		if isImg {
+		if _, ok := imgSet[[4]int32{rect.X, rect.Y, rect.W, rect.H}]; ok {
 			continue
 		}
 
@@ -313,7 +298,7 @@ func (r *Renderer) drawLinkUnderline(idx int) {
 
 		underlineY := sy + rect.H
 		r.sdlRenderer.SetDrawColor(r.theme.LinkColor.R, r.theme.LinkColor.G, r.theme.LinkColor.B, r.theme.LinkColor.A)
-		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X, Y: underlineY, W: rect.W, H: 2})
+		r.sdlRenderer.FillRect(&sdl.Rect{X: rect.X, Y: underlineY, W: rect.W, H: linkUnderlineHeight})
 	}
 }
 
@@ -329,7 +314,7 @@ func (r *Renderer) renderStatusBar() {
 	}
 
 	if r.statusOverride != "" {
-		r.renderStatusText(r.statusOverride, 12, r.width-24)
+		r.renderStatusText(r.statusOverride, statusTextXPadding, r.width-statusTextMaxW)
 		return
 	}
 
@@ -348,15 +333,15 @@ func (r *Renderer) renderStatusBar() {
 					}
 				}
 			}
-			r.renderStatusText(text, 12, r.width-24)
+			r.renderStatusText(text, statusTextXPadding, r.width-statusTextMaxW)
 		}
 		return
 	}
 
 	rightW, _ := measureText(rightText, font, false, false, false)
-	gap := int32(24)
-	rightX := r.width - rightW - 12
-	availLeft := rightX - gap - 12
+	gap := int32(statusTextMaxW)
+	rightX := r.width - rightW - statusTextXPadding
+	availLeft := rightX - gap - statusTextXPadding
 	if availLeft < 20 {
 		availLeft = 0
 	}
@@ -378,7 +363,7 @@ func (r *Renderer) renderStatusBar() {
 				leftText = string(runes[:n]) + "..."
 			}
 		}
-		r.renderStatusText(leftText, 12, availLeft)
+		r.renderStatusText(leftText, statusTextXPadding, availLeft)
 	}
 
 	r.renderStatusText(rightText, rightX, rightW)
@@ -418,7 +403,7 @@ func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
 		return
 	}
 	font := r.fonts[FontBody].font
-	segments, totalW := r.createTextSegments(text, font, r.theme.TextColor)
+	segments, totalW := r.createTextSegments(text, font, FontBody, r.theme.TextColor)
 
 	if len(segments) == 0 {
 		return
@@ -440,12 +425,6 @@ func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
 		r.sdlRenderer.Copy(s.tex, nil, &sdl.Rect{X: curX, Y: dstY, W: dw, H: dh})
 		curX += dw
 	}
-
-	for _, s := range segments {
-		if !s.isEmoji {
-			s.tex.Destroy()
-		}
-	}
 }
 
 func (r *Renderer) renderScrollbar() {
@@ -458,8 +437,8 @@ func (r *Renderer) renderScrollbar() {
 
 	// Calculate thumb size
 	thumbH := int32(float64(vpHeight) * float64(vpHeight) / float64(totalH))
-	if thumbH < 20 {
-		thumbH = 20
+	if thumbH < scrollbarMinThumb {
+		thumbH = scrollbarMinThumb
 	}
 
 	// Calculate thumb position
@@ -474,12 +453,12 @@ func (r *Renderer) renderScrollbar() {
 
 	// Draw track.
 	r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_BLEND)
-	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, 80)
-	r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - 5, Y: 0, W: 5, H: vpHeight})
+	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, scrollbarTrackAlpha)
+	r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - scrollbarWidth, Y: 0, W: scrollbarWidth, H: vpHeight})
 
 	// Draw thumb.
-	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, 220)
-	r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - 5, Y: thumbY, W: 5, H: thumbH})
+	r.sdlRenderer.SetDrawColor(r.theme.RuleColor.R, r.theme.RuleColor.G, r.theme.RuleColor.B, scrollbarThumbAlpha)
+	r.sdlRenderer.FillRect(&sdl.Rect{X: r.width - scrollbarWidth, Y: thumbY, W: scrollbarWidth, H: thumbH})
 	r.sdlRenderer.SetDrawBlendMode(sdl.BLENDMODE_NONE)
 }
 

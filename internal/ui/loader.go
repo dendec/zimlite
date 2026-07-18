@@ -24,6 +24,14 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+const (
+	maxDownloadRetries   = 5
+	menuRefreshThrottle  = 2 * time.Second
+	downloadRetryDelay   = 2 * time.Second
+	statusClearDelayDur  = 10 * time.Second
+	downloadRefreshSleep = 3 * time.Second
+)
+
 type VirtualPageGenerator func(path string, loader *DocumentLoader) (*document.Document, error)
 
 type DocumentLoader struct {
@@ -393,72 +401,71 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 	// Clear menu from cache so it reloads and shows the new .part file when navigated back
 	delete(l.docCache, "virtual:menu")
 
-	go func() {
-		defer storage.Manager.Remove(filename) // Cleanup in case Download fails early
-		var lastMenuRefresh time.Time
-		var err error
+	go l.downloadWithRetry(downloadURL, filename, viewer, lang)
+}
 
-		for attempt := 1; attempt <= 5; attempt++ {
-			err = storage.Download(downloadURL, filename, lang, func(status string) {
-				viewer.SetStatusOverride(status)
+func (l *DocumentLoader) downloadWithRetry(downloadURL, filename string, viewer StatusBar, lang string) {
+	defer storage.Manager.Remove(filename)
+	var lastMenuRefresh time.Time
+	var err error
 
-				// Refresh menu at most once per 2 seconds to avoid excessive layout calls
-				if time.Since(lastMenuRefresh) > 2*time.Second {
-					l.pendingMenuReload.Store(true)
-					lastMenuRefresh = time.Now()
-				}
-
-				_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-			})
-
-			if err == nil || !strings.Contains(err.Error(), "idle timeout") {
-				break
+	for attempt := 1; attempt <= maxDownloadRetries; attempt++ {
+		err = storage.Download(downloadURL, filename, lang, func(status string) {
+			viewer.SetStatusOverride(status)
+			if time.Since(lastMenuRefresh) > menuRefreshThrottle {
+				l.pendingMenuReload.Store(true)
+				lastMenuRefresh = time.Now()
 			}
-
-			slog.Warn("Download timed out, retrying...", "filename", filename, "attempt", attempt)
-			viewer.SetStatusOverride(i18n.Tf(lang, "download.retry", attempt))
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-			time.Sleep(2 * time.Second)
+		})
+
+		if err == nil || !strings.Contains(err.Error(), "idle timeout") {
+			break
 		}
 
-		if err != nil {
-			if strings.Contains(err.Error(), "context canceled") {
-				slog.Info("Download stopped by user", "filename", filename)
-				msg := i18n.T(lang, "download.stopped")
-				viewer.SetStatusOverride(msg)
-				l.pendingMenuReload.Store(true) // Ensure UI updates back to "Start" button
-				_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-
-				l.clearStatusAfter(viewer, msg, 10*time.Second)
-				return
-			}
-
-			slog.Error("Download failed", "url", downloadURL, "filename", filename, "error", err)
-
-			errStr := err.Error()
-			if strings.HasPrefix(errStr, "download: Get \"") {
-				if idx := strings.Index(errStr, "\": "); idx != -1 {
-					errStr = errStr[idx+3:]
-				}
-			}
-
-			errMsg := util.Truncate(errStr, 60)
-			msg := i18n.Tf(lang, "download.failed", errMsg)
-			viewer.SetStatusOverride(msg)
-			l.pendingMenuReload.Store(true) // Ensure UI updates back to "Start" button
-			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-
-			l.clearStatusAfter(viewer, msg, 10*time.Second)
-			return
-		}
-
-		slog.Info("Download completed successfully", "filename", filename)
-		// Store filename then signal main thread. All SDL state (SetDocument,
-		// Relayout, sleep, status clear) must happen on the main thread.
-		l.downloadFilename = filename
-		l.pendingDownload.Store(true)
+		slog.Warn("Download timed out, retrying...", "filename", filename, "attempt", attempt)
+		viewer.SetStatusOverride(i18n.Tf(lang, "download.retry", attempt))
 		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-	}()
+		time.Sleep(downloadRetryDelay)
+	}
+
+	if err != nil {
+		l.handleDownloadError(err, downloadURL, filename, viewer, lang)
+		return
+	}
+
+	slog.Info("Download completed successfully", "filename", filename)
+	l.downloadFilename = filename
+	l.pendingDownload.Store(true)
+	_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+}
+
+func (l *DocumentLoader) handleDownloadError(err error, downloadURL, filename string, viewer StatusBar, lang string) {
+	if strings.Contains(err.Error(), "context canceled") {
+		slog.Info("Download stopped by user", "filename", filename)
+		msg := i18n.T(lang, "download.stopped")
+		viewer.SetStatusOverride(msg)
+		l.pendingMenuReload.Store(true)
+		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+		l.clearStatusAfter(viewer, msg, statusClearDelayDur)
+		return
+	}
+
+	slog.Error("Download failed", "url", downloadURL, "filename", filename, "error", err)
+
+	errStr := err.Error()
+	if strings.HasPrefix(errStr, "download: Get \"") {
+		if idx := strings.Index(errStr, "\": "); idx != -1 {
+			errStr = errStr[idx+3:]
+		}
+	}
+
+	errMsg := util.Truncate(errStr, 60)
+	msg := i18n.Tf(lang, "download.failed", errMsg)
+	viewer.SetStatusOverride(msg)
+	l.pendingMenuReload.Store(true)
+	_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	l.clearStatusAfter(viewer, msg, statusClearDelayDur)
 }
 
 func (l *DocumentLoader) clearStatusAfter(viewer StatusBar, message string, delay time.Duration) {
@@ -477,7 +484,7 @@ func (l *DocumentLoader) applyPendingDownloadCompletion() {
 	if !l.pendingDownload.CompareAndSwap(true, false) {
 		return
 	}
-	time.Sleep(3 * time.Second)
+	time.Sleep(downloadRefreshSleep)
 	l.host.getViewer().SetStatusOverride("")
 	current := l.host.getNavigator().Current()
 	if current == "virtual:menu" || strings.HasPrefix(current, "virtual:library/download") {

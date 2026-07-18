@@ -13,6 +13,14 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 )
 
+const (
+	emojiPrefix     = "emoji/"
+	emojiSuffix     = ".svg"
+	emojiPrefixLen  = len(emojiPrefix)
+	emojiSuffixLen  = len(emojiSuffix)
+	emojiMinNameLen = emojiPrefixLen + emojiSuffixLen
+)
+
 //go:embed assets/emoji.zip
 var emojiZip []byte
 
@@ -31,8 +39,8 @@ func buildEmojiIndex() {
 	for _, f := range r.File {
 		name := f.Name
 		// Strip "emoji/" prefix and ".svg" suffix
-		if len(name) > 10 && name[:6] == "emoji/" {
-			name = name[6 : len(name)-4]
+		if len(name) > emojiMinNameLen && name[:emojiPrefixLen] == emojiPrefix {
+			name = name[emojiPrefixLen : len(name)-emojiSuffixLen]
 			emojiIdx[name] = f
 		}
 	}

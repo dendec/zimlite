@@ -47,7 +47,7 @@ func main() {
 		slog.Info("No external TTF font found. Using embedded fonts.")
 	}
 
-	r, err := renderer.New(fmt.Sprintf("Zimlite %s", storage.Version), 640, 480, fontPath, cfg.FontSize)
+	r, err := renderer.New(fmt.Sprintf("Zimlite %s", storage.Version), renderer.DefaultWindowW, renderer.DefaultWindowH, fontPath, cfg.FontSize)
 	if err != nil {
 		slog.Error("Error creating renderer", "error", err)
 		// On Windows,Stderr might not be visible easily, so we show a message box if possible

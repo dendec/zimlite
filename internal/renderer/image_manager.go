@@ -17,6 +17,8 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
+const defaultGIFDelayMs = 100
+
 type AnimatedTexture struct {
 	Frames    []*image.RGBA
 	Delays    []time.Duration
@@ -213,7 +215,7 @@ func (m *ImageManager) loadGIF(url string, data []byte) (*sdl.Texture, bool) {
 		copy(finalFrame.Pix, canvas.Pix)
 		anim.Frames = append(anim.Frames, finalFrame)
 
-		delayMs := 100
+		delayMs := defaultGIFDelayMs
 		if i < len(parsedGIF.Delay) && parsedGIF.Delay[i] > 0 {
 			delayMs = parsedGIF.Delay[i] * 10
 		}

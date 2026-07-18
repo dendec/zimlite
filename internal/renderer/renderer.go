@@ -54,6 +54,13 @@ const (
 	defaultListIndent = 16
 	maxTextCacheSize  = 1500
 	maxEmojiCacheSize = 512
+
+	keyRepeatDelayHint     = "300"
+	keyRepeatIntervalHint  = "40"
+	DefaultWindowW         = 640
+	DefaultWindowH         = 480
+	titleTruncateMaxRunes  = 45
+	titleTruncateKeepRunes = 42
 )
 
 // spacingForSize returns line and block spacing proportional to font size.
@@ -276,8 +283,8 @@ type PageLayout struct {
 // New creates a Renderer.
 func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Renderer, error) {
 	sdl.SetHint(sdl.HINT_RENDER_SCALE_QUALITY, "1")
-	sdl.SetHint("SDL_HINT_KEY_REPEAT_DELAY", "300")
-	sdl.SetHint("SDL_HINT_KEY_REPEAT_INTERVAL", "40")
+	sdl.SetHint("SDL_HINT_KEY_REPEAT_DELAY", keyRepeatDelayHint)
+	sdl.SetHint("SDL_HINT_KEY_REPEAT_INTERVAL", keyRepeatIntervalHint)
 	if err := sdl.Init(sdl.INIT_VIDEO | sdl.INIT_GAMECONTROLLER); err != nil {
 		return nil, fmt.Errorf("sdl init: %w", err)
 	}
@@ -884,8 +891,8 @@ func extractTitle(doc *document.Document) string {
 	for _, b := range doc.Blocks {
 		if h, ok := b.(*document.Heading); ok && h.Level == 1 {
 			runes := []rune(h.Content)
-			if len(runes) > 45 {
-				return string(runes[:42]) + "..."
+			if len(runes) > titleTruncateMaxRunes {
+				return string(runes[:titleTruncateKeepRunes]) + "..."
 			}
 			return h.Content
 		}

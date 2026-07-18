@@ -24,6 +24,8 @@ const (
 	minTableCellWidth       = 10
 	fallbackImageColorValue = 150
 	codeSpanPadding         = 2
+	codeBlockMinWidthMult   = 6
+	codeBlockMinWidthAdd    = 2
 )
 
 func (r *Renderer) relayout() {
@@ -183,8 +185,8 @@ func (s *layoutState) VisitCodeBlock(c *document.CodeBlock) {
 	s.y += pad
 
 	maxCodeW := s.maxW - 2*leftPad
-	if maxCodeW < pad*6+2 {
-		maxCodeW = pad * 6
+	if maxCodeW < pad*codeBlockMinWidthMult+codeBlockMinWidthAdd {
+		maxCodeW = pad * codeBlockMinWidthMult
 	}
 
 	addLine := func(text string) {
