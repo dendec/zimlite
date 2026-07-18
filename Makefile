@@ -114,9 +114,9 @@ deploy: dist-arm64
 	adb shell "mkdir -p $(DEVICE_DIR)/lib"
 	adb push dist/zimlite/zimlite $(DEVICE_DIR)/
 	adb push dist/zimlite/lib/libzim.so.9.7.0 $(DEVICE_DIR)/lib/
+	adb push dist/zimlite/lib/libzim.so.9 $(DEVICE_DIR)/lib/
 	adb push dist/zimlite/lib/liblzma.so.5 $(DEVICE_DIR)/lib/
 	adb push dist/zimlite/lib/libzstd.so.1 $(DEVICE_DIR)/lib/
-	adb shell "cd $(DEVICE_DIR)/lib && ln -sf libzim.so.9.7.0 libzim.so.9 && ln -sf libzim.so.9.7.0 libzim.so && ln -sf libzstd.so.1 libzstd.so.1.4.8"
 	adb push scripts/zimlite.sh '$(PORTS_DIR)/$(PORT_SCRIPT)'
 	adb shell "chmod +x '$(PORTS_DIR)/$(PORT_SCRIPT)' && killall -9 zimlite 2>/dev/null; true"
 	@echo "=== Deployed ==="
