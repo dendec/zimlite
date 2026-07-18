@@ -234,8 +234,6 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 		app.toggleMode()
 	case ActionGoHome:
 		app.goHome()
-	case ActionQuit:
-		app.running.Store(false)
 	case ActionZoomIn:
 		c.zoom(1)
 	case ActionZoomOut:

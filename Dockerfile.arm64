@@ -54,9 +54,8 @@ RUN mkdir -p /dist/zimlite/lib \
     && cp zimlite /dist/zimlite/ \
     && cp ${ZIM_LIB}/libzim.so.9.7.0 /dist/zimlite/lib/ \
     && cp ${ZIM_LIB}/libzim.so.9 /dist/zimlite/lib/ \
-    && cp ${ZIM_LIB}/libzim.so /dist/zimlite/lib/ \
-    && find /usr/lib/aarch64-linux-gnu/ -name 'liblzma.so*' -exec cp {} /dist/zimlite/lib/ \; \
-    && find /usr/lib/aarch64-linux-gnu/ -name 'libzstd.so*' -exec cp {} /dist/zimlite/lib/ \;
+    && find /usr/lib/aarch64-linux-gnu/ -name 'liblzma.so.*' -exec cp -L {} /dist/zimlite/lib/ \; \
+    && find /usr/lib/aarch64-linux-gnu/ -name 'libzstd.so.*' -exec cp -L {} /dist/zimlite/lib/ \;
 
 RUN printf '#!/bin/sh\nDIR="$(dirname "$0")"\nexport LD_LIBRARY_PATH="$DIR/lib:/usr/lib:$LD_LIBRARY_PATH"\n"$DIR/zimlite" "$@"\n' > /dist/zimlite/zimlite.sh \
     && chmod +x /dist/zimlite/zimlite.sh

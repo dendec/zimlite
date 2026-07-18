@@ -22,7 +22,6 @@ const (
 	ActionPageDown
 	ActionToggleTree
 	ActionGoHome
-	ActionQuit
 	ActionZoomIn
 	ActionZoomOut
 	ActionSelectPrevLink
@@ -47,13 +46,32 @@ func (td *TriggerDebouncer) Update(value int16) bool {
 	return false
 }
 
+// AxisDebouncer debounces dual-direction analog axes (thumbsticks, D-pad-as-axis).
+// Fires once on transition from neutral to an active direction, ignores subsequent
+// same-direction values until released back to neutral.
+type AxisDebouncer struct {
+	active bool
+}
+
+// Update returns true only on the rising edge: neutral → active.
+func (ad *AxisDebouncer) Update(value int16, threshold int16) bool {
+	active := value < -threshold || value > threshold
+	if active && !ad.active {
+		ad.active = true
+		return true
+	}
+	if !active {
+		ad.active = false
+	}
+	return false
+}
+
 // GamepadState groups all tracked inputs for a controller and translates raw events to logical Actions.
 type GamepadState struct {
-	L2            TriggerDebouncer
-	R2            TriggerDebouncer
-	selectPressed bool
-	menuPressed   bool
-	startPressed  bool
+	L2    TriggerDebouncer
+	R2    TriggerDebouncer
+	leftY AxisDebouncer
+	leftX AxisDebouncer
 }
 
 // TranslateEvent processes a raw SDL event. If the event is a GameController event, it translates it to an Action and returns true.
@@ -75,19 +93,20 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 			return ActionNone, true
 		}
 
-		// Dead zone
-		if v > -analogDeadZone && v < analogDeadZone {
-			return ActionNone, false
-		}
-
 		if mode == modeTree {
 			switch e.Axis {
 			case sdl.CONTROLLER_AXIS_LEFTY: // vertical
+				if !g.leftY.Update(v, analogDeadZone) {
+					return ActionNone, true
+				}
 				if v < 0 {
 					return ActionScrollUp, true
 				}
 				return ActionScrollDown, true
 			case sdl.CONTROLLER_AXIS_LEFTX: // horizontal
+				if !g.leftX.Update(v, analogDeadZone) {
+					return ActionNone, true
+				}
 				if v < 0 {
 					return ActionLeft, true // collapses branch / moves to parent
 				}
@@ -96,11 +115,17 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 		} else {
 			switch e.Axis {
 			case sdl.CONTROLLER_AXIS_LEFTY:
+				if !g.leftY.Update(v, analogDeadZone) {
+					return ActionNone, true
+				}
 				if v < 0 {
 					return ActionScrollUp, true
 				}
 				return ActionScrollDown, true
 			case sdl.CONTROLLER_AXIS_LEFTX:
+				if !g.leftX.Update(v, analogDeadZone) {
+					return ActionNone, true
+				}
 				if v < 0 {
 					return ActionSelectPrevLink, true
 				}
@@ -112,30 +137,18 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 		switch e.Button {
 		case sdl.CONTROLLER_BUTTON_BACK: // Select
 			if e.State == sdl.RELEASED {
-				g.selectPressed = false
 				return ActionNone, true
 			}
-			g.selectPressed = true
-			if g.menuPressed {
-				return ActionQuit, true
-			}
-			return ActionNone, true
-		case sdl.CONTROLLER_BUTTON_GUIDE: // Menu
+			return ActionShowSettings, true
+		case sdl.CONTROLLER_BUTTON_GUIDE: // Menu (not on all devices)
 			if e.State == sdl.RELEASED {
-				g.menuPressed = false
 				return ActionNone, true
-			}
-			g.menuPressed = true
-			if g.selectPressed {
-				return ActionQuit, true
 			}
 			return ActionShowSettings, true
 		case sdl.CONTROLLER_BUTTON_START:
 			if e.State == sdl.RELEASED {
-				g.startPressed = false
 				return ActionNone, true
 			}
-			g.startPressed = true
 			return ActionShowHelp, true
 		default:
 			if e.State != sdl.PRESSED {

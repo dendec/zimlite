@@ -113,9 +113,9 @@ deploy: dist-arm64
 	adb shell "mkdir -p $(DEVICE_DIR)/lib"
 	adb push dist/zimlite/zimlite $(DEVICE_DIR)/
 	adb push dist/zimlite/lib/libzim.so.9.7.0 $(DEVICE_DIR)/lib/
-	adb push dist/zimlite/lib/liblzma.so $(DEVICE_DIR)/lib/
-	adb push dist/zimlite/lib/libzstd.so.1.4.8 $(DEVICE_DIR)/lib/
-	adb shell "cd $(DEVICE_DIR)/lib && ln -sf libzim.so.9.7.0 libzim.so.9 && ln -sf libzim.so.9.7.0 libzim.so && ln -sf libzstd.so.1.4.8 libzstd.so.1 && ln -sf liblzma.so liblzma.so.5"
+	adb push dist/zimlite/lib/liblzma.so.5 $(DEVICE_DIR)/lib/
+	adb push dist/zimlite/lib/libzstd.so.1 $(DEVICE_DIR)/lib/
+	adb shell "cd $(DEVICE_DIR)/lib && ln -sf libzim.so.9.7.0 libzim.so.9 && ln -sf libzim.so.9.7.0 libzim.so && ln -sf libzstd.so.1 libzstd.so.1.4.8"
 	adb push scripts/zimlite.sh '$(PORTS_DIR)/$(PORT_SCRIPT)'
 	adb shell "chmod +x '$(PORTS_DIR)/$(PORT_SCRIPT)' && killall -9 zimlite 2>/dev/null; true"
 	@echo "=== Deployed ==="
@@ -125,15 +125,14 @@ dist-portmaster: dist-arm64
 	@mkdir -p dist/portmaster_build/zimlite/lib
 	cp "portmaster/Zimlite.sh" dist/portmaster_build/
 	cp "portmaster/port.json" dist/portmaster_build/
+	cp "portmaster/README.md" dist/portmaster_build/
+	cp "portmaster/gameinfo.xml" dist/portmaster_build/
 	cp "portmaster/screenshot.png" dist/portmaster_build/
 	cp "portmaster/screenshot.png" dist/portmaster_build/zimlite/cover.png
-	cp "portmaster/README.md" dist/portmaster_build/zimlite/
 	cp -r "portmaster/licenses" dist/portmaster_build/zimlite/
 	cp dist/zimlite/zimlite dist/portmaster_build/zimlite/
 	cp dist/zimlite/lib/* dist/portmaster_build/zimlite/lib/
-	@RELEASE_DATE=$$(date +%Y%m%d)T000000; \
-	printf '<gameList>\n    <game>\n        <path>./Zimlite.sh</path>\n        <name>Zimlite</name>\n        <desc>Zimlite is a lightweight offline reader for ZIM archives, the format used by Kiwix and Wikipedia. Browse articles, search content, and read without an internet connection on your handheld device.</desc>\n        <image>./zimlite/cover.png</image>\n        <developer>dendec</developer>\n        <publisher>dendec</publisher>\n        <releasedate>%s</releasedate>\n        <genre>Reference</genre>\n    </game>\n</gameList>\n' "$$RELEASE_DATE" > dist/portmaster_build/zimlite/gameinfo.xml
-	cd dist/portmaster_build && zip -r ../zimlite.zip "Zimlite.sh" port.json screenshot.png zimlite
+	cd dist/portmaster_build && zip -r ../zimlite.zip "Zimlite.sh" README.md gameinfo.xml port.json screenshot.png zimlite
 	@echo "=== Generated dist/zimlite.zip ==="
 	@ls -lh dist/zimlite.zip
 
