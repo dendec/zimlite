@@ -21,5 +21,6 @@ vendor/
 *.zim.info
 *.zim.part
 config.json
+library_cache.json
 TODO.md
 testdata

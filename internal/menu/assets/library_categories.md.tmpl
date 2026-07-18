@@ -4,5 +4,5 @@
 
 {{T "library.select_category"}}
 
-{{range .Categories}}* [{{.Title}}](virtual:library/entries?lang={{$.Language}}&name={{urlquery $.LanguageName}}&category={{.Category}})
+{{range .Categories}}* [{{.Title}} ({{Tf "library.archives_count" .Count}})](virtual:library/entries?lang={{$.Language}}&name={{urlquery $.LanguageName}}&category={{urlquery .Category}})
 {{end}}

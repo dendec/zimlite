@@ -15,5 +15,5 @@
 
 ---
 {{end}}
-{{if gt .Page 0}}[{{T "library.prev_page"}}](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{.Category}}&page={{.PrevPage}})  {{end}}{{if .HasNextPage}}[{{T "library.next_page"}}](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{.Category}}&page={{.NextPage}}){{end}}
+{{if gt .Page 0}}[{{T "library.prev_page"}}](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{urlquery .Category}}&page={{.PrevPage}})  {{end}}{{if .HasNextPage}}[{{T "library.next_page"}}](virtual:library/entries?lang={{.Language}}&name={{urlquery .LanguageName}}&category={{urlquery .Category}}&page={{.NextPage}}){{end}}
 {{end}}

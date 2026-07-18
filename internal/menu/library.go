@@ -1,13 +1,19 @@
 package menu
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -39,10 +45,11 @@ type AtomEntry struct {
 
 // AtomFeed represents the root feed element in an Atom/OPDS catalog.
 type AtomFeed struct {
-	XMLName xml.Name    `xml:"feed"`
-	Title   string      `xml:"title"`
-	Links   []AtomLink  `xml:"link"`
-	Entries []AtomEntry `xml:"entry"`
+	XMLName      xml.Name    `xml:"feed"`
+	Title        string      `xml:"title"`
+	Links        []AtomLink  `xml:"link"`
+	TotalResults int         `xml:"totalResults"`
+	Entries      []AtomEntry `xml:"entry"`
 }
 
 func renderErrorDoc(lang, section string, err error) (*document.Document, error) {
@@ -54,6 +61,8 @@ func renderErrorDoc(lang, section string, err error) (*document.Document, error)
 	return markdown.Parse(strings.NewReader(sb.String()))
 }
 
+const maxFeedSize = 10 << 20 // 10 MiB
+
 func fetchFeed(urlStr string) (*AtomFeed, error) {
 	client := storage.HTTPClient(5 * time.Second)
 	resp, err := client.Get(urlStr)
@@ -61,13 +70,148 @@ func fetchFeed(urlStr string) (*AtomFeed, error) {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GET %s: HTTP %d", urlStr, resp.StatusCode)
+	}
+
 	var feed AtomFeed
-	dec := xml.NewDecoder(resp.Body)
+	dec := xml.NewDecoder(io.LimitReader(resp.Body, maxFeedSize))
 	if err := dec.Decode(&feed); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse feed %s: %w", urlStr, err)
 	}
 	return &feed, nil
 }
+
+// --- category count cache (disk-backed, 24h TTL) ---
+
+type categoryCount struct {
+	Count int   `json:"count"`
+	TS    int64 `json:"ts"`
+}
+
+type categoryCache struct {
+	path string
+	ttl  time.Duration
+
+	mu   sync.RWMutex
+	data map[string]map[string]categoryCount // lang → category → {count, ts}
+}
+
+func newCategoryCache(dir string, ttl time.Duration) *categoryCache {
+	return &categoryCache{
+		path: filepath.Join(dir, "library_cache.json"),
+		ttl:  ttl,
+		data: make(map[string]map[string]categoryCount),
+	}
+}
+
+func (c *categoryCache) load() {
+	raw, err := os.ReadFile(c.path)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			slog.Warn("Failed to read library cache", "path", c.path, "error", err)
+		}
+		return
+	}
+	var loaded map[string]map[string]categoryCount
+	if err := json.Unmarshal(raw, &loaded); err != nil {
+		slog.Warn("Failed to parse library cache, ignoring", "path", c.path, "error", err)
+		return
+	}
+	if loaded != nil {
+		c.data = loaded
+	}
+}
+
+func (c *categoryCache) save() {
+	c.mu.RLock()
+	snapshot := make(map[string]map[string]categoryCount, len(c.data))
+	for lang, cats := range c.data {
+		cp := make(map[string]categoryCount, len(cats))
+		for k, v := range cats {
+			cp[k] = v
+		}
+		snapshot[lang] = cp
+	}
+	c.mu.RUnlock()
+
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		slog.Warn("Failed to marshal library cache", "error", err)
+		return
+	}
+
+	dir := filepath.Dir(c.path)
+	tmp, err := os.CreateTemp(dir, "library_cache_*.tmp")
+	if err != nil {
+		slog.Warn("Failed to create cache tmp file", "dir", dir, "error", err)
+		return
+	}
+	tmpPath := tmp.Name()
+	defer func() { _ = os.Remove(tmpPath) }() // cleanup if rename already succeeded is harmless
+
+	if _, err := tmp.Write(raw); err != nil {
+		slog.Warn("Failed to write cache tmp", "path", tmpPath, "error", err)
+		_ = tmp.Close()
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		slog.Warn("Failed to close cache tmp", "path", tmpPath, "error", err)
+		return
+	}
+	if err := os.Rename(tmpPath, c.path); err != nil {
+		slog.Warn("Failed to rename cache file", "from", tmpPath, "to", c.path, "error", err)
+		return
+	}
+	// rename succeeded — prevent deferred Remove
+	tmpPath = ""
+}
+
+func (c *categoryCache) get(lang, category string) (int, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	cats, ok := c.data[lang]
+	if !ok {
+		return 0, false
+	}
+	cc, ok := cats[category]
+	if !ok || time.Since(time.Unix(cc.TS, 0)) > c.ttl {
+		return 0, false
+	}
+	return cc.Count, true
+}
+
+func (c *categoryCache) set(lang, category string, count int) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.data[lang] == nil {
+		c.data[lang] = make(map[string]categoryCount)
+	}
+	c.data[lang][category] = categoryCount{Count: count, TS: time.Now().Unix()}
+}
+
+// singleton — created once from executable dir
+var (
+	libCache     *categoryCache
+	libCacheOnce sync.Once
+)
+
+func getLibCache() *categoryCache {
+	libCacheOnce.Do(func() {
+		dir := "."
+		if exe, err := os.Executable(); err == nil {
+			dir = filepath.Dir(exe)
+		}
+		libCache = newCategoryCache(dir, 24*time.Hour)
+		libCache.load()
+	})
+	return libCache
+}
+
+// --- pages ---
 
 func LibraryLanguagesPage(lang string) (*document.Document, error) {
 	feed, err := fetchFeed("https://browse.library.kiwix.org/catalog/v2/languages")
@@ -117,6 +261,7 @@ type LibraryCategoriesData struct {
 type LibraryCategory struct {
 	Title    string
 	Category string
+	Count    int
 }
 
 func LibraryCategoriesPage(lang, catalogLang, name string) (*document.Document, error) {
@@ -125,29 +270,84 @@ func LibraryCategoriesPage(lang, catalogLang, name string) (*document.Document, 
 		return renderErrorDoc(lang, i18n.T(lang, "library.section_categories"), err)
 	}
 
-	data := LibraryCategoriesData{
-		UILang:       lang,
-		Language:     catalogLang,
-		LanguageName: name,
-	}
-
 	hiddenCategories := map[string]bool{
 		"phet": true, // interactive JS simulations
 		"ted":  true, // video content
 		"mooc": true, // video courses and interactive tests
 	}
 
+	// Build list of visible categories
+	var visible []LibraryCategory
 	for _, entry := range categories.Entries {
 		categoryID := strings.ToLower(entry.Title)
 		if hiddenCategories[categoryID] {
 			continue
 		}
-
-		data.Categories = append(data.Categories, LibraryCategory{
+		visible = append(visible, LibraryCategory{
 			Title:    entry.Title,
 			Category: categoryID,
 		})
 	}
+
+	// Fetch counts in parallel, using cache where available
+	type result struct {
+		index int
+		count int
+	}
+
+	cache := getLibCache()
+	var wg sync.WaitGroup
+	ch := make(chan result, len(visible))
+
+	for i, cat := range visible {
+		if cached, ok := cache.get(catalogLang, cat.Category); ok {
+			visible[i].Count = cached
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, categoryID string) {
+			defer wg.Done()
+			feedURL := entriesURL(catalogLang, categoryID, 1, 0)
+			f, err := fetchFeed(feedURL)
+			if err != nil {
+				slog.Warn("Failed to fetch category count", "category", categoryID, "error", err)
+				ch <- result{idx, -1}
+				return
+			}
+			cache.set(catalogLang, categoryID, f.TotalResults)
+			ch <- result{idx, f.TotalResults}
+		}(i, cat.Category)
+	}
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	for r := range ch {
+		if r.count >= 0 {
+			visible[r.index].Count = r.count
+		}
+	}
+
+	cache.save()
+
+	// Filter out categories with 0 archives
+	data := LibraryCategoriesData{
+		UILang:       lang,
+		Language:     catalogLang,
+		LanguageName: name,
+	}
+	for _, cat := range visible {
+		if cat.Count > 0 {
+			data.Categories = append(data.Categories, cat)
+		}
+	}
+
+	// Sort by count descending
+	sort.Slice(data.Categories, func(i, j int) bool {
+		return data.Categories[i].Count > data.Categories[j].Count
+	})
 
 	buf, err := executeTemplate(libraryCategoriesTemplate, lang, data)
 	if err != nil {
@@ -177,12 +377,17 @@ type LibraryEntry struct {
 	DownloadURL string
 }
 
+const pageSize = 50
+
 func LibraryEntriesPage(lang, catalogLang, name, category string, page int) (*document.Document, error) {
 	if page < 0 {
 		page = 0
 	}
-	start := page * 50
-	feed, err := fetchFeed(fmt.Sprintf("https://browse.library.kiwix.org/catalog/v2/entries?start=%d&count=50&lang=%s&category=%s", start, catalogLang, category))
+	if page > 1000 { // sanity cap to avoid int overflow on start
+		page = 1000
+	}
+	start := page * pageSize
+	feed, err := fetchFeed(entriesURL(catalogLang, category, pageSize, start))
 	if err != nil {
 		return renderErrorDoc(lang, i18n.T(lang, "library.section_archives"), err)
 	}
@@ -211,10 +416,11 @@ func LibraryEntriesPage(lang, catalogLang, name, category string, page int) (*do
 		}
 		sizeStr := storage.FormatSize(sizeBytes)
 		directURL := strings.Replace(downloadURL, ".zim.meta4", ".zim", 1)
-		uDirect, _ := url.Parse(directURL)
 		filename := entry.Title + ".zim"
-		if uDirect != nil {
-			filename = path.Base(uDirect.Path)
+		if uDirect, err := url.Parse(directURL); err == nil {
+			if base := path.Base(uDirect.Path); base != "" && base != "." && base != "/" {
+				filename = base
+			}
 		}
 
 		data.Entries = append(data.Entries, LibraryEntry{
@@ -226,8 +432,10 @@ func LibraryEntriesPage(lang, catalogLang, name, category string, page int) (*do
 		})
 	}
 
-	if len(feed.Entries) == 50 {
-		data.HasNextPage = true
+	if feed.TotalResults > 0 {
+		data.HasNextPage = start+pageSize < feed.TotalResults
+	} else {
+		data.HasNextPage = len(feed.Entries) == pageSize
 	}
 
 	buf, err := executeTemplate(libraryEntriesTemplate, lang, data)
@@ -237,4 +445,17 @@ func LibraryEntriesPage(lang, catalogLang, name, category string, page int) (*do
 
 	slog.Debug("Generated library menu", "content", buf.String())
 	return markdown.Parse(buf)
+}
+
+// entriesURL builds the OPDS entries endpoint with properly encoded query params.
+func entriesURL(lang, category string, count, start int) string {
+	q := url.Values{
+		"lang":     {lang},
+		"category": {category},
+		"count":    {fmt.Sprint(count)},
+	}
+	if start > 0 {
+		q.Set("start", fmt.Sprint(start))
+	}
+	return "https://browse.library.kiwix.org/catalog/v2/entries?" + q.Encode()
 }

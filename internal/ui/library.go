@@ -24,7 +24,10 @@ func (l *DocumentLoader) generateLibraryDoc(pathStr string) (*document.Document,
 	case "/library/categories":
 		return menu.LibraryCategoriesPage(lang, u.Query().Get("lang"), u.Query().Get("name"))
 	case "/library/entries":
-		page, _ := strconv.Atoi(u.Query().Get("page"))
+		page, err := strconv.Atoi(u.Query().Get("page"))
+		if err != nil || page < 0 {
+			page = 0
+		}
 		return menu.LibraryEntriesPage(lang, u.Query().Get("lang"), u.Query().Get("name"), u.Query().Get("category"), page)
 	case "/library/download":
 		return l.libraryDownloadPage(u)
