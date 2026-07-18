@@ -68,10 +68,27 @@ func (ad *AxisDebouncer) Update(value int16, threshold int16) bool {
 
 // GamepadState groups all tracked inputs for a controller and translates raw events to logical Actions.
 type GamepadState struct {
-	L2    TriggerDebouncer
-	R2    TriggerDebouncer
-	leftY AxisDebouncer
-	leftX AxisDebouncer
+	L2         TriggerDebouncer
+	R2         TriggerDebouncer
+	leftY      AxisDebouncer
+	leftX      AxisDebouncer
+	controller *sdl.GameController
+	leftYValue int16
+}
+
+func (g *GamepadState) SetController(controller *sdl.GameController) {
+	g.controller = controller
+}
+
+func (g *GamepadState) Controller() *sdl.GameController {
+	return g.controller
+}
+
+func (g *GamepadState) LeftY() int16 {
+	if g.controller != nil {
+		return g.controller.Joystick().Axis(int(sdl.CONTROLLER_AXIS_LEFTY))
+	}
+	return g.leftYValue
 }
 
 // TranslateEvent processes a raw SDL event. If the event is a GameController event, it translates it to an Action and returns true.
@@ -79,6 +96,9 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 	switch e := event.(type) {
 	case *sdl.ControllerAxisEvent:
 		v := e.Value
+		if e.Axis == sdl.CONTROLLER_AXIS_LEFTY {
+			g.leftYValue = v
+		}
 		// Handle triggers
 		switch e.Axis {
 		case sdl.CONTROLLER_AXIS_TRIGGERLEFT:

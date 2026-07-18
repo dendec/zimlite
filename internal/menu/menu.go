@@ -246,16 +246,7 @@ func scanDirectory(dir string) (zims []FileEntry, mds []FileEntry, downloads []D
 }
 
 func formatProgress(current, total int64) string {
-	const unit = 1024
-	if total < unit {
-		return fmt.Sprintf("%d / %d B", current, total)
-	}
-	div, exp := int64(unit), 0
-	for n := total / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f / %.1f %s", float64(current)/float64(div), float64(total)/float64(div), []string{"kB", "MB", "GB", "TB"}[exp])
+	return storage.FormatProgress(current, total)
 }
 
 // CheckInternet pings the Kiwix library catalog and returns true if reachable.

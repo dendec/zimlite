@@ -60,6 +60,9 @@ func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n DocNavigator,
 		mode:      modeDoc,
 		stopCh:    make(chan struct{}),
 	}
+	if provider, ok := viewer.(interface{ GameController() *sdl.GameController }); ok {
+		app.gamepad.SetController(provider.GameController())
+	}
 	app.loader = NewDocumentLoader(app)
 	app.input = NewInputController(app)
 	// Install a static resource loader once. It always resolves paths from the
@@ -379,8 +382,12 @@ func (app *App) Run() {
 	}()
 
 	for app.running.Load() {
-		event := sdl.WaitEvent()
+		event := sdl.WaitEventTimeout(int(frameDuration / time.Millisecond))
 		if event == nil {
+			app.input.Update(time.Now())
+			app.loader.applyPendingMenuReload()
+			app.loader.applyPendingDownloadCompletion()
+			app.viewer.Render()
 			continue
 		}
 		app.input.ProcessEvent(event)
@@ -391,6 +398,7 @@ func (app *App) Run() {
 			}
 			app.input.ProcessEvent(ev)
 		}
+		app.input.Update(time.Now())
 		app.loader.applyPendingMenuReload()
 		app.loader.applyPendingDownloadCompletion()
 		app.viewer.Render()

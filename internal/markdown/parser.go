@@ -137,27 +137,9 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		for child := node.FirstChild(); child != nil; child = child.NextSibling() {
 			switch childNode := child.(type) {
 			case *extast.TableHeader:
-				row := document.TableRow{IsHeader: true}
-				for cellNode := childNode.FirstChild(); cellNode != nil; cellNode = cellNode.NextSibling() {
-					if cell, ok := cellNode.(*extast.TableCell); ok {
-						row.Cells = append(row.Cells, document.TableCell{
-							Inlines:   c.collectInlines(cell),
-							Alignment: alignFromGoldmark(cell.Alignment),
-						})
-					}
-				}
-				table.Rows = append(table.Rows, row)
+				table.Rows = append(table.Rows, c.collectTableRow(childNode, true))
 			case *extast.TableRow:
-				row := document.TableRow{IsHeader: false}
-				for cellNode := childNode.FirstChild(); cellNode != nil; cellNode = cellNode.NextSibling() {
-					if cell, ok := cellNode.(*extast.TableCell); ok {
-						row.Cells = append(row.Cells, document.TableCell{
-							Inlines:   c.collectInlines(cell),
-							Alignment: alignFromGoldmark(cell.Alignment),
-						})
-					}
-				}
-				table.Rows = append(table.Rows, row)
+				table.Rows = append(table.Rows, c.collectTableRow(childNode, false))
 			}
 		}
 		c.document.Blocks = append(c.document.Blocks, table)
@@ -168,6 +150,19 @@ func (c *converter) walker(n ast.Node, entering bool) (ast.WalkStatus, error) {
 	}
 
 	return ast.WalkContinue, nil
+}
+
+func (c *converter) collectTableRow(node ast.Node, isHeader bool) document.TableRow {
+	row := document.TableRow{IsHeader: isHeader}
+	for cellNode := node.FirstChild(); cellNode != nil; cellNode = cellNode.NextSibling() {
+		if cell, ok := cellNode.(*extast.TableCell); ok {
+			row.Cells = append(row.Cells, document.TableCell{
+				Inlines:   c.collectInlines(cell),
+				Alignment: alignFromGoldmark(cell.Alignment),
+			})
+		}
+	}
+	return row
 }
 
 func alignFromGoldmark(a extast.Alignment) document.Alignment {

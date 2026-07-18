@@ -248,10 +248,7 @@ func (l *DocumentLoader) handleDeleteFile(url string) {
 	if err := os.Remove(filename); err != nil {
 		slog.Error("Failed to delete file", "filename", filename, "error", err)
 	}
-	if l.host.getNavigator().Current() == "virtual:menu" {
-		l.pendingMenuReload.Store(true)
-		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-	}
+	l.notifyMenuReload()
 }
 
 func (l *DocumentLoader) handleDownloadStart(url string) {
@@ -265,10 +262,7 @@ func (l *DocumentLoader) handleDownloadStart(url string) {
 	}
 	l.startDownload("", filename)
 
-	if l.host.getNavigator().Current() == "virtual:menu" {
-		l.pendingMenuReload.Store(true)
-		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-	}
+	l.notifyMenuReload()
 }
 
 func (l *DocumentLoader) handleDownloadStop(url string) {
@@ -282,10 +276,7 @@ func (l *DocumentLoader) handleDownloadStop(url string) {
 	}
 	storage.Manager.Stop(filename)
 
-	if l.host.getNavigator().Current() == "virtual:menu" {
-		l.pendingMenuReload.Store(true)
-		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-	}
+	l.notifyMenuReload()
 }
 
 func (l *DocumentLoader) handleDownloadDelete(url string) {
@@ -302,10 +293,15 @@ func (l *DocumentLoader) handleDownloadDelete(url string) {
 	_ = os.Remove(filename + ".part")
 	_ = os.Remove(filename + ".info")
 
-	if l.host.getNavigator().Current() == "virtual:menu" {
-		l.pendingMenuReload.Store(true)
-		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	l.notifyMenuReload()
+}
+
+func (l *DocumentLoader) notifyMenuReload() {
+	if l.host.getNavigator().Current() != "virtual:menu" {
+		return
 	}
+	l.pendingMenuReload.Store(true)
+	_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 }
 
 func (l *DocumentLoader) handleLibraryDownload(urlStr string) {
@@ -363,9 +359,7 @@ func (l *DocumentLoader) navigateZIMArticle(url string) {
 		return
 	}
 	resolved := url
-	if !strings.HasPrefix(url, "A/") && !strings.HasPrefix(url, "C/") &&
-		!strings.HasPrefix(url, "I/") && !strings.HasPrefix(url, "M/") &&
-		!strings.HasPrefix(url, "X/") && !strings.HasPrefix(url, "-/") {
+	if !zim.HasNamespacePrefix(url) {
 		if referrer != "" {
 			resolved = path.Join(referrer, url)
 		}
@@ -435,13 +429,7 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 				l.pendingMenuReload.Store(true) // Ensure UI updates back to "Start" button
 				_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 
-				go func() {
-					time.Sleep(10 * time.Second)
-					if viewer.GetStatusOverride() == msg {
-						viewer.SetStatusOverride("")
-						_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-					}
-				}()
+				l.clearStatusAfter(viewer, msg, 10*time.Second)
 				return
 			}
 
@@ -460,13 +448,7 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 			l.pendingMenuReload.Store(true) // Ensure UI updates back to "Start" button
 			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
 
-			go func() {
-				time.Sleep(10 * time.Second)
-				if viewer.GetStatusOverride() == msg {
-					viewer.SetStatusOverride("")
-					_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
-				}
-			}()
+			l.clearStatusAfter(viewer, msg, 10*time.Second)
 			return
 		}
 
@@ -476,6 +458,16 @@ func (l *DocumentLoader) startDownload(downloadURL, filename string) {
 		l.downloadFilename = filename
 		l.pendingDownload.Store(true)
 		_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+	}()
+}
+
+func (l *DocumentLoader) clearStatusAfter(viewer StatusBar, message string, delay time.Duration) {
+	go func() {
+		time.Sleep(delay)
+		if viewer.GetStatusOverride() == message {
+			viewer.SetStatusOverride("")
+			_, _ = sdl.PushEvent(&sdl.UserEvent{Type: sdl.USEREVENT})
+		}
 	}()
 }
 

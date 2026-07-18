@@ -29,6 +29,18 @@ type Reader struct {
 	filePath     string
 }
 
+var knownNamespacePrefixes = [...]string{"A/", "C/", "I/", "M/", "X/", "-/"}
+
+// HasNamespacePrefix reports whether p already contains a ZIM namespace prefix.
+func HasNamespacePrefix(p string) bool {
+	for _, prefix := range knownNamespacePrefixes {
+		if strings.HasPrefix(p, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // Open opens a ZIM file. Caller must Close().
 func Open(filePath string) (*Reader, error) {
 	cPath := C.CString(filePath)

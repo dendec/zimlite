@@ -181,6 +181,7 @@ type fontSlot struct {
 type Renderer struct {
 	window      *sdl.Window
 	sdlRenderer *sdl.Renderer
+	controller  *sdl.GameController
 	fonts       [fontCount]fontSlot
 
 	layout PageLayout
@@ -285,11 +286,6 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		return nil, fmt.Errorf("ttf init: %w", err)
 	}
 
-	// Open first joystick/gamepad if available.
-	if sdl.NumJoysticks() > 0 {
-		sdl.GameControllerOpen(0)
-	}
-
 	window, err := sdl.CreateWindow(title,
 		sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED,
 		winW, winH,
@@ -328,6 +324,9 @@ func New(title string, winW, winH int32, fontPath string, baseFontSize int) (*Re
 		handCursor:   sdl.CreateSystemCursor(sdl.SYSTEM_CURSOR_HAND),
 		visited:      make(map[string]struct{}),
 	}
+	if sdl.NumJoysticks() > 0 {
+		r.controller = sdl.GameControllerOpen(0)
+	}
 
 	fonts, err := loadFonts(baseFontSize, fontPath)
 	if err != nil {
@@ -354,8 +353,17 @@ func (r *Renderer) SetResourceLoader(loader ResourceLoader) {
 	}
 }
 
+// GameController returns the controller opened during renderer initialization.
+func (r *Renderer) GameController() *sdl.GameController {
+	return r.controller
+}
+
 func (r *Renderer) Destroy() {
 	r.ClearCache()
+	if r.controller != nil {
+		r.controller.Close()
+		r.controller = nil
+	}
 	for i := range r.fonts {
 		if r.fonts[i].font != nil {
 			r.fonts[i].font.Close()

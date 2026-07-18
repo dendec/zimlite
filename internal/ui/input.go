@@ -2,7 +2,9 @@ package ui
 
 import (
 	"log/slog"
+	"math"
 	"strings"
+	"time"
 
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -10,13 +12,27 @@ import (
 const (
 	scrollStep      = 40
 	axisSensitivity = 16000
+	holdDelay       = 200 * time.Millisecond
+	maxAxisValue    = 32767
+	analogMaxSpeed  = float64(scrollStep * 5)
 )
 
+type scrollHold struct {
+	active    bool
+	started   time.Time
+	lastStep  time.Time
+	direction int32
+}
+
 type InputController struct {
-	app        *App
-	globalKeys map[sdl.Scancode]func()
-	docKeys    map[sdl.Scancode]func()
-	treeKeys   map[sdl.Scancode]func()
+	app           *App
+	globalKeys    map[sdl.Scancode]func()
+	docKeys       map[sdl.Scancode]func()
+	treeKeys      map[sdl.Scancode]func()
+	upHold        scrollHold
+	downHold      scrollHold
+	axisRemainder float64
+	lastAxisTime  time.Time
 }
 
 func NewInputController(app *App) *InputController {
@@ -182,6 +198,124 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 			}
 		}
 	}
+}
+
+// Update advances held D-pad navigation and analog scrolling once per frame.
+func (c *InputController) Update(now time.Time) {
+	controller := c.app.gamepad.Controller()
+	upHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_UP) != 0
+	downHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_DOWN) != 0
+	axisDirection, axisStrength := analogDirection(c.app.gamepad.LeftY())
+
+	if c.app.mode == modeTree {
+		direction := int32(0)
+		strength := float64(0)
+		if upHeld {
+			direction, strength = -1, 1
+		} else if downHeld {
+			direction, strength = 1, 1
+		} else if axisDirection != 0 {
+			direction, strength = axisDirection, axisStrength
+		}
+		c.updateTreeHold(direction, strength, now)
+		c.lastAxisTime = time.Time{}
+		c.axisRemainder = 0
+		return
+	}
+
+	c.updateDocumentHold(&c.upHold, upHeld, -1, 1, now)
+	c.updateDocumentHold(&c.downHold, downHeld, 1, 1, now)
+	if axisDirection == 0 {
+		c.lastAxisTime = time.Time{}
+		c.axisRemainder = 0
+		return
+	}
+	if c.lastAxisTime.IsZero() {
+		c.lastAxisTime = now
+		return
+	}
+	seconds := now.Sub(c.lastAxisTime).Seconds()
+	c.lastAxisTime = now
+	c.axisRemainder += analogMaxSpeed * axisStrength * seconds
+	delta := int32(c.axisRemainder)
+	if delta == 0 {
+		return
+	}
+	c.axisRemainder -= float64(delta)
+	c.app.scroller.ScrollBy(axisDirection * delta)
+}
+
+func (c *InputController) updateTreeHold(direction int32, strength float64, now time.Time) {
+	h := &c.upHold
+	if direction > 0 {
+		h = &c.downHold
+	}
+	if direction == 0 {
+		c.upHold.active = false
+		c.downHold.active = false
+		return
+	}
+	if !h.active || h.direction != direction {
+		*h = scrollHold{active: true, started: now, lastStep: now, direction: direction}
+		return
+	}
+	if now.Sub(h.started) < holdDelay {
+		return
+	}
+	rate := 5 * math.Pow(2, math.Floor(now.Sub(h.started).Seconds())) * strength
+	interval := time.Duration(float64(time.Second) / rate)
+	if now.Sub(h.lastStep) < interval {
+		return
+	}
+	steps := int(now.Sub(h.lastStep) / interval)
+	for i := 0; i < steps; i++ {
+		if direction < 0 {
+			c.app.navState.MoveUp()
+		} else {
+			c.app.navState.MoveDown()
+		}
+	}
+	c.app.renderTree()
+	h.lastStep = now
+}
+
+func (c *InputController) updateDocumentHold(h *scrollHold, held bool, direction int32, strength float64, now time.Time) {
+	if !held {
+		h.active = false
+		return
+	}
+	if !h.active {
+		*h = scrollHold{active: true, started: now, lastStep: now, direction: direction}
+		return
+	}
+	if now.Sub(h.started) < holdDelay {
+		return
+	}
+	rate := 5 * math.Pow(2, math.Floor(now.Sub(h.started).Seconds())) * strength
+	interval := time.Duration(float64(time.Second) / rate)
+	if now.Sub(h.lastStep) < interval {
+		return
+	}
+	steps := int(now.Sub(h.lastStep) / interval)
+	for i := 0; i < steps; i++ {
+		c.app.scroller.ScrollBy(direction * scrollStep)
+	}
+	h.lastStep = now
+}
+
+func analogDirection(value int16) (int32, float64) {
+	absolute := math.Abs(float64(value))
+	if absolute <= float64(analogDeadZone) {
+		return 0, 0
+	}
+	strength := (absolute - float64(analogDeadZone)) / (maxAxisValue - float64(analogDeadZone))
+	if strength > 1 {
+		strength = 1
+	}
+	if value < 0 {
+		return -1, strength
+	}
+	return 1, strength
 }
 
 func (c *InputController) processJoyB() {
