@@ -51,6 +51,10 @@ func (n *SimpleNavigator) CurrentState() document.ViewState {
 }
 
 func (n *SimpleNavigator) Open(id string) {
+	// Don't push duplicate consecutive entries (e.g. repeated Select→settings).
+	if n.index >= 0 && n.history[n.index].ID == id {
+		return
+	}
 	// Truncate any forward history.
 	if n.index+1 < len(n.history) {
 		n.history = n.history[:n.index+1]
