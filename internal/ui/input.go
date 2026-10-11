@@ -100,6 +100,7 @@ func (c *InputController) openSelectedLink() {
 }
 
 func (c *InputController) moveLinkSelection(direction int32) {
+	c.app.loader.cancelPendingDelete()
 	if scroller, ok := c.app.viewer.(interface{ ScrollTableHorizontally(int32) bool }); ok && scroller.ScrollTableHorizontally(direction) {
 		return
 	}
@@ -136,6 +137,9 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 			return
 		}
 		sc := e.Keysym.Scancode
+		if e.Repeat != 0 && (sc == sdl.SCANCODE_RETURN || sc == sdl.SCANCODE_KP_ENTER) {
+			return
+		}
 		debugEvent("KEY", int(sc), 0)
 
 		if fn, ok := c.globalKeys[sc]; ok {

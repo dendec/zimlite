@@ -100,6 +100,9 @@ func (app *App) restoreCachedDocument(doc *document.Document, state document.Vie
 }
 
 func (app *App) goBack() {
+	if app.loader.cancelPendingDelete() {
+		return
+	}
 	if app.mode == modeTree {
 		app.exitTreeMode()
 		return

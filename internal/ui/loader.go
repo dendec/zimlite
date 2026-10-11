@@ -31,6 +31,12 @@ const (
 
 type VirtualPageGenerator func(path string, loader *DocumentLoader) (*document.Document, error)
 
+type deleteConfirmation struct {
+	kind          string
+	filename      string
+	previousState string
+}
+
 type DocumentLoader struct {
 	host              LoaderHost
 	docCache          map[string]*document.Document
@@ -42,6 +48,7 @@ type DocumentLoader struct {
 	pendingMenuReload atomic.Bool
 	pendingDownload   atomic.Bool
 	downloadFilename  string // set by goroutine before pendingDownload.Store(true)
+	pendingDelete     *deleteConfirmation
 	virtualPages      map[string]VirtualPageGenerator
 }
 
@@ -116,6 +123,7 @@ func (l *DocumentLoader) applyPendingMenuReload() {
 
 // OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim, and virtual:menu.
 func (l *DocumentLoader) OpenFile(pathStr string) error {
+	l.cancelPendingDelete()
 	if !strings.HasPrefix(pathStr, "virtual:") {
 		switch strings.ToLower(filepath.Ext(pathStr)) {
 		case ".html", ".htm", ".zim":
@@ -221,6 +229,9 @@ func (l *DocumentLoader) loadResource(rawURL string) ([]byte, error) {
 }
 
 func (l *DocumentLoader) NavigateLink(url string) {
+	if l.pendingDelete != nil && !isDeleteLink(url) {
+		l.cancelPendingDelete()
+	}
 	if l.navigateServoURL(url) {
 		return
 	}
@@ -264,6 +275,9 @@ func (l *DocumentLoader) handleDeleteFile(url string) {
 	if filename == "" {
 		return
 	}
+	if !l.confirmDelete("archive", filename) {
+		return
+	}
 	slog.Info("Deleting file", "filename", filename)
 	if err := os.Remove(filename); err != nil {
 		slog.Error("Failed to delete file", "filename", filename, "error", err)
@@ -299,6 +313,46 @@ func (l *DocumentLoader) handleDownloadStop(url string) {
 	l.notifyMenuReload()
 }
 
+func isDeleteLink(url string) bool {
+	return strings.HasPrefix(url, "virtual:delete?file=") || strings.HasPrefix(url, "virtual:download/delete?file=")
+}
+
+// confirmDelete arms a two-step confirmation for the requested file. It returns
+// true only when the same delete action is selected again.
+func (l *DocumentLoader) confirmDelete(kind, filename string) bool {
+	if pending := l.pendingDelete; pending != nil && pending.kind == kind && pending.filename == filename {
+		l.pendingDelete = nil
+		l.host.getViewer().SetStatusOverride("")
+		return true
+	}
+
+	if l.pendingDelete != nil {
+		l.cancelPendingDelete()
+	}
+
+	viewer := l.host.getViewer()
+	l.pendingDelete = &deleteConfirmation{
+		kind:          kind,
+		filename:      filename,
+		previousState: viewer.GetStatusOverride(),
+	}
+	viewer.SetStatusOverride(i18n.Tf(l.uiLang(), "menu.delete_confirm", util.Truncate(filepath.Base(filename), 36)))
+	slog.Info("Deletion awaiting confirmation", "filename", filename, "kind", kind)
+	return false
+}
+
+// cancelPendingDelete cancels the confirmation and restores the prior status.
+func (l *DocumentLoader) cancelPendingDelete() bool {
+	pending := l.pendingDelete
+	if pending == nil {
+		return false
+	}
+	l.pendingDelete = nil
+	l.host.getViewer().SetStatusOverride(pending.previousState)
+	slog.Info("Deletion cancelled", "filename", pending.filename, "kind", pending.kind)
+	return true
+}
+
 func (l *DocumentLoader) handleDownloadDelete(url string) {
 	u, err := neturl.Parse(url)
 	if err != nil {
@@ -306,6 +360,9 @@ func (l *DocumentLoader) handleDownloadDelete(url string) {
 	}
 	filename := u.Query().Get("file")
 	if filename == "" {
+		return
+	}
+	if !l.confirmDelete("download", filename) {
 		return
 	}
 	storage.Manager.Stop(filename)
