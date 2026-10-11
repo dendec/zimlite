@@ -34,6 +34,8 @@ type InputController struct {
 	axisHold      scrollHold
 	axisRemainder float64
 	lastAxisTime  time.Time
+	linkHold      scrollHold
+	tableHold     scrollHold
 }
 
 func NewInputController(app *App) *InputController {
@@ -101,9 +103,6 @@ func (c *InputController) openSelectedLink() {
 
 func (c *InputController) moveLinkSelection(direction int32) {
 	c.app.loader.cancelPendingDelete()
-	if scroller, ok := c.app.viewer.(interface{ ScrollTableHorizontally(int32) bool }); ok && scroller.ScrollTableHorizontally(direction) {
-		return
-	}
 	if direction < 0 {
 		c.app.links.SelectPrevLink()
 		return
@@ -221,6 +220,8 @@ func (c *InputController) Update(now time.Time) {
 	controller := c.app.gamepad.Controller()
 	upHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_UP) != 0
 	downHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_DOWN) != 0
+	leftHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_LEFT) != 0
+	rightHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_RIGHT) != 0
 	axisDirection, axisStrength := analogDirection(c.app.gamepad.LeftY())
 
 	if c.app.mode == modeTree {
@@ -234,13 +235,26 @@ func (c *InputController) Update(now time.Time) {
 			direction, strength = axisDirection, axisStrength
 		}
 		c.updateTreeHold(direction, strength, now)
+		c.axisHold.active = false
 		c.lastAxisTime = time.Time{}
 		c.axisRemainder = 0
+		c.linkHold.active = false
+		c.tableHold.active = false
 		return
 	}
 
-	c.updateDocumentHold(&c.upHold, upHeld, -1, 1, now)
-	c.updateDocumentHold(&c.downHold, downHeld, 1, 1, now)
+	linkDirection := int32(0)
+	switch {
+	case upHeld || leftHeld:
+		linkDirection = -1
+	case downHeld || rightHeld:
+		linkDirection = 1
+	}
+	c.updateLinkHold(linkDirection, now)
+
+	tableDirection, tableStrength := analogDirection(c.app.gamepad.LeftX())
+	c.updateTableHold(tableDirection, tableStrength, now)
+
 	if axisDirection == 0 {
 		c.axisHold.active = false
 		c.lastAxisTime = time.Time{}
@@ -266,6 +280,64 @@ func (c *InputController) Update(now time.Time) {
 	}
 	c.axisRemainder -= float64(delta)
 	c.app.scroller.ScrollBy(axisDirection * delta)
+}
+
+func (c *InputController) updateLinkHold(direction int32, now time.Time) {
+	if direction == 0 {
+		c.linkHold.active = false
+		return
+	}
+	if !c.linkHold.active || c.linkHold.direction != direction {
+		c.linkHold = scrollHold{active: true, started: now, lastStep: now, direction: direction}
+		return
+	}
+	if now.Sub(c.linkHold.started) < holdDelay {
+		return
+	}
+	interval := 200 * time.Millisecond
+	if now.Sub(c.linkHold.started) > time.Second {
+		interval = 120 * time.Millisecond
+	}
+	if now.Sub(c.linkHold.lastStep) < interval {
+		return
+	}
+	c.moveLinkSelection(direction)
+	c.linkHold.lastStep = now
+}
+
+func (c *InputController) updateTableHold(direction int32, strength float64, now time.Time) {
+	if direction == 0 {
+		c.tableHold.active = false
+		return
+	}
+	scroller, ok := c.app.viewer.(interface{ ScrollTableHorizontally(int32) bool })
+	if !ok {
+		c.tableHold.active = false
+		return
+	}
+	if !c.tableHold.active || c.tableHold.direction != direction {
+		c.tableHold = scrollHold{active: true, started: now, lastStep: now, direction: direction}
+		scroller.ScrollTableHorizontally(direction)
+		return
+	}
+	if now.Sub(c.tableHold.started) < holdDelay {
+		return
+	}
+	// Each table-scroll command moves most of a viewport, so keep the repeat
+	// rate lower than vertical page scrolling and cap it to avoid overshooting.
+	rate := 1.5 + 2.5*strength
+	if now.Sub(c.tableHold.started) > time.Second {
+		rate *= 1.5
+	}
+	if rate > 4 {
+		rate = 4
+	}
+	interval := time.Duration(float64(time.Second) / rate)
+	if now.Sub(c.tableHold.lastStep) < interval {
+		return
+	}
+	scroller.ScrollTableHorizontally(direction)
+	c.tableHold.lastStep = now
 }
 
 func (c *InputController) updateTreeHold(direction int32, strength float64, now time.Time) {
@@ -299,30 +371,6 @@ func (c *InputController) updateTreeHold(direction int32, strength float64, now 
 		}
 	}
 	c.app.renderTree()
-	h.lastStep = now
-}
-
-func (c *InputController) updateDocumentHold(h *scrollHold, held bool, direction int32, strength float64, now time.Time) {
-	if !held {
-		h.active = false
-		return
-	}
-	if !h.active {
-		*h = scrollHold{active: true, started: now, lastStep: now, direction: direction}
-		return
-	}
-	if now.Sub(h.started) < holdDelay {
-		return
-	}
-	rate := 5 * math.Pow(2, math.Floor(now.Sub(h.started).Seconds())) * strength
-	interval := time.Duration(float64(time.Second) / rate)
-	if now.Sub(h.lastStep) < interval {
-		return
-	}
-	steps := int(now.Sub(h.lastStep) / interval)
-	for i := 0; i < steps; i++ {
-		c.app.scroller.ScrollBy(direction * scrollStep)
-	}
 	h.lastStep = now
 }
 

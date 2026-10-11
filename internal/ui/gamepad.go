@@ -74,6 +74,7 @@ type GamepadState struct {
 	leftX      AxisDebouncer
 	controller *sdl.GameController
 	leftYValue int16
+	leftXValue int16
 }
 
 func (g *GamepadState) SetController(controller *sdl.GameController) {
@@ -91,6 +92,13 @@ func (g *GamepadState) LeftY() int16 {
 	return g.leftYValue
 }
 
+func (g *GamepadState) LeftX() int16 {
+	if g.controller != nil {
+		return g.controller.Joystick().Axis(int(sdl.CONTROLLER_AXIS_LEFTX))
+	}
+	return g.leftXValue
+}
+
 // TranslateEvent processes a raw SDL event. If the event is a GameController event, it translates it to an Action and returns true.
 func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bool) {
 	switch e := event.(type) {
@@ -98,6 +106,8 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 		v := e.Value
 		if e.Axis == sdl.CONTROLLER_AXIS_LEFTY {
 			g.leftYValue = v
+		} else if e.Axis == sdl.CONTROLLER_AXIS_LEFTX {
+			g.leftXValue = v
 		}
 		// Handle triggers
 		switch e.Axis {
@@ -143,13 +153,8 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 				}
 				return ActionScrollDown, true
 			case sdl.CONTROLLER_AXIS_LEFTX:
-				if !g.leftX.Update(v, analogDeadZone) {
-					return ActionNone, true
-				}
-				if v < 0 {
-					return ActionSelectPrevLink, true
-				}
-				return ActionSelectNextLink, true
+				// Horizontal stick motion scrolls an overflowing table in Update.
+				return ActionNone, true
 			}
 		}
 
@@ -188,9 +193,15 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 			case sdl.CONTROLLER_BUTTON_RIGHTSHOULDER:
 				return ActionPageDown, true
 			case sdl.CONTROLLER_BUTTON_DPAD_UP:
-				return ActionScrollUp, true
+				if mode == modeTree {
+					return ActionScrollUp, true
+				}
+				return ActionSelectPrevLink, true
 			case sdl.CONTROLLER_BUTTON_DPAD_DOWN:
-				return ActionScrollDown, true
+				if mode == modeTree {
+					return ActionScrollDown, true
+				}
+				return ActionSelectNextLink, true
 			case sdl.CONTROLLER_BUTTON_DPAD_LEFT:
 				if mode == modeTree {
 					return ActionLeft, true

@@ -27,8 +27,10 @@ Project homepage: [dendec.github.io/zimlite](https://dendec.github.io/zimlite/)
 
 | Button | Action |
 |--|--| 
-| D-Pad Up / Down, Left Analog Stick Y | Scroll Up / Scroll Down |
-| D-Pad Left / Right, Left Analog Stick X | Select Prev Link / Select Next Link |
+| D-Pad Up / Left | Select previous link |
+| D-Pad Down / Right | Select next link |
+| Left Analog Stick Up / Down | Scroll article |
+| Left Analog Stick Left / Right | Scroll a wide table horizontally |
 | A | Open selected link |
 | B | Go back in history |
 | X | Toggle the article tree view / search |
