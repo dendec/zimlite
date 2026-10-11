@@ -1,6 +1,13 @@
 package i18n
 
 var enTranslations = map[string]string{
+	"tree.load_error":        "Cannot load article tree: %s",
+	"settings.renderer":      "🖼️ Article renderer",
+	"renderer.full":          "Full",
+	"renderer.simple":        "Simple",
+	"settings.renderer_note": "The full renderer automatically switches to the simple renderer if memory is low or an error occurs.",
+	"servo.loading":          "Full renderer: loading article…",
+	"servo.fallback":         "Full renderer unavailable; using simple renderer: %s",
 	// Menu
 	"menu.title":      "📖 Menu",
 	"menu.help":       "❓ Help",

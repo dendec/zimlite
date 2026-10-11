@@ -1,0 +1,11 @@
+diff --git a/components/fonts/platform/freetype/font_list.rs b/components/fonts/platform/freetype/font_list.rs
+--- a/components/fonts/platform/freetype/font_list.rs
++++ b/components/fonts/platform/freetype/font_list.rs
+@@ -221,5 +221,7 @@ pub fn fallback_font_families(options: FallbackFontSelectionOptions) -> Vec<&'static
+     families.push("FreeSans");
+     families.push("Symbola");
+     families.push("Droid Sans Fallback");
++    // Zimlite bundles Unifont for characters absent from firmware fonts.
++    families.push("Unifont");
+     families
+ }

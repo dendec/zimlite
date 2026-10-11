@@ -1,0 +1,16 @@
+.git
+**/.git
+dist
+/zimlite
+/zimlite-*
+native/servo-host/target
+lib/servo/target
+OmniOSK_sdl3
+gamepad-osk
+*.zim
+*.zim.part
+*.zim.info
+config.json
+library_cache.json
+lib/servo/
+native/

@@ -60,12 +60,12 @@ func NewInputController(app *App) *InputController {
 		sdl.SCANCODE_DOWN:     func() { app.scroller.ScrollBy(scrollStep) },
 		sdl.SCANCODE_S:        func() { app.scroller.ScrollBy(scrollStep) },
 		sdl.SCANCODE_KP_2:     func() { app.scroller.ScrollBy(scrollStep) },
-		sdl.SCANCODE_LEFT:     func() { app.links.SelectPrevLink() },
-		sdl.SCANCODE_A:        func() { app.links.SelectPrevLink() },
-		sdl.SCANCODE_KP_4:     func() { app.links.SelectPrevLink() },
-		sdl.SCANCODE_RIGHT:    func() { app.links.SelectNextLink() },
-		sdl.SCANCODE_D:        func() { app.links.SelectNextLink() },
-		sdl.SCANCODE_KP_6:     func() { app.links.SelectNextLink() },
+		sdl.SCANCODE_LEFT:     func() { c.moveLinkSelection(-1) },
+		sdl.SCANCODE_A:        func() { c.moveLinkSelection(-1) },
+		sdl.SCANCODE_KP_4:     func() { c.moveLinkSelection(-1) },
+		sdl.SCANCODE_RIGHT:    func() { c.moveLinkSelection(1) },
+		sdl.SCANCODE_D:        func() { c.moveLinkSelection(1) },
+		sdl.SCANCODE_KP_6:     func() { c.moveLinkSelection(1) },
 		sdl.SCANCODE_PAGEUP:   func() { app.scroller.ScrollPageUp() },
 		sdl.SCANCODE_PAGEDOWN: func() { app.scroller.ScrollPageDown() },
 		sdl.SCANCODE_SPACE:    func() { app.scroller.ScrollPageDown() },
@@ -97,6 +97,17 @@ func (c *InputController) openSelectedLink() {
 		c.markLinkVisited(url)
 		c.app.loader.NavigateLink(url)
 	}
+}
+
+func (c *InputController) moveLinkSelection(direction int32) {
+	if scroller, ok := c.app.viewer.(interface{ ScrollTableHorizontally(int32) bool }); ok && scroller.ScrollTableHorizontally(direction) {
+		return
+	}
+	if direction < 0 {
+		c.app.links.SelectPrevLink()
+		return
+	}
+	c.app.links.SelectNextLink()
 }
 
 func (c *InputController) markLinkVisited(url string) {
@@ -381,9 +392,9 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 	case ActionZoomOut:
 		c.zoom(-1)
 	case ActionSelectPrevLink:
-		app.links.SelectPrevLink()
+		c.moveLinkSelection(-1)
 	case ActionSelectNextLink:
-		app.links.SelectNextLink()
+		c.moveLinkSelection(1)
 	case ActionShowHelp:
 		_ = app.loader.OpenFile("virtual:help")
 	case ActionShowSettings:

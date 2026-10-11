@@ -45,3 +45,40 @@ Project homepage: [dendec.github.io/zimlite](https://dendec.github.io/zimlite/)
 make dist-portmaster
 # Output: dist/zimlite.zip
 ```
+
+## Article renderer
+
+Settings → Article renderer switches between the existing SDL renderer and
+Servo. SDL is the default. Servo renders the original HTML and CSS; article
+scripts and external network resources are disabled. Menus and Markdown keep
+using SDL. If Servo fails or exceeds its memory budget, the article falls back
+to SDL with a status message.
+
+The optional package includes the helper, CPU libraries, fonts, licenses and a
+private software Mesa runtime. Software rendering is the default while firmware
+GLES compatibility with the full SDL app is being validated. Setting
+`ZIMLITE_SERVO_CONTEXT=auto` opts into firmware GLES with software fallback when
+a context cannot be created. Nothing is installed into the
+firmware's library directories. A 1 GB device still needs available memory for
+the OS and viewer; large pages may reach the configured budgets.
+
+```shell
+make dist-portmaster-servo
+# Output: dist/zimlite-servo.zip
+```
+
+The build audits runtime symbols against glibc 2.30. Hardware acceptance and
+current compatibility limits are recorded in `docs/SERVO-PROTOTYPE-RESULTS.md`.
+
+For memory diagnostics, create `zimlite/servo/profile.enabled` and launch the
+port. Each run writes app events, Go memory, process/system memory and kernel
+messages into temporary RAM files, then archives them in
+`zimlite/profiles/<UTC-date>-<PID>/` after normal exit. Active logs disappear on
+reboot; copy them over SSH during investigation. Remove the flag to disable.
+See `docs/SERVO-PROFILING.md` for log fields and limits.
+
+When the optional Servo runtime is installed, the launcher stages the Go
+executable (~22 MiB) in `/tmp` before SDL startup. `KIWIX_APP_DIR` keeps
+configuration, catalogue cache and helper paths in the installation directory.
+The temporary executable is removed after exit. This avoids executing the
+Go binary from the handheld FUSE/exFAT partition while Servo starts.

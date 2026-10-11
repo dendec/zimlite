@@ -62,10 +62,16 @@ func renderErrorDoc(lang, section string, err error) (*document.Document, error)
 }
 
 const maxFeedSize = 10 << 20 // 10 MiB
+const catalogV2URL = "https://opds.library.kiwix.org/catalog/v2"
 
 func fetchFeed(urlStr string) (*AtomFeed, error) {
 	client := storage.HTTPClient(5 * time.Second)
-	resp, err := client.Get(urlStr)
+	req, err := http.NewRequest(http.MethodGet, urlStr, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "application/atom+xml")
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +79,9 @@ func fetchFeed(urlStr string) (*AtomFeed, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("GET %s: HTTP %d", urlStr, resp.StatusCode)
+	}
+	if strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/html") {
+		return nil, fmt.Errorf("catalog returned an HTML page instead of an OPDS feed (HTTP %d)", resp.StatusCode)
 	}
 
 	var feed AtomFeed
@@ -201,9 +210,12 @@ var (
 
 func getLibCache() *categoryCache {
 	libCacheOnce.Do(func() {
-		dir := "."
-		if exe, err := os.Executable(); err == nil {
-			dir = filepath.Dir(exe)
+		dir := os.Getenv("KIWIX_APP_DIR")
+		if dir == "" {
+			dir = "."
+			if exe, err := os.Executable(); err == nil {
+				dir = filepath.Dir(exe)
+			}
 		}
 		libCache = newCategoryCache(dir, 24*time.Hour)
 		libCache.load()
@@ -214,7 +226,7 @@ func getLibCache() *categoryCache {
 // --- pages ---
 
 func LibraryLanguagesPage(lang string) (*document.Document, error) {
-	feed, err := fetchFeed("https://browse.library.kiwix.org/catalog/v2/languages")
+	feed, err := fetchFeed(catalogV2URL + "/languages")
 	if err != nil {
 		return renderErrorDoc(lang, i18n.T(lang, "library.section_languages"), err)
 	}
@@ -265,7 +277,7 @@ type LibraryCategory struct {
 }
 
 func LibraryCategoriesPage(lang, catalogLang, name string) (*document.Document, error) {
-	categories, err := fetchFeed("https://browse.library.kiwix.org/catalog/v2/categories")
+	categories, err := fetchFeed(catalogV2URL + "/categories")
 	if err != nil {
 		return renderErrorDoc(lang, i18n.T(lang, "library.section_categories"), err)
 	}
@@ -457,5 +469,5 @@ func entriesURL(lang, category string, count, start int) string {
 	if start > 0 {
 		q.Set("start", fmt.Sprint(start))
 	}
-	return "https://browse.library.kiwix.org/catalog/v2/entries?" + q.Encode()
+	return catalogV2URL + "/entries?" + q.Encode()
 }

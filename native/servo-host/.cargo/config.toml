@@ -1,0 +1,8 @@
+[env]
+RUSTC_BOOTSTRAP = "crown,script,script_webgpu,script_bindings,style_tests,mozjs,mozjs_sys"
+
+[build]
+jobs = 2
+
+[resolver]
+incompatible-rust-versions = "fallback"

@@ -117,6 +117,23 @@ func (r *Reader) ArticleCount() int {
 	return int(C.zim_get_article_count(r.handle))
 }
 
+// ArticleAt reads a single title-index entry, not its article body.
+func (r *Reader) ArticleAt(index int) (document.ArticleEntry, error) {
+	if r.handle == nil || index < 0 || index > 2147483647 {
+		return document.ArticleEntry{}, errors.New("invalid article index")
+	}
+	entry := C.zim_get_article_at(r.handle, C.int(index))
+	if entry == nil {
+		return document.ArticleEntry{}, fmt.Errorf("read article index %d", index)
+	}
+	defer C.zim_entry_free(entry)
+	title := C.zim_entry_get_title(entry)
+	defer C.free(unsafe.Pointer(title))
+	path := C.zim_entry_get_path(entry)
+	defer C.free(unsafe.Pointer(path))
+	return document.ArticleEntry{Title: C.GoString(title), Path: C.GoString(path)}, nil
+}
+
 // ListArticles returns all article titles and paths in title order.
 // Uses libzim's iterByTitle() — only FRONT_ARTICLE entries, no JS/CSS/images.
 func (r *Reader) ListArticles() []document.ArticleEntry {
@@ -223,7 +240,15 @@ func (r *Reader) ResolveArticle(rawURL string, referrer string) ([]byte, string,
 }
 
 // GetResource retrieves raw bytes and mimetype of any ZIM entry (e.g. images, css).
+var ErrResourceTooLarge = errors.New("ZIM resource exceeds size limit")
+
 func (r *Reader) GetResource(path string) ([]byte, string, error) {
+	return r.GetResourceLimited(path, 0)
+}
+
+// GetResourceLimited rejects oversized entries before copying their contents.
+// A zero limit preserves the existing unrestricted reader behavior.
+func (r *Reader) GetResourceLimited(path string, limit uint64) ([]byte, string, error) {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 
@@ -233,7 +258,7 @@ func (r *Reader) GetResource(path string) ([]byte, string, error) {
 	}
 	defer C.zim_entry_free(entry)
 
-	return r.entryToData(entry)
+	return r.entryToDataLimited(entry, limit)
 }
 
 // ResolveResource searches namespaces to resolve a relative resource path.
@@ -269,11 +294,18 @@ func (r *Reader) ResolveResource(rawURL string) ([]byte, string, error) {
 }
 
 func (r *Reader) entryToData(entry C.zim_entry_t) ([]byte, string, error) {
+	return r.entryToDataLimited(entry, 0)
+}
+
+func (r *Reader) entryToDataLimited(entry C.zim_entry_t, limit uint64) ([]byte, string, error) {
 	item := C.zim_entry_get_item(entry, 1) // follow redirects
 	if item == nil {
 		return nil, "", errors.New("cannot get item")
 	}
 	defer C.zim_item_free(item)
+	if limit > 0 && uint64(C.zim_item_get_size(item)) > limit {
+		return nil, "", fmt.Errorf("%w: %d bytes", ErrResourceTooLarge, limit)
+	}
 
 	cMime := C.zim_item_get_mimetype(item)
 	mime := C.GoString(cMime)
@@ -288,4 +320,50 @@ func (r *Reader) entryToData(entry C.zim_entry_t) ([]byte, string, error) {
 	C.free(unsafe.Pointer(cContent))
 
 	return data, mime, nil
+}
+
+// ResourceInfo follows redirects without copying or decompressing entry data.
+func (r *Reader) ResourceInfo(name string) (canonical, mime string, size uint64, err error) {
+	cName := C.CString(name)
+	defer C.free(unsafe.Pointer(cName))
+	entry := C.zim_get_entry_by_path(r.handle, cName)
+	if entry == nil {
+		return "", "", 0, fmt.Errorf("resource %q: not found", name)
+	}
+	defer C.zim_entry_free(entry)
+	item := C.zim_entry_get_item(entry, 1)
+	if item == nil {
+		return "", "", 0, errors.New("cannot get resource item")
+	}
+	defer C.zim_item_free(item)
+	cPath := C.zim_item_get_path(item)
+	defer C.free(unsafe.Pointer(cPath))
+	cMime := C.zim_item_get_mimetype(item)
+	defer C.free(unsafe.Pointer(cMime))
+	if cPath == nil || cMime == nil {
+		return "", "", 0, errors.New("cannot get resource metadata")
+	}
+	return C.GoString(cPath), C.GoString(cMime), uint64(C.zim_item_get_size(item)), nil
+}
+
+// ResolveArticlePath resolves native links to the canonical browser document URL.
+func (r *Reader) ResolveArticlePath(rawURL, referrer string) (string, error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	decoded := u.Path
+	cleaned := strings.TrimPrefix(decoded, "/")
+	candidates := []string{decoded, cleaned}
+	if referrer != "" && !strings.HasPrefix(decoded, "/") {
+		candidates = append(candidates, path.Join(path.Dir(referrer), decoded))
+	}
+	candidates = append(candidates, path.Join(r.rootPrefix, cleaned))
+	for _, candidate := range candidates {
+		canonical, mime, _, err := r.ResourceInfo(candidate)
+		if err == nil && strings.HasPrefix(mime, "text/html") {
+			return canonical, nil
+		}
+	}
+	return "", fmt.Errorf("article not found: %s", rawURL)
 }

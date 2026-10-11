@@ -1,6 +1,13 @@
 package i18n
 
 var deTranslations = map[string]string{
+	"tree.load_error":        "Artikelbaum konnte nicht geladen werden: %s",
+	"settings.renderer":      "🖼️ Artikeldarstellung",
+	"renderer.full":          "Vollständig",
+	"renderer.simple":        "Einfach",
+	"settings.renderer_note": "Die vollständige Darstellung wechselt bei Speichermangel oder Fehlern automatisch zur einfachen Darstellung.",
+	"servo.loading":          "Vollständige Darstellung: Artikel wird geladen…",
+	"servo.fallback":         "Vollständige Darstellung nicht verfügbar; einfache Darstellung wird verwendet: %s",
 	// Menu
 	"menu.title":      "📖 Menü",
 	"menu.help":       "❓ Hilfe",

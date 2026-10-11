@@ -25,7 +25,7 @@ LDFLAGS      := -X 'github.com/dendec/zimlite/internal/storage.Version=$(VERSION
 .PHONY: dist-all dist-arm64 dist-windows dist-amd64 dist-portmaster deploy deploy-portmaster
 
 fmt:
-	gofmt -s -w .
+	gofmt -s -w cmd internal
 
 dist-all: dist-arm64 dist-amd64 dist-windows dist-portmaster
 
@@ -90,6 +90,19 @@ run: build
 info:
 	@echo "ZIM_LIB=$(ZIM_LIB)"
 
+# Servo feasibility probe. Does not change the normal reader build or launcher.
+.PHONY: servo-submodules servo-builder servo-probe
+servo-submodules:
+	git submodule update --init --recursive lib/servo
+
+servo-builder: servo-submodules
+	docker build -t zimlite-servo-probe -f Dockerfile.servo .
+
+servo-probe: $(ZIM_LIB)/libzim.a
+	@mkdir -p dist
+	$(GOFLAGS) CGO_CXXFLAGS="$(CGO_CXXFLAGS)" CGO_LDFLAGS="$(CGO_LDFLAGS)" \
+		$(GO) build -o dist/servo-probe ./cmd/servo-probe
+
 # ARM64 PortMaster distribution via Docker.
 DOCKER_IMAGE := zimlite-arm64
 DOCKER_FILE  := Dockerfile.arm64
@@ -143,7 +156,6 @@ dist-portmaster: dist-arm64
 	cp "portmaster/README.md" dist/portmaster_build/
 	cp "portmaster/gameinfo.xml" dist/portmaster_build/
 	cp "portmaster/screenshot.png" dist/portmaster_build/
-	cp "portmaster/screenshot.png" dist/portmaster_build/zimlite/cover.png
 	cp -r "portmaster/licenses" dist/portmaster_build/zimlite/
 	cp dist/zimlite/zimlite dist/portmaster_build/zimlite/
 	rm -f dist/zimlite.zip && cd dist/portmaster_build && zip -r ../zimlite.zip "Zimlite.sh" README.md gameinfo.xml port.json screenshot.png zimlite
@@ -154,3 +166,25 @@ deploy-portmaster: dist-portmaster
 	adb push dist/zimlite.zip $(PM_AUTOINSTALL)/
 	@echo "=== Zip deployed to autoinstall ==="
 
+# Optional Servo runtime. Artifact packaging fails if any CPU library needs GLIBC >2.30.
+.PHONY: servo-toolchain servo-runtime-arm64 dist-arm64-servo dist-portmaster-servo
+servo-toolchain:
+	docker build --target toolchain -t zimlite-servo-toolchain -f Dockerfile.servo .
+
+servo-runtime-arm64: servo-submodules servo-toolchain
+	docker build -t zimlite-servo-abi30 -f Dockerfile.servo-abi30 .
+	@mkdir -p dist/servo-runtime
+	@set -e; servo_container=$$(docker create zimlite-servo-abi30 /bin/true); \
+		trap 'docker rm "$$servo_container" >/dev/null' EXIT; \
+		docker cp "$$servo_container:/servo/." dist/servo-runtime/
+
+dist-arm64-servo: dist-arm64 servo-runtime-arm64
+	mkdir -p dist/zimlite/servo
+	cp -a dist/servo-runtime/. dist/zimlite/servo/
+
+dist-portmaster-servo: dist-portmaster servo-runtime-arm64
+	mkdir -p dist/portmaster_build/zimlite/servo
+	cp -a dist/servo-runtime/. dist/portmaster_build/zimlite/servo/
+	python3 -c 'import json,pathlib; p=pathlib.Path("dist/portmaster_build/port.json"); d=json.loads(p.read_text()); d["name"]="zimlite-servo.zip"; p.write_text(json.dumps(d,indent=2)+"\n")'
+	rm -f dist/zimlite-servo.zip
+	cd dist/portmaster_build && zip -r ../zimlite-servo.zip Zimlite.sh README.md gameinfo.xml port.json screenshot.png zimlite

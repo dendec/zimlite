@@ -19,12 +19,16 @@ int           zim_get_article_count(zim_archive_t archive);
 zim_entry_t   zim_get_main_entry(zim_archive_t archive);
 const char*   zim_get_main_page_redirect(zim_archive_t archive);
 zim_entry_t   zim_get_entry_by_path(zim_archive_t archive, const char* path);
+// One FRONT_ARTICLE entry by index in iterByTitle(), without listing the archive.
+zim_entry_t   zim_get_article_at(zim_archive_t archive, int index);
 const char*   zim_entry_get_path(zim_entry_t entry);
 char          zim_entry_get_namespace(zim_entry_t entry);
 const char*   zim_entry_get_title(zim_entry_t entry);
 zim_item_t    zim_entry_get_item(zim_entry_t entry, int follow);
 const char*   zim_item_get_content(zim_item_t item, int* size_out);
+unsigned long long zim_item_get_size(zim_item_t item);
 const char*   zim_item_get_mimetype(zim_item_t item);
+const char*   zim_item_get_path(zim_item_t item);
 void          zim_entry_free(zim_entry_t entry);
 void          zim_item_free(zim_item_t item);
 

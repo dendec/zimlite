@@ -1,21 +1,18 @@
 package ui
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
 	neturl "net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/dendec/zimlite/internal/document"
-	"github.com/dendec/zimlite/internal/html"
 	"github.com/dendec/zimlite/internal/i18n"
 	"github.com/dendec/zimlite/internal/menu"
 	"github.com/dendec/zimlite/internal/storage"
@@ -37,6 +34,9 @@ type VirtualPageGenerator func(path string, loader *DocumentLoader) (*document.D
 type DocumentLoader struct {
 	host              LoaderHost
 	docCache          map[string]*document.Document
+	cacheKeys         []string
+	locations         map[string]articleLocation
+	locationKeys      []string
 	zimReader         ZimReader
 	internetAvailable atomic.Bool
 	pendingMenuReload atomic.Bool
@@ -76,6 +76,9 @@ func (l *DocumentLoader) uiLang() string {
 }
 
 func (l *DocumentLoader) shutdown() {
+	if viewer, ok := l.host.getViewer().(ArticleViewer); ok {
+		viewer.StopArticle()
+	}
 	if l.zimReader != nil {
 		l.zimReader.Close()
 		l.zimReader = nil
@@ -113,6 +116,12 @@ func (l *DocumentLoader) applyPendingMenuReload() {
 
 // OpenFile loads a document and displays it. Supports .md, .html, .htm, .zim, and virtual:menu.
 func (l *DocumentLoader) OpenFile(pathStr string) error {
+	if !strings.HasPrefix(pathStr, "virtual:") {
+		switch strings.ToLower(filepath.Ext(pathStr)) {
+		case ".html", ".htm", ".zim":
+			return l.openArticleFile(pathStr)
+		}
+	}
 	var absPath string
 	var isZIM bool
 	var doc *document.Document
@@ -138,7 +147,7 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 		if err != nil {
 			return err
 		}
-		l.docCache[absPath] = doc
+		l.cacheDocument(absPath, doc)
 	} else {
 		absPath, err = filepath.Abs(pathStr)
 		if err != nil {
@@ -167,14 +176,14 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 					return err
 				}
 			}
-			l.docCache[absPath] = doc
+			l.cacheDocument(absPath, doc)
 		}
 	}
 
 	if isZIM && l.zimReader != nil {
 		mainPath := l.zimReader.MainPagePath()
 		navKey := "zim:" + mainPath
-		l.docCache[navKey] = doc
+		l.cacheDocument(navKey, doc)
 		l.host.getViewer().SetHasTree(l.zimReader.ArticleCount() > 1)
 		l.host.showDocument(doc, navKey)
 	} else {
@@ -212,6 +221,9 @@ func (l *DocumentLoader) loadResource(rawURL string) ([]byte, error) {
 }
 
 func (l *DocumentLoader) NavigateLink(url string) {
+	if l.navigateServoURL(url) {
+		return
+	}
 	switch {
 	case util.IsExternalURL(url):
 		l.openExternalURL(url)
@@ -339,6 +351,10 @@ func (l *DocumentLoader) handleSettings(url string) {
 }
 
 func (l *DocumentLoader) scrollToAnchor(anchor string) {
+	if viewer, ok := l.host.getViewer().(ArticleViewer); ok && viewer.ArticleActive() {
+		viewer.ScrollToAnchor(anchor)
+		return
+	}
 	if y, ok := l.host.getViewer().FindAnchorY(anchor); ok {
 		l.host.getScroller().ScrollToY(y)
 	} else {
@@ -346,36 +362,30 @@ func (l *DocumentLoader) scrollToAnchor(anchor string) {
 	}
 }
 
-func (l *DocumentLoader) navigateZIMArticle(url string) {
-	var referrer string
-	current := l.host.getNavigator().Current()
-	if strings.HasPrefix(current, "zim:") {
-		referrer = strings.TrimPrefix(current, "zim:")
+func (l *DocumentLoader) navigateZIMArticle(rawURL string) {
+	if l.zimReader == nil {
+		return
 	}
-	data, mime, err := l.zimReader.ResolveArticle(url, referrer)
+	current := l.locations[l.host.getNavigator().Current()]
+	resolver, ok := l.zimReader.(interface {
+		ResolveArticlePath(string, string) (string, error)
+	})
+	if !ok {
+		return
+	}
+	entry, err := resolver.ResolveArticlePath(rawURL, current.Entry)
 	if err != nil {
-		slog.Error("ResolveArticle failed", "url", url, "error", err)
+		slog.Error("Resolve article failed", "error", err)
 		return
 	}
-	if !strings.HasPrefix(mime, "text/html") {
-		slog.Warn("Unsupported article mime", "mime", mime)
+	location := articleLocation{File: l.zimReader.FilePath(), Entry: entry, ZIM: true}
+	if err = l.displayArticle(location, false); err != nil {
+		slog.Error("Open article failed", "error", err)
 		return
 	}
-	doc, err := html.Parse(bytes.NewReader(data))
-	if err != nil {
-		slog.Error("Parse error", "error", err)
-		return
+	if u, err := neturl.Parse(rawURL); err == nil && u.Fragment != "" {
+		l.scrollToAnchor(u.Fragment)
 	}
-	resolved := url
-	if !zim.HasNamespacePrefix(url) {
-		if referrer != "" {
-			resolved = path.Join(referrer, url)
-		}
-	}
-	navKey := "zim:" + resolved
-	l.docCache[navKey] = doc
-	l.host.showDocument(doc, navKey)
-	slog.Info("Navigated to article", "url", navKey)
 }
 
 func (l *DocumentLoader) openFileOrFallback(url string) {

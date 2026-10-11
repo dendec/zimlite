@@ -2,9 +2,21 @@
 package ui
 
 import (
+	"github.com/dendec/zimlite/internal/article"
 	"github.com/dendec/zimlite/internal/document"
 	"github.com/dendec/zimlite/internal/renderer"
 )
+
+// ArticleViewer is optional: virtual pages and Markdown keep using DocViewer.
+type ArticleViewer interface {
+	OpenArticle(article.Source, string) error
+	StopArticle()
+	ArticleActive() bool
+	ArticleError() error
+	PollArticleNavigation() string
+	ResolveArticleURL(string) (string, string, bool)
+	ScrollToAnchor(string)
+}
 
 // ZimReader is the interface for reading ZIM archives. Implemented by zim.Reader.
 type ZimReader interface {

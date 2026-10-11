@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"bytes"
+	"encoding/xml"
 	"image"
 	"image/draw"
 	"image/gif"
@@ -36,6 +37,7 @@ type ImageManager struct {
 	dimensions map[string]struct{ w, h int32 }
 	renderer   *sdl.Renderer
 	startTime  time.Time
+	dark       bool
 }
 
 const maxImageTextureEntries = 256
@@ -52,6 +54,38 @@ func NewImageManager(renderer *sdl.Renderer) *ImageManager {
 
 func (m *ImageManager) SetLoader(loader ResourceLoader) {
 	m.loader = loader
+}
+
+func (m *ImageManager) SetDark(dark bool) {
+	if m.dark != dark {
+		m.dark = dark
+		m.ClearCache()
+	}
+}
+
+// MathJax labels its SVG root with the formula title. Ordinary SVG pictures
+// must retain their original colors in both themes.
+func isFormulaSVG(data []byte) bool {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return false
+		}
+		root, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		if root.Name.Local != "svg" {
+			return false
+		}
+		for _, attr := range root.Attr {
+			if attr.Name.Local == "aria-labelledby" && strings.Contains(attr.Value, "MathJax-SVG-") {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 func isSVG(url string, data []byte) bool {
@@ -162,6 +196,15 @@ func (m *ImageManager) loadSVG(url string, data []byte) *sdl.Texture {
 	img := svg.Render(data)
 	if img == nil {
 		return nil
+	}
+	if m.dark && isFormulaSVG(data) {
+		// LunaSVG's convertToRGBA exports straight alpha for SDL blending.
+		// Invert RGB only; preserve transparency and antialiased edges.
+		for i := 0; i < len(img.Pix); i += 4 {
+			img.Pix[i] = 255 - img.Pix[i]
+			img.Pix[i+1] = 255 - img.Pix[i+1]
+			img.Pix[i+2] = 255 - img.Pix[i+2]
+		}
 	}
 	return m.createTextureFromImage(url, img)
 }

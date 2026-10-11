@@ -128,13 +128,15 @@ func HelpPage(lang string, hasGamepad bool) (*document.Document, error) {
 }
 
 type settingsData struct {
-	ThemeName string
-	ThemePrev string
-	ThemeNext string
-	FontSize  int
-	LangName  string
-	LangPrev  string
-	LangNext  string
+	RendererName string
+	RendererNext string
+	ThemeName    string
+	ThemePrev    string
+	ThemeNext    string
+	FontSize     int
+	LangName     string
+	LangPrev     string
+	LangNext     string
 }
 
 var themeIDs = []string{"light", "dark", "sepia"}
@@ -166,13 +168,19 @@ func SettingsPage(lang string, cfg config.Config) (*document.Document, error) {
 	}
 
 	data := settingsData{
-		ThemeName: i18n.T(lang, "theme."+themeIDs[themeIdx]),
-		ThemePrev: themeIDs[(themeIdx-1+n)%n],
-		ThemeNext: themeIDs[(themeIdx+1)%n],
-		FontSize:  cfg.FontSize,
-		LangName:  langName,
-		LangPrev:  langs[(langIdx-1+m)%m].Code,
-		LangNext:  langs[(langIdx+1)%m].Code,
+		RendererName: i18n.T(lang, "renderer.simple"),
+		RendererNext: config.ArticleRendererServo,
+		ThemeName:    i18n.T(lang, "theme."+themeIDs[themeIdx]),
+		ThemePrev:    themeIDs[(themeIdx-1+n)%n],
+		ThemeNext:    themeIDs[(themeIdx+1)%n],
+		FontSize:     cfg.FontSize,
+		LangName:     langName,
+		LangPrev:     langs[(langIdx-1+m)%m].Code,
+		LangNext:     langs[(langIdx+1)%m].Code,
+	}
+	if cfg.ArticleRenderer == config.ArticleRendererServo {
+		data.RendererName = i18n.T(lang, "renderer.full")
+		data.RendererNext = config.ArticleRendererNative
 	}
 
 	buf, err := executeTemplate(settingsTemplate, lang, data)
@@ -252,10 +260,15 @@ func formatProgress(current, total int64) string {
 // CheckInternet pings the Kiwix library catalog and returns true if reachable.
 func CheckInternet() bool {
 	client := storage.HTTPClient(4 * time.Second)
-	resp, err := client.Get("https://browse.library.kiwix.org/catalog/v2/languages")
+	req, err := http.NewRequest(http.MethodGet, catalogV2URL+"/languages", nil)
+	if err != nil {
+		return false
+	}
+	req.Header.Set("Accept", "application/atom+xml")
+	resp, err := client.Do(req)
 	if err != nil {
 		return false
 	}
 	defer func() { _ = resp.Body.Close() }()
-	return resp.StatusCode == http.StatusOK
+	return resp.StatusCode == http.StatusOK && !strings.Contains(strings.ToLower(resp.Header.Get("Content-Type")), "text/html")
 }

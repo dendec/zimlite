@@ -1,6 +1,7 @@
 package renderer
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/dendec/zimlite/internal/document"
@@ -46,6 +47,12 @@ func (r *Renderer) Render() {
 	r.hasActiveAnimations = false
 	r.sdlRenderer.SetDrawColor(r.theme.BgColor.R, r.theme.BgColor.G, r.theme.BgColor.B, r.theme.BgColor.A)
 	r.sdlRenderer.Clear()
+	if r.servo != nil {
+		r.renderServo()
+		r.renderStatusBar()
+		r.sdlRenderer.Present()
+		return
+	}
 	r.renderImages()
 	r.renderBlockquotes()
 	r.renderCodeBackgrounds()
@@ -370,6 +377,9 @@ func (r *Renderer) renderStatusBar() {
 }
 
 func (r *Renderer) computeRightStatus() string {
+	if r.servo != nil {
+		return fmt.Sprintf("Servo · %dpx · %d/%d", r.scrollY, r.selectedLink+1, r.servo.links)
+	}
 	if r.doc == nil {
 		return ""
 	}

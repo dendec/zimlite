@@ -1,6 +1,13 @@
 package i18n
 
 var zhTranslations = map[string]string{
+	"tree.load_error":        "无法加载文章目录：%s",
+	"settings.renderer":      "🖼️ 文章渲染器",
+	"renderer.full":          "完整",
+	"renderer.simple":        "简单",
+	"settings.renderer_note": "内存不足或发生错误时，完整渲染器会自动切换到简单渲染器。",
+	"servo.loading":          "完整渲染器：正在加载文章…",
+	"servo.fallback":         "完整渲染器不可用，正在使用简单渲染器：%s",
 	// Menu
 	"menu.title":      "📖 菜单",
 	"menu.help":       "❓ 帮助",

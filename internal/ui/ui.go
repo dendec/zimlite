@@ -2,18 +2,16 @@
 package ui
 
 import (
-	"bytes"
 	"fmt"
 	"log/slog"
 	neturl "net/url"
 	"path/filepath"
-	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/document"
-	"github.com/dendec/zimlite/internal/html"
+	"github.com/dendec/zimlite/internal/i18n"
 	"github.com/dendec/zimlite/internal/menu"
 	"github.com/dendec/zimlite/internal/renderer"
 	"github.com/dendec/zimlite/internal/trie"
@@ -118,8 +116,20 @@ func (app *App) goBack() {
 			app.enterTreeMode()
 			return
 		}
-		if doc, ok := app.loader.docCache[prevPath]; ok {
+		if _, ok := app.loader.locations[prevPath]; ok {
+			if err := app.loader.restoreArticle(prevPath, false); err != nil {
+				slog.Error("Cannot restore article", "error", err)
+			}
+			app.scroller.SetScrollY(state.ScrollY)
+			app.links.SetSelectedLinkIndex(state.SelectedLink)
+			app.navigator.UpdateCurrentState(state)
+		} else if doc, ok := app.loader.docCache[prevPath]; ok {
 			app.restoreCachedDocument(doc, state)
+		} else {
+			_ = app.loader.OpenFile(prevPath)
+			app.scroller.SetScrollY(state.ScrollY)
+			app.links.SetSelectedLinkIndex(state.SelectedLink)
+			app.navigator.UpdateCurrentState(state)
 		}
 	} else if app.loader.zimReader != nil && app.mode == modeDoc {
 		app.enterTreeMode()
@@ -135,13 +145,28 @@ func (app *App) enterTreeMode() {
 		return
 	}
 	app.saveCurrentState()
+	if viewer, ok := app.viewer.(ArticleViewer); ok {
+		viewer.StopArticle()
+	}
 	if app.navState == nil {
-		allArticles := app.loader.zimReader.ListArticles()
-		articles := filterDisplayableArticles(allArticles)
-		if len(articles) == 0 {
+		var root *trie.RadixNode
+		var err error
+		if index, ok := app.loader.zimReader.(trie.TitleIndex); ok {
+			root, err = trie.NewIndexedTree(index)
+		} else {
+			articles := filterDisplayableArticles(app.loader.zimReader.ListArticles())
+			root = trie.NewTree(articles)
+		}
+		if err != nil || len(root.Children()) == 0 {
+			if err := app.loader.restoreArticle(app.navigator.Current(), false); err != nil {
+				slog.Error("Restore article after empty tree", "error", err)
+			}
+			if err != nil {
+				slog.Error("Cannot load article tree", "error", err)
+				app.viewer.SetStatusOverride(i18n.Tf(app.config.Get().Language, "tree.load_error", err))
+			}
 			return
 		}
-		root := trie.NewTree(articles)
 		app.navState = trie.NewNavState(root)
 	}
 	app.mode = modeTree
@@ -177,8 +202,13 @@ func (app *App) exitTreeMode() {
 		app.navigator.Back()
 	}
 	prevPath := app.navigator.Current()
-	if doc, ok := app.loader.docCache[prevPath]; ok {
-		state := app.navigator.CurrentState()
+	state := app.navigator.CurrentState()
+	if _, ok := app.loader.locations[prevPath]; ok {
+		_ = app.loader.restoreArticle(prevPath, false)
+		app.scroller.SetScrollY(state.ScrollY)
+		app.links.SetSelectedLinkIndex(state.SelectedLink)
+		app.navigator.UpdateCurrentState(state)
+	} else if doc, ok := app.loader.docCache[prevPath]; ok {
 		app.restoreCachedDocument(doc, state)
 	}
 }
@@ -187,27 +217,10 @@ func (app *App) goHome() {
 	if app.loader.zimReader == nil {
 		return
 	}
-	mainPath := app.loader.zimReader.MainPagePath()
-	navKey := "zim:" + mainPath
-	doc, ok := app.loader.docCache[navKey]
-	if !ok {
-		data, mime, err := app.loader.zimReader.MainPage()
-		if err != nil {
-			slog.Error("goHome: cannot load main page", "error", err)
-			return
-		}
-		if !strings.HasPrefix(mime, "text/html") {
-			slog.Error("goHome: main page not HTML", "mime", mime)
-			return
-		}
-		doc, err = html.Parse(bytes.NewReader(data))
-		if err != nil {
-			slog.Error("goHome: cannot parse main page", "error", err)
-			return
-		}
-		app.loader.docCache[navKey] = doc
+	location := articleLocation{File: app.loader.zimReader.FilePath(), Entry: app.loader.zimReader.MainPagePath(), ZIM: true}
+	if err := app.loader.displayArticle(location, false); err != nil {
+		slog.Error("Cannot open main page", "error", err)
 	}
-	app.showDocument(doc, navKey)
 }
 
 func (app *App) toggleMode() {
@@ -249,6 +262,11 @@ func (app *App) renderTree() {
 		title = filepath.Base(app.loader.zimReader.FilePath())
 	}
 	app.scroller.SetTextLines(title, items)
+	if cursor := app.navState.Cursor; cursor != nil && cursor.LoadError() != nil {
+		app.viewer.SetStatusOverride(i18n.Tf(app.config.Get().Language, "tree.load_error", cursor.LoadError()))
+	} else {
+		app.viewer.SetStatusOverride("")
+	}
 	// Scroll to the cursor item if visible.
 	for i, item := range items {
 		if item.IsCursor {
@@ -265,7 +283,7 @@ func (app *App) OpenFile(path string) error {
 
 // ReloadCurrentDocument reloads the current document while preserving scroll and selection.
 func (app *App) ReloadCurrentDocument(doc *document.Document) {
-	app.loader.docCache[app.navigator.Current()] = doc
+	app.loader.cacheDocument(app.navigator.Current(), doc)
 	sy := app.scroller.CurrentScrollY()
 	sel := app.links.SelectedLinkIndex()
 	app.viewer.SetDocument(doc)
@@ -277,17 +295,20 @@ func (app *App) ReloadCurrentDocument(doc *document.Document) {
 
 // settingsChange describes the result of parsing a settings URL.
 type settingsChange struct {
-	Theme    string
-	Language string
-	FontSize int // delta
-	HasTheme bool
-	HasLang  bool
-	HasFs    bool
+	Theme       string
+	Renderer    string
+	Language    string
+	FontSize    int // delta
+	HasTheme    bool
+	HasRenderer bool
+	HasLang     bool
+	HasFs       bool
 }
 
 func parseSettingsURL(u *neturl.URL) settingsChange {
 	sc := settingsChange{
 		Theme:    u.Query().Get("theme"),
+		Renderer: u.Query().Get("renderer"),
 		Language: u.Query().Get("lang"),
 	}
 	fsParam := u.Query().Get("fontsize")
@@ -298,6 +319,7 @@ func parseSettingsURL(u *neturl.URL) settingsChange {
 			sc.HasFs = true
 		}
 	}
+	sc.HasRenderer = sc.Renderer == config.ArticleRendererNative || sc.Renderer == config.ArticleRendererServo
 	sc.HasTheme = sc.Theme != ""
 	sc.HasLang = sc.Language != ""
 	return sc
@@ -305,6 +327,10 @@ func parseSettingsURL(u *neturl.URL) settingsChange {
 
 func applySettings(cfg config.Provider, sc settingsChange) (themeChanged, anyChanged bool) {
 	cfg.Update(func(c *config.Config) {
+		if sc.HasRenderer && sc.Renderer != c.ArticleRenderer {
+			c.ArticleRenderer = sc.Renderer
+			anyChanged = true
+		}
 		if sc.HasTheme && sc.Theme != c.Theme {
 			c.Theme = sc.Theme
 			themeChanged = true
@@ -382,6 +408,7 @@ func (app *App) Run() {
 	}()
 
 	for app.running.Load() {
+		app.pollArticle()
 		event := sdl.WaitEventTimeout(int(frameDuration / time.Millisecond))
 		if event == nil {
 			app.input.Update(time.Now())

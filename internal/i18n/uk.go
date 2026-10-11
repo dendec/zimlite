@@ -1,6 +1,13 @@
 package i18n
 
 var ukTranslations = map[string]string{
+	"tree.load_error":        "Не вдалося завантажити дерево статей: %s",
+	"settings.renderer":      "🖼️ Рендеринг статті",
+	"renderer.full":          "Повний",
+	"renderer.simple":        "Простий",
+	"settings.renderer_note": "Повний рендерер автоматично перемикається на простий за нестачі пам’яті або в разі помилок.",
+	"servo.loading":          "Повний рендерер: завантаження статті…",
+	"servo.fallback":         "Повний рендерер недоступний; використовується простий: %s",
 	// Menu
 	"menu.title":      "📖 Меню",
 	"menu.help":       "❓ Довідка",

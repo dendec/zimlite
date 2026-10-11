@@ -60,6 +60,9 @@ func (n *SimpleNavigator) Open(id string) {
 		n.history = n.history[:n.index+1]
 	}
 	n.history = append(n.history, HistoryItem{ID: id, State: document.ViewState{ScrollY: 0, SelectedLink: -1}})
+	if len(n.history) > 32 {
+		n.history = append([]HistoryItem(nil), n.history[len(n.history)-32:]...)
+	}
 	n.index = len(n.history) - 1
 }
 

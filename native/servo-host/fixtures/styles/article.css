@@ -1,0 +1,7 @@
+body { font-family: sans-serif; margin: 20px; color: #162b39; background: #f6f2e8; }
+h1 { font-size: 26px; border-bottom: 4px solid #00a070; }
+table { border-collapse: collapse; width: 85%; margin-top: 12px; }
+th, td { border: 1px solid #687b85; padding: 6px 12px; text-align: left; }
+th { background: #d7eadf; }
+img { float: right; margin: 8px; }
+a { color: #005cad; }

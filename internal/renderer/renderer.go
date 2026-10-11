@@ -11,6 +11,7 @@ import (
 
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/document"
+	engine "github.com/dendec/zimlite/internal/servo"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -191,7 +192,9 @@ type Renderer struct {
 	controller  *sdl.GameController
 	fonts       [fontCount]fontSlot
 
-	layout PageLayout
+	layout     PageLayout
+	servo      *servoView
+	servoError error
 
 	treeItems []TreeItem // cached for theme toggle
 
@@ -366,6 +369,7 @@ func (r *Renderer) GameController() *sdl.GameController {
 }
 
 func (r *Renderer) Destroy() {
+	r.StopArticle()
 	r.ClearCache()
 	if r.controller != nil {
 		r.controller.Close()
@@ -393,6 +397,7 @@ func (r *Renderer) Destroy() {
 }
 
 func (r *Renderer) SetDocument(doc *document.Document) {
+	r.StopArticle()
 	r.doc = doc
 	r.scrollY = 0
 	r.selectedLink = -1
@@ -454,6 +459,11 @@ func (r *Renderer) applyThemeByIndex() {
 	case 2:
 		r.theme = SepiaTheme()
 	}
+	r.imgManager.SetDark(!r.IsLight())
+	if r.servo != nil {
+		r.sendServoTheme()
+		return
+	}
 	r.relayout()
 	r.relayoutTextLines()
 }
@@ -465,6 +475,10 @@ func (r *Renderer) IsLight() bool {
 
 func (r *Renderer) Relayout() {
 	r.width, r.height = r.window.GetSize()
+	if r.servo != nil {
+		r.resizeServo()
+		return
+	}
 	r.relayout()
 }
 
@@ -472,6 +486,7 @@ func (r *Renderer) Relayout() {
 
 // SetTextLines configures the renderer for simple text-line display mode.
 func (r *Renderer) SetTextLines(title string, items []TreeItem) {
+	r.StopArticle()
 	r.treeItems = items
 	r.layout = PageLayout{}
 	r.doc = nil
@@ -539,10 +554,18 @@ func (r *Renderer) ScrollToLine(lineIdx int) {
 
 // --- Link API ---
 
-func (r *Renderer) LinkCount() int  { return len(r.layout.links) }
+func (r *Renderer) LinkCount() int {
+	if r.servo != nil {
+		return r.servo.links
+	}
+	return len(r.layout.links)
+}
 func (r *Renderer) SelectNextLink() { r.moveLink(+1) }
 func (r *Renderer) SelectPrevLink() { r.moveLink(-1) }
 func (r *Renderer) SelectedLinkURL() string {
+	if r.servo != nil {
+		return r.servo.selectedURL
+	}
 	if r.selectedLink < 0 || r.selectedLink >= len(r.layout.links) {
 		return ""
 	}
@@ -554,12 +577,21 @@ func (r *Renderer) SelectedLinkIndex() int {
 }
 
 func (r *Renderer) SetSelectedLinkIndex(idx int) {
+	if r.servo != nil {
+		r.selectedLink = idx
+		r.servo.selectedURL = ""
+		r.servoSend(engine.Command{Op: "select", Value: int32(idx)})
+		return
+	}
 	r.selectedLink = idx
 	r.clampSelection()
 }
 
 // MarkLinkVisited records a URL (exact match) as visited and triggers relayout for immediate color update.
 func (r *Renderer) MarkLinkVisited(url string) {
+	if r.servo != nil {
+		return
+	}
 	if url == "" {
 		return
 	}
@@ -616,6 +648,20 @@ func backwardLinkIdx(links []linkEntry, top, bottom int32) int {
 }
 
 func (r *Renderer) moveLink(delta int) {
+	if r.servo != nil {
+		n := r.servo.links
+		if n > 0 {
+			idx := r.selectedLink + delta
+			if idx < 0 {
+				idx = n - 1
+			}
+			if idx >= n {
+				idx = 0
+			}
+			r.SetSelectedLinkIndex(idx)
+		}
+		return
+	}
 	if len(r.layout.links) == 0 {
 		return
 	}
@@ -676,27 +722,51 @@ func (r *Renderer) clampSelection() {
 // --- Scroll API ---
 
 func (r *Renderer) ScrollBy(delta int32) {
+	if r.servo != nil {
+		h := r.height - r.getStatusBarHeight()
+		if h > 0 {
+			delta = int32(float64(delta) * float64(r.servo.height) / float64(h) / (float64(r.baseFontSize) / 16))
+		}
+		r.servoSend(engine.Command{Op: "scroll", Value: delta})
+		return
+	}
 	r.scrollY += delta
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollPageUp() {
+	if r.servo != nil {
+		r.ScrollBy(-(r.height - r.getStatusBarHeight()) * 3 / 4)
+		return
+	}
 	r.scrollY -= (r.height - r.getStatusBarHeight()) * 3 / 4
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollPageDown() {
+	if r.servo != nil {
+		r.ScrollBy((r.height - r.getStatusBarHeight()) * 3 / 4)
+		return
+	}
 	r.scrollY += (r.height - r.getStatusBarHeight()) * 3 / 4
 	r.clampScroll()
 }
 
-func (r *Renderer) ScrollToTop() { r.scrollY = 0 }
+func (r *Renderer) ScrollToTop() { r.ScrollToY(0) }
 func (r *Renderer) ScrollToBottom() {
+	if r.servo != nil {
+		r.SetScrollY(2147483647)
+		return
+	}
 	r.scrollY = r.layout.totalHeight - (r.height - r.getStatusBarHeight())
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollToY(y int32) {
+	if r.servo != nil {
+		r.SetScrollY(y)
+		return
+	}
 	r.scrollY = y - r.marginY
 	r.clampScroll()
 }
@@ -706,6 +776,11 @@ func (r *Renderer) CurrentScrollY() int32 {
 }
 
 func (r *Renderer) SetScrollY(scrollY int32) {
+	if r.servo != nil {
+		r.scrollY = scrollY
+		r.servoSend(engine.Command{Op: "scroll_to", Value: scrollY})
+		return
+	}
 	r.scrollY = scrollY
 	r.clampScroll()
 }
@@ -782,6 +857,14 @@ func (r *Renderer) clampScroll() {
 }
 
 func (r *Renderer) HandleClick(mx, my int32) string {
+	if r.servo != nil {
+		h := r.height - r.getStatusBarHeight()
+		if mx >= 0 && my >= 0 && mx < r.width && my < h {
+			zoom := float64(r.baseFontSize) / 16
+			r.servoSend(engine.Command{Op: "click", X: int32(float64(mx) * float64(r.servo.width) / float64(r.width) / zoom), Y: int32(float64(my) * float64(r.servo.height) / float64(h) / zoom)})
+		}
+		return ""
+	}
 	docY := my + r.scrollY
 	startIdx := sort.Search(len(r.layout.links), func(i int) bool {
 		rects := r.layout.links[i].rects
@@ -873,6 +956,11 @@ func (r *Renderer) Zoom(delta int) error {
 	r.textCache.DestroyAll()
 
 	// Recalculate document layout with new font sizes
+	if r.servo != nil {
+		r.resizeServo()
+		r.servoSend(engine.Command{Op: "zoom", Scale: float32(r.baseFontSize) / 16})
+		return nil
+	}
 	r.relayout()
 	return nil
 }
@@ -905,6 +993,9 @@ func (r *Renderer) HasAnimations() bool {
 }
 
 func (r *Renderer) HandleMouseMove(mx, my int32) {
+	if r.servo != nil {
+		return
+	}
 	docY := my + r.scrollY
 	// On first mouse event, mark pointer present and deselect.
 	if !r.hasPointer {

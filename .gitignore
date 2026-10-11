@@ -7,6 +7,7 @@
 
 # Build output
 /dist/
+/native/servo-host/target/
 
 # Go
 vendor/

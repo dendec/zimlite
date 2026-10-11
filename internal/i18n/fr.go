@@ -1,6 +1,13 @@
 package i18n
 
 var frTranslations = map[string]string{
+	"tree.load_error":        "Impossible de charger l’arborescence des articles : %s",
+	"settings.renderer":      "🖼️ Rendu des articles",
+	"renderer.full":          "Complet",
+	"renderer.simple":        "Simple",
+	"settings.renderer_note": "Le rendu complet passe automatiquement au rendu simple si la mémoire est insuffisante ou en cas d’erreur.",
+	"servo.loading":          "Rendu complet : chargement de l’article…",
+	"servo.fallback":         "Rendu complet indisponible ; utilisation du rendu simple : %s",
 	// Menu
 	"menu.title":      "📖 Menu",
 	"menu.help":       "❓ Aide",

@@ -1,6 +1,13 @@
 package i18n
 
 var ruTranslations = map[string]string{
+	"tree.load_error":        "Не удалось загрузить дерево статей: %s",
+	"settings.renderer":      "🖼️ Рендеринг статьи",
+	"renderer.full":          "Полный",
+	"renderer.simple":        "Простой",
+	"settings.renderer_note": "Полный рендерер автоматически переключается на простой при нехватке памяти или ошибках.",
+	"servo.loading":          "Полный рендерер: загрузка статьи…",
+	"servo.fallback":         "Полный рендерер недоступен; используется простой: %s",
 	// Menu
 	"menu.title":      "📖 Меню",
 	"menu.help":       "❓ Помощь",

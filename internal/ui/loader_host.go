@@ -3,6 +3,7 @@ package ui
 import (
 	"net/url"
 
+	"github.com/dendec/zimlite/internal/article"
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/document"
 )
@@ -11,6 +12,7 @@ import (
 // This breaks the bidirectional dependency: loader depends on the interface, not *App.
 type LoaderHost interface {
 	showDocument(doc *document.Document, navKey string)
+	showArticle(article.Source, string, string) error
 	getNavigator() DocNavigator
 	getViewer() DocViewer
 	getScroller() Scroller

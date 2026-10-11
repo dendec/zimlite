@@ -1,6 +1,13 @@
 package i18n
 
 var idTranslations = map[string]string{
+	"tree.load_error":        "Tidak dapat memuat pohon artikel: %s",
+	"settings.renderer":      "🖼️ Perender artikel",
+	"renderer.full":          "Lengkap",
+	"renderer.simple":        "Sederhana",
+	"settings.renderer_note": "Perender lengkap otomatis beralih ke perender sederhana jika memori tidak cukup atau terjadi kesalahan.",
+	"servo.loading":          "Perender lengkap: memuat artikel…",
+	"servo.fallback":         "Perender lengkap tidak tersedia; menggunakan perender sederhana: %s",
 	// Menu
 	"menu.title":      "📖 Menu",
 	"menu.help":       "❓ Bantuan",

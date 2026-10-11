@@ -2,6 +2,9 @@
 # Builds libzim from source with GCC 10 for ABI compatibility.
 FROM debian:bullseye-slim
 
+RUN sed -i 's@deb.debian.org/debian-security@archive.debian.org/debian-security@g' /etc/apt/sources.list && \
+    printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99archive
+
 RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
     && wget -q https://go.dev/dl/go1.25.4.linux-amd64.tar.gz -O /tmp/go.tar.gz \
     && tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz \
@@ -51,7 +54,15 @@ RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
     go build -ldflags="-s -w" -o zimlite ./cmd/zimlite \
     && aarch64-linux-gnu-strip zimlite
 
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
+    CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ \
+    PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
+    CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -I${ZIM_INC}" \
+    CGO_LDFLAGS="-L${ZIM_LIB} -L/usr/lib/aarch64-linux-gnu -Wl,-Bstatic -lzim -lzstd -llzma -Wl,-Bdynamic -lz -lpthread" \
+    go build -ldflags="-s -w" -o servo-probe ./cmd/servo-probe
+
 RUN mkdir -p /dist/zimlite \
-    && cp zimlite /dist/zimlite/
+    && cp zimlite /dist/zimlite/ \
+    && cp servo-probe /dist/
 
 RUN echo "=== Dist ===" && find /dist -type f -exec ls -lh {} \;

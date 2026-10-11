@@ -10,14 +10,17 @@ import (
 
 // Config represents the application settings.
 type Config struct {
-	Language string `json:"language"`
-	Theme    string `json:"theme"`
-	FontSize int    `json:"font_size"`
+	Language        string `json:"language"`
+	Theme           string `json:"theme"`
+	FontSize        int    `json:"font_size"`
+	ArticleRenderer string `json:"article_renderer"`
 }
 
 const (
-	MinFontSize = 10
-	MaxFontSize = 32
+	MinFontSize           = 10
+	MaxFontSize           = 32
+	ArticleRendererNative = "native"
+	ArticleRendererServo  = "servo"
 )
 
 // Provider abstracts config access for dependency injection.
@@ -45,9 +48,10 @@ var (
 // Default returns a configuration with sensible defaults.
 func Default() Config {
 	return Config{
-		Language: "en",
-		Theme:    "dark",
-		FontSize: 16,
+		Language:        "en",
+		Theme:           "dark",
+		FontSize:        16,
+		ArticleRenderer: ArticleRendererNative,
 	}
 }
 
@@ -77,6 +81,9 @@ func Update(mutate func(c *Config)) Config {
 
 // configFilePath returns the absolute path to the config.json file.
 func configFilePath() string {
+	if dir := os.Getenv("KIWIX_APP_DIR"); dir != "" {
+		return filepath.Join(dir, "config.json")
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return "config.json"
@@ -105,6 +112,9 @@ func Load() {
 		slog.Error("Failed to parse config file, using defaults", "error", err)
 	} else {
 		slog.Info("Config loaded successfully", "path", path)
+	}
+	if currentConfig.ArticleRenderer != ArticleRendererServo {
+		currentConfig.ArticleRenderer = ArticleRendererNative
 	}
 }
 

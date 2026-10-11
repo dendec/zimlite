@@ -1,6 +1,13 @@
 package i18n
 
 var itTranslations = map[string]string{
+	"tree.load_error":        "Impossibile caricare l’albero degli articoli: %s",
+	"settings.renderer":      "🖼️ Rendering degli articoli",
+	"renderer.full":          "Completo",
+	"renderer.simple":        "Semplice",
+	"settings.renderer_note": "Il rendering completo passa automaticamente a quello semplice se la memoria è insufficiente o si verifica un errore.",
+	"servo.loading":          "Rendering completo: caricamento dell’articolo…",
+	"servo.fallback":         "Rendering completo non disponibile; uso del rendering semplice: %s",
 	// Menu
 	"menu.title":      "📖 Menu",
 	"menu.help":       "❓ Aiuto",

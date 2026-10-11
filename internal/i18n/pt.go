@@ -1,6 +1,13 @@
 package i18n
 
 var ptTranslations = map[string]string{
+	"tree.load_error":        "Não foi possível carregar a árvore de artigos: %s",
+	"settings.renderer":      "🖼️ Renderizador de artigos",
+	"renderer.full":          "Completo",
+	"renderer.simple":        "Simples",
+	"settings.renderer_note": "O renderizador completo muda automaticamente para o simples se faltar memória ou ocorrer um erro.",
+	"servo.loading":          "Renderizador completo: carregando artigo…",
+	"servo.fallback":         "Renderizador completo indisponível; usando o simples: %s",
 	// Menu
 	"menu.title":      "📖 Menu",
 	"menu.help":       "❓ Ajuda",
