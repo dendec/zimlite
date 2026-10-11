@@ -72,12 +72,18 @@ They do not verify a new handheld build, controller mappings on every device,
 or native GPU error paths. Rust compilation and device deployment were not run
 as part of this review.
 
-Memory protection is still a sampled guard for Servo, not a hard memory cap for
-the whole application. Native libzim decompression and the simple renderer's
-image decoding/GIF storage can allocate beyond the HTTP/frame budgets. This
-requires a separate memory hardening pass before claiming a strict 1 GB resource
-guarantee. A blocked storage read cannot be cancelled by the Go watchdog; source
-shutdown deliberately waits for that native read to preserve lifecycle safety.
+The subsequent handheld memory hardening pass adds adaptive physical-memory
+budgets, earlier cancellation, bounded simple-image decoding/GIF storage,
+asynchronous source cleanup, and fallback from retained HTML. ARM64 compilation
+and regression/race checks pass; crash snapshots are now saved during execution.
+See `SERVO-PROFILING.md` for the policy and diagnostics.
+
+Memory protection remains sampled rather than a hard cap for the whole
+application. Native libzim decompression and uninterruptible kernel/storage
+waits remain outside the watchdog's control. Source cleanup waits for an active
+native read asynchronously to preserve safety without blocking the SDL thread.
+These changes do not establish a strict 1 GB resource guarantee or prove the
+reported handheld hang resolved without reproducing it on the device.
 
 The global configuration provider and library cache remain architectural debt.
 Their existing interfaces permit incremental isolation. Neither requires

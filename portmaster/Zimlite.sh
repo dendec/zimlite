@@ -23,11 +23,13 @@ cd "$GAMEDIR"
 [ -f "$GAMEDIR/log.txt" ] && cp "$GAMEDIR/log.txt" "$GAMEDIR/log.previous.txt"
 profile_monitor_pid=''
 if [ "${ZIMLITE_PROFILE:-0}" = 1 ] || [ -f "$GAMEDIR/servo/profile.enabled" ]; then
-  profile_archive_dir="$GAMEDIR/profiles/$(date -u '+%Y%m%dT%H%M%SZ')-$$"
+	profile_archive_dir="$GAMEDIR/profiles/$(date -u '+%Y%m%dT%H%M%SZ')-$$"
   export KIWIX_PROFILE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/zimlite-profile.XXXXXX")
   mkdir -p "$KIWIX_PROFILE_DIR"
   exec > >(tee "$KIWIX_PROFILE_DIR/app.log") 2>&1
-  sh "$GAMEDIR/servo/profile.sh" "$$" "$KIWIX_PROFILE_DIR" &
+  mkdir -p "$profile_archive_dir"
+  printf 'RUNNING ram_logs=%s\n' "$KIWIX_PROFILE_DIR" > "$profile_archive_dir/run-state.txt"
+  sh "$GAMEDIR/servo/profile.sh" "$$" "$KIWIX_PROFILE_DIR" "$profile_archive_dir" &
   profile_monitor_pid=$!
   echo "Profiling: $KIWIX_PROFILE_DIR"
 else
@@ -61,6 +63,7 @@ if [ -n "$profile_monitor_pid" ]; then
   wait "$profile_monitor_pid" 2>/dev/null || true
   mkdir -p "$profile_archive_dir"
   if cp "$KIWIX_PROFILE_DIR"/* "$profile_archive_dir/" && cp "$KIWIX_PROFILE_DIR/app.log" "$GAMEDIR/log.txt"; then
+    printf 'COMPLETE\n' > "$profile_archive_dir/run-state.txt"
     rm -rf -- "$KIWIX_PROFILE_DIR"
     echo "Profile archived: $profile_archive_dir"
   else

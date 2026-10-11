@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/url"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/dendec/zimlite/internal/document"
 	"github.com/dendec/zimlite/internal/html"
 	"github.com/dendec/zimlite/internal/i18n"
+	"github.com/dendec/zimlite/internal/memory"
 	"github.com/dendec/zimlite/internal/profile"
 	"github.com/dendec/zimlite/internal/zim"
 )
@@ -109,6 +111,11 @@ func (l *DocumentLoader) openArticleFile(filename string) error {
 func (l *DocumentLoader) displayArticle(location articleLocation, forceNative bool) error {
 	started := time.Now()
 	profile.Mark("article.open.begin", map[string]any{"file": location.File, "entry": location.Entry, "zim": location.ZIM, "force_native": forceNative})
+	key := l.locationKey(location)
+	if forceNative && l.fallbackKey == key && l.fallbackHTML != nil {
+		profile.Mark("article.fallback.cached_html", map[string]any{"bytes": len(l.fallbackHTML)})
+		return l.showSimpleArticle(key, l.fallbackHTML, nil)
+	}
 	var source article.Source
 	var err error
 	if location.ZIM {
@@ -149,11 +156,12 @@ func (l *DocumentLoader) displayArticle(location articleLocation, forceNative bo
 		_ = source.Close()
 		return fmt.Errorf("unsupported article MIME: %s", resource.MIME)
 	}
-	key := l.locationKey(location)
+	key = l.locationKey(location)
 	l.rememberLocation(key, location)
 	l.host.getViewer().SetHasTree(location.ZIM && l.zimReader.ArticleCount() > 1)
 	var fallback error
 	if !forceNative && l.host.getConfig().Get().ArticleRenderer == config.ArticleRendererServo {
+		l.fallbackKey, l.fallbackHTML = key, resource.Data
 		fallback = l.host.showArticle(source, location.Entry, key)
 		if fallback == nil {
 			return nil
@@ -162,10 +170,21 @@ func (l *DocumentLoader) displayArticle(location articleLocation, forceNative bo
 	} else {
 		_ = source.Close()
 	}
-	doc, err := html.Parse(bytes.NewReader(resource.Data))
+	if fallback != nil {
+		l.releaseArticleCaches()
+	}
+	return l.showSimpleArticle(key, resource.Data, fallback)
+}
+
+func (l *DocumentLoader) showSimpleArticle(key string, data []byte, fallback error) error {
+	started := time.Now()
+	profile.Mark("article.simple.parse.begin", map[string]any{"bytes": len(data)})
+	doc, err := html.Parse(bytes.NewReader(data))
 	if err != nil {
 		return err
 	}
+	l.fallbackKey, l.fallbackHTML = "", nil
+	profile.Mark("article.simple.parse.end", map[string]any{"elapsed_ms": time.Since(started).Milliseconds()})
 	l.cacheDocument(key, doc)
 	l.host.showDocument(doc, key)
 	if fallback != nil {
@@ -173,6 +192,17 @@ func (l *DocumentLoader) displayArticle(location articleLocation, forceNative bo
 		l.host.getViewer().SetStatusOverride(i18n.Tf(l.uiLang(), "servo.fallback", fallback.Error()))
 	}
 	return nil
+}
+
+func (l *DocumentLoader) releaseArticleCaches() {
+	clear(l.docCache)
+	l.cacheKeys = nil
+	before, _ := memory.ReadSystem()
+	// The helper and textures have been stopped first. Return unused Go heap
+	// pages before building the fallback's Markdown/document layout.
+	debug.FreeOSMemory()
+	after, _ := memory.ReadSystem()
+	profile.Mark("article.memory.released", map[string]any{"available_before_kib": before.AvailableKiB, "available_after_kib": after.AvailableKiB})
 }
 func (l *DocumentLoader) restoreArticle(key string, forceNative bool) error {
 	if location, ok := l.locations[key]; ok {
@@ -222,11 +252,14 @@ func (app *App) pollArticle() {
 		profile.Mark("article.fallback", map[string]any{"error": err.Error()})
 		state := document.ViewState{ScrollY: app.scroller.CurrentScrollY(), SelectedLink: app.links.SelectedLinkIndex()}
 		viewer.StopArticle()
+		app.loader.releaseArticleCaches()
+		profile.Mark("article.fallback.helper_stopped", nil)
 		if fallbackErr := app.loader.restoreArticle(app.navigator.Current(), true); fallbackErr != nil {
 			slog.Error("Cannot restore SDL article", "error", fallbackErr)
 		} else {
 			app.scroller.SetScrollY(state.ScrollY)
 			app.links.SetSelectedLinkIndex(state.SelectedLink)
+			profile.Mark("article.fallback.ready", nil)
 		}
 		app.viewer.SetStatusOverride(i18n.Tf(app.config.Get().Language, "servo.fallback", err.Error()))
 		return

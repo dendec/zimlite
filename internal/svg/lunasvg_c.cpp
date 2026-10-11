@@ -2,10 +2,18 @@
 #include "lunasvg.h"
 #include <stdlib.h>
 #include <string.h>
+#include <cmath>
 
 extern "C" {
 
 static void* render_to_bitmap(lunasvg::Document* document, uint32_t width, uint32_t height, int* out_w, int* out_h) {
+    // Reject before LunaSVG allocates the native bitmap, not after readback.
+    double w_budget = width ? width : std::ceil(document->width());
+    double h_budget = height ? height : std::ceil(document->height());
+    if (!std::isfinite(w_budget) || !std::isfinite(h_budget) || w_budget <= 0 || h_budget <= 0 ||
+        w_budget * h_budget > 1024.0 * 1024.0) {
+        return NULL;
+    }
     auto bitmap = document->renderToBitmap(width, height);
     if (!bitmap.valid()) {
         return NULL;

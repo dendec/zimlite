@@ -13,18 +13,20 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/dendec/zimlite/internal/article"
+	"github.com/dendec/zimlite/internal/memory"
 	"github.com/dendec/zimlite/internal/profile"
 )
 
 const maxEventBytes = 64 << 10
 const maxCommandBytes = 8 << 10
-const minAvailableMemoryKiB int64 = 50 * 1024
+
+// Keep at most one helper/source alive, including deferred storage cleanup.
+var activeSessions atomic.Int32
 
 // Command contains semantic viewer operations, never arbitrary scripts.
 type Command struct {
@@ -58,7 +60,8 @@ type Session struct {
 	States     chan Event
 	Navigation chan Event
 	Errors     chan error
-	Done       chan struct{}
+	Done       chan struct{} // Resource cleanup completed.
+	stopped    chan struct{} // Helper exited and HTTP connections were aborted.
 	commands   chan []byte
 	cancel     context.CancelFunc
 	closeOnce  sync.Once
@@ -73,10 +76,30 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 		_ = source.Close()
 		return nil, errors.New("servo viewport exceeds memory budget")
 	}
-	if available, err := availableMemoryKiB(); err == nil && available < minAvailableMemoryKiB {
+	if activeSessions.Load() != 0 {
 		_ = source.Close()
-		return nil, fmt.Errorf("insufficient available memory for Servo (%d KiB available; reserve %d KiB)", available, minAvailableMemoryKiB)
+		return nil, errors.New("previous Servo resource read is still stopping")
 	}
+	budget := memoryBudget{reserveKiB: 128 * 1024, helperKiB: 512 * 1024, helperSwapKiB: 16 * 1024}
+	if system, e := memory.ReadSystem(); e == nil {
+		budget = budgetFor(system)
+		if budget.helperKiB < minimumHelperKiB {
+			_ = source.Close()
+			return nil, fmt.Errorf("insufficient RAM for Servo startup (%d KiB helper budget; need %d KiB)", budget.helperKiB, minimumHelperKiB)
+		}
+	} else {
+		slog.Warn("Servo physical memory monitor unavailable", "error", e)
+	}
+	if !activeSessions.CompareAndSwap(0, 1) {
+		_ = source.Close()
+		return nil, errors.New("another Servo session is still stopping")
+	}
+	helperStarted := false
+	defer func() {
+		if !helperStarted {
+			activeSessions.Add(-1)
+		}
+	}()
 	server, err := article.StartServer(source)
 	if err != nil {
 		_ = source.Close()
@@ -107,14 +130,20 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 		_ = source.Close()
 		return nil, fmt.Errorf("start Servo: %w", err)
 	}
-	session := &Session{Frames: make(chan *image.RGBA, 1), States: make(chan Event, 1), Navigation: make(chan Event, 16), Errors: make(chan error, 1), Done: make(chan struct{}), commands: make(chan []byte, 16), cancel: cancel, base: server.URL("")}
+	helperStarted = true
+	cancelAll := func() { server.Stop(); cancel(); _ = stdout.Close() }
+	session := &Session{Frames: make(chan *image.RGBA, 1), States: make(chan Event, 1), Navigation: make(chan Event, 16), Errors: make(chan error, 1), Done: make(chan struct{}), commands: make(chan []byte, 16), cancel: cancelAll, stopped: make(chan struct{}), base: server.URL("")}
+	prioritizeHelperOOM(command.Process.Pid)
+	var failureOnce sync.Once
 	fail := func(err error) {
-		profile.Mark("servo.error", map[string]any{"pid": command.Process.Pid, "error": err.Error()})
-		select {
-		case session.Errors <- err:
-		default:
-		}
-		cancel()
+		failureOnce.Do(func() {
+			profile.Mark("servo.error", map[string]any{"pid": command.Process.Pid, "error": err.Error()})
+			select {
+			case session.Errors <- err:
+			default:
+			}
+			cancelAll()
+		})
 	}
 	go func() {
 		defer func() { _ = stdin.Close() }()
@@ -141,10 +170,6 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 		}
 	}()
 	go func() {
-		defer close(session.Done)
-		defer func() { _ = source.Close() }()
-		defer func() { _ = server.Close() }()
-		defer cancel()
 		for {
 			frame, event, e := readPacket(stdout)
 			if e != nil {
@@ -193,11 +218,33 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 				break
 			}
 		}
-		if e := command.Wait(); e != nil && ctx.Err() == nil {
-			fail(e)
+		waitErr := command.Wait()
+		if waitErr != nil && ctx.Err() == nil {
+			fail(waitErr)
 		}
+		cancel()
+		server.Stop()
+		fields := map[string]any{"pid": command.Process.Pid}
+		if waitErr != nil {
+			fields["exit_error"] = waitErr.Error()
+		}
+		profile.Mark("servo.helper.exited", fields)
+		go func() {
+			defer close(session.Done)
+			defer activeSessions.Add(-1)
+			_ = server.Close()
+			_ = source.Close()
+			profile.Mark("servo.resources.closed", map[string]any{"pid": command.Process.Pid})
+		}()
+		// Normal reads finish immediately. A blocked storage read must not
+		// hold the SDL thread while the helper's memory has already been freed.
+		select {
+		case <-session.Done:
+		case <-time.After(10 * time.Millisecond):
+		}
+		close(session.stopped)
 	}()
-	go session.watch(ctx, command.Process.Pid, fail)
+	go session.watch(ctx, command.Process.Pid, budget, server.Errors, fail)
 	profile.Mark("servo.started", map[string]any{"pid": command.Process.Pid})
 	return session, nil
 }
@@ -242,7 +289,7 @@ func (s *Session) Send(command Command) error {
 		return errors.New("servo command exceeds memory budget")
 	}
 	select {
-	case <-s.Done:
+	case <-s.stopped:
 		return errors.New("servo session closed")
 	default:
 	}
@@ -259,68 +306,84 @@ func (s *Session) Close() {
 	s.closeOnce.Do(func() {
 		profile.Mark("servo.close.begin", nil)
 		s.cancel()
-		<-s.Done
+		select {
+		case <-s.stopped:
+		case <-time.After(500 * time.Millisecond):
+			profile.Mark("servo.close.deferred", nil)
+			return // Never block SDL on an uninterruptible kernel/storage wait.
+		}
+		// The producer has stopped; release queued RGBA and control data.
+		drain(s.Frames)
+		drain(s.States)
+		drain(s.Navigation)
+		drain(s.commands)
 		profile.Mark("servo.close.end", nil)
 	})
 }
 
-// availableMemoryKiB uses reclaimable cache as well as free pages. Unlike RSS,
-// this includes system-wide pressure without double-counting shared mappings.
-func availableMemoryKiB() (int64, error) {
-	mem, err := os.ReadFile("/proc/meminfo")
-	if err != nil {
-		return 0, err
-	}
-	for _, line := range strings.Split(string(mem), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 3 && fields[0] == "MemAvailable:" && fields[2] == "kB" {
-			n, err := strconv.ParseInt(fields[1], 10, 64)
-			if err != nil {
-				return 0, err
-			}
-			if n < 0 {
-				return 0, errors.New("invalid MemAvailable")
-			}
-			return n, nil
+func drain[T any](queue chan T) {
+	for {
+		select {
+		case <-queue:
+		default:
+			return
 		}
 	}
-	return 0, errors.New("MemAvailable unavailable")
 }
 
-// Watchdog supplements resource/IPC budgets with a dynamic system memory reserve.
-// This is a sampled guard, not kernel enforcement: sudden allocations can cross
-// the reserve between samples. Never use RLIMIT_AS for Servo's large reservations.
-func (s *Session) watch(ctx context.Context, pid int, fail func(error)) {
+// watch samples physical memory before reclaim or swap makes the device
+// unresponsive. Helper virtual address space is deliberately not limited.
+func (s *Session) watch(ctx context.Context, pid int, budget memoryBudget, resourceErrors <-chan error, fail func(error)) {
 	start := time.Now()
-	tick := time.NewTicker(100 * time.Millisecond)
+	tick := time.NewTicker(memoryPollInterval)
 	defer tick.Stop()
-	profile.Mark("servo.watchdog", map[string]any{"pid": pid, "min_available_kib": minAvailableMemoryKiB, "poll_interval_ms": 100, "first_frame_timeout_seconds": 35})
-	lastSample := time.Time{}
+	fields := map[string]any{"pid": pid, "reserve_kib": budget.reserveKiB, "helper_budget_kib": budget.helperKiB, "helper_swap_limit_kib": budget.helperSwapKiB, "poll_interval_ms": memoryPollInterval.Milliseconds(), "first_frame_timeout_seconds": firstFrameTimeout.Seconds()}
+	profile.Mark("servo.watchdog", fields)
+	slog.Info("Servo memory guard", "reserve_kib", budget.reserveKiB, "helper_budget_kib", budget.helperKiB, "helper_swap_limit_kib", budget.helperSwapKiB)
+	var previous memory.System
+	previousTime, lastSample := time.Time{}, time.Time{}
 	reportedUnavailable := false
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case err := <-resourceErrors:
+			fail(err)
+			return
 		case <-tick.C:
 		}
-		available, err := availableMemoryKiB()
+		now := time.Now()
+		system, err := memory.ReadSystem()
+		helper, helperErr := memory.ReadProcess(pid)
 		if err == nil {
-			if available < minAvailableMemoryKiB {
-				fields := map[string]any{"pid": pid, "available_kib": available, "min_available_kib": minAvailableMemoryKiB}
+			// Helper RSS is optional during exec/exit; system reserve still applies.
+			if helperErr != nil {
+				helper = memory.Process{}
+			}
+			fields := map[string]any{"pid": pid, "available_kib": system.AvailableKiB, "total_kib": system.TotalKiB, "swap_free_kib": system.SwapFreeKiB, "helper_rss_kib": helper.RSSKiB, "helper_swap_kib": helper.SwapKiB, "helper_peak_kib": helper.PeakKiB, "reserve_kib": budget.reserveKiB, "helper_budget_kib": budget.helperKiB, "first_frame": s.firstFrame.Load()}
+			if e := budget.check(system, helper, previous, now.Sub(previousTime)); e != nil {
+				fields["reason"] = e.Error()
 				profile.Mark("servo.memory_pressure", fields)
-				fail(fmt.Errorf("low system memory (%d KiB available; reserve %d KiB)", available, minAvailableMemoryKiB))
-				slog.Warn("Low available memory; switching Servo to SDL", "available_kib", available, "min_available_kib", minAvailableMemoryKiB)
+				fail(e)
+				slog.Warn("Stopping Servo before memory exhaustion", "reason", e, "available_kib", system.AvailableKiB, "helper_rss_kib", helper.RSSKiB, "helper_swap_kib", helper.SwapKiB)
 				return
 			}
-			if time.Since(lastSample) >= time.Second {
-				profile.Mark("servo.memory_available", map[string]any{"pid": pid, "available_kib": available, "min_available_kib": minAvailableMemoryKiB})
-				lastSample = time.Now()
+			previous, previousTime = system, now
+			if now.Sub(lastSample) >= 250*time.Millisecond {
+				profile.Mark("servo.memory_sample", fields)
+				lastSample = now
 			}
 		} else if !reportedUnavailable {
 			profile.Mark("servo.memory_monitor_unavailable", map[string]any{"error": err.Error()})
 			reportedUnavailable = true
 		}
-		if !s.firstFrame.Load() && time.Since(start) > 35*time.Second {
+		if err != nil && helperErr == nil {
+			if e := budget.checkHelper(helper); e != nil {
+				fail(e)
+				return
+			}
+		}
+		if !s.firstFrame.Load() && now.Sub(start) > firstFrameTimeout {
 			fail(errors.New("servo first frame timed out"))
 			return
 		}

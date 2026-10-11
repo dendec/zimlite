@@ -2,7 +2,6 @@ package article
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
@@ -47,7 +46,9 @@ type Server struct {
 	server   *http.Server
 	done     chan struct{}
 	readMu   sync.Mutex
-	closing  bool
+	closing  atomic.Bool
+	stopOnce sync.Once
+	Errors   chan error // Fatal resource-budget failures; ordinary missing links are tolerated.
 	bytes    atomic.Int64
 	failures atomic.Int64
 	slots    chan struct{}
@@ -63,7 +64,7 @@ func StartServer(source Source) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{source: source, token: hex.EncodeToString(token), address: listener.Addr().String(), done: make(chan struct{}), slots: make(chan struct{}, 2), pending: make(chan struct{}, maxPendingResources)}
+	s := &Server{source: source, token: hex.EncodeToString(token), address: listener.Addr().String(), done: make(chan struct{}), Errors: make(chan error, 1), slots: make(chan struct{}, 2), pending: make(chan struct{}, maxPendingResources)}
 	s.server = &http.Server{Handler: s, ReadHeaderTimeout: 3 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 5 * time.Second, MaxHeaderBytes: 8 << 10}
 	go func() {
 		defer close(s.done)
@@ -82,22 +83,36 @@ func (s *Server) URL(articlePath string) string {
 
 func (s *Server) Failures() int64 { return s.failures.Load() }
 
-func (s *Server) Close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	err := s.server.Shutdown(ctx)
-	if err != nil {
+// Stop rejects new resource reads and closes HTTP connections immediately.
+// It does not wait for a native archive read that the OS cannot cancel.
+func (s *Server) Stop() {
+	s.stopOnce.Do(func() {
+		s.closing.Store(true)
 		_ = s.server.Close()
-	}
+	})
+}
+
+func (s *Server) Close() error {
+	s.Stop()
 	<-s.done
-	// Shutdown may time out; serializing here also waits for an active read.
+	// Source may be freed only after the active native read finishes.
 	s.readMu.Lock()
-	s.closing = true
-	s.readMu.Unlock()
-	return err
+	defer s.readMu.Unlock()
+	return nil
+}
+
+func (s *Server) reject(err error) {
+	select {
+	case s.Errors <- err:
+	default:
+	}
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if s.closing.Load() {
+		http.Error(w, "article session closed", http.StatusServiceUnavailable)
+		return
+	}
 	if r.Host != s.address || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
 		http.Error(w, "unsupported request", http.StatusBadRequest)
 		return
@@ -124,6 +139,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			slog.Warn("Article resource queue full", "path", r.URL.Path)
 		}
 		profile.Mark("resource.rejected", map[string]any{"path": r.URL.Path, "reason": "queue_full"})
+		s.reject(errors.New("article resource queue exceeded budget"))
 		http.Error(w, "resource queue full", http.StatusTooManyRequests)
 		return
 	}
@@ -141,7 +157,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	readStarted := time.Now()
 	profile.Mark("resource.begin", map[string]any{"path": name})
 	s.readMu.Lock()
-	if s.closing {
+	if s.closing.Load() || r.Context().Err() != nil {
 		s.readMu.Unlock()
 		http.Error(w, "article session closed", http.StatusServiceUnavailable)
 		return
@@ -161,6 +177,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		status := http.StatusNotFound
 		if errors.Is(err, ErrResourceLimit) {
 			status = http.StatusRequestEntityTooLarge
+			s.reject(err)
 		}
 		http.Error(w, "article resource unavailable", status)
 		return
@@ -172,6 +189,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(resource.Data) > MaxResourceBytes || (strings.HasPrefix(resource.MIME, "text/html") && len(resource.Data) > MaxHTMLBytes) || s.bytes.Add(int64(len(resource.Data))) > maxSessionBytes {
 		s.failures.Add(1)
+		s.reject(errors.New("article resource bytes exceeded memory budget"))
 		http.Error(w, "article memory budget exceeded", http.StatusRequestEntityTooLarge)
 		return
 	}
@@ -179,6 +197,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		config, _, e := image.DecodeConfig(bytes.NewReader(resource.Data))
 		if e != nil || config.Width <= 0 || config.Height <= 0 || int64(config.Width)*int64(config.Height) > maxImagePixels {
 			s.failures.Add(1)
+			s.reject(errors.New("article decoded image exceeded memory budget"))
 			http.Error(w, "decoded image exceeds memory budget", http.StatusRequestEntityTooLarge)
 			return
 		}

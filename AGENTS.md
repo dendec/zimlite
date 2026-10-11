@@ -94,6 +94,8 @@ main.go
 - `article` owns bounded file/ZIM resource adapters, the authenticated loopback server, and HTML table containment. It has no SDL dependency.
 - `servo.Session` owns the helper process, resource server, and source, including startup failures. It contains bounded IPC queues and the system memory watchdog, without depending on SDL.
 - `renderer/servo.go` adapts helper frames and semantic view commands to the SDL window. UI selects the renderer and coordinates fallback through `ArticleViewer`.
+- `memory` reads Linux physical RAM and process RSS/swap without SDL. `servo/budget.go` defines the adaptive reserve and helper limits; shutdown aborts HTTP/helper immediately and defers blocked source cleanup. UI retains one bounded HTML body for fallback without rereading the archive.
+- Simple image decoding and GIF caches are bounded in `renderer/image_budget.go`; SVG bitmap dimensions are checked before native allocation. Profiling uses rotated RAM logs and a separate bounded crash-snapshot worker; see `docs/SERVO-PROFILING.md`.
 
 ### `internal/ui/`
 **Application logic.**

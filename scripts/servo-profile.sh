@@ -1,10 +1,38 @@
 #!/bin/sh
 # Independent process: continue recording if the application's UI thread stalls.
-# Usage: profile.sh LAUNCHER_PID OUTPUT_DIRECTORY
+# Usage: profile.sh LAUNCHER_PID RAM_DIRECTORY [ARCHIVE_DIRECTORY]
 set -eu
+
+# A separate worker makes bounded crash snapshots without putting SD-card
+# writes on the UI or system sampler. Never spawn overlapping snapshot workers.
+if [ "${1:-}" = --snapshot ]; then
+    snapshot_parent=$2
+    snapshot_ram=$3
+    snapshot_archive=$4
+    while [ -d "/proc/$snapshot_parent" ]; do
+        for snapshot_name in events.jsonl app.log system.log kernel.log; do
+            [ -f "$snapshot_ram/$snapshot_name" ] || continue
+            snapshot_tmp="$snapshot_archive/$snapshot_name.live.tmp"
+            if tail -c 262144 "$snapshot_ram/$snapshot_name" > "$snapshot_tmp"; then
+                mv -f "$snapshot_tmp" "$snapshot_archive/$snapshot_name.live"
+            fi
+        done
+        sleep 2
+    done
+    exit 0
+fi
+
 launcher_pid=$1
 profile_dir=$2
 mkdir -p "$profile_dir"
+snapshot_worker=''
+if [ -n "${3:-}" ]; then
+    sh "$0" --snapshot "$$" "$profile_dir" "$3" &
+    snapshot_worker=$!
+fi
+# Do not wait for a worker stuck in filesystem I/O on shutdown.
+trap '[ -z "$snapshot_worker" ] || kill "$snapshot_worker" 2>/dev/null || true' EXIT
+trap 'exit 0' HUP INT TERM
 sample_log="$profile_dir/system.log"
 kernel_log="$profile_dir/kernel.log"
 dmesg > "$kernel_log" 2>&1 || true
@@ -49,7 +77,7 @@ while [ -d "/proc/$launcher_pid" ]; do
         mv -f "$kernel_log.tmp" "$kernel_log"
     fi
     # Do not synchronously flush FUSE/exFAT while the renderer is active.
-    if [ "$(wc -c < "$sample_log")" -gt 16777216 ]; then
+    if [ "$(wc -c < "$sample_log")" -gt 2097152 ]; then
         mv -f "$sample_log" "$profile_dir/system.previous.log"
     fi
     sample=$((sample + 1))

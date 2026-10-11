@@ -263,6 +263,11 @@ func (r *Reader) GetResourceLimited(path string, limit uint64) ([]byte, string, 
 
 // ResolveResource searches namespaces to resolve a relative resource path.
 func (r *Reader) ResolveResource(rawURL string) ([]byte, string, error) {
+	return r.ResolveResourceLimited(rawURL, 0)
+}
+
+// ResolveResourceLimited bounds the copy before decompressing resource contents.
+func (r *Reader) ResolveResourceLimited(rawURL string, limit uint64) ([]byte, string, error) {
 	decoded, err := url.PathUnescape(rawURL)
 	if err != nil {
 		decoded = rawURL
@@ -285,7 +290,10 @@ func (r *Reader) ResolveResource(rawURL string) ([]byte, string, error) {
 	}
 
 	for _, c := range candidates {
-		data, mime, err := r.GetResource(c)
+		data, mime, err := r.GetResourceLimited(c, limit)
+		if errors.Is(err, ErrResourceTooLarge) {
+			return nil, "", err
+		}
 		if err == nil {
 			return data, mime, nil
 		}

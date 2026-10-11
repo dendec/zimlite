@@ -25,7 +25,7 @@ type ZimReader interface {
 	Close()
 	MainPagePath() string
 	ResolveArticlePath(rawURL string, referrer string) (string, error)
-	ResolveResource(rawURL string) ([]byte, string, error)
+	ResolveResourceLimited(rawURL string, limit uint64) ([]byte, string, error)
 	FilePath() string
 }
 

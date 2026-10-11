@@ -41,7 +41,8 @@ type ImageManager struct {
 	dark       bool
 }
 
-const maxImageTextureEntries = 256
+// Eight bounded RGBA textures retain at most 32 MiB before native overhead.
+const maxImageTextureEntries = 8
 
 func NewImageManager(renderer *sdl.Renderer) *ImageManager {
 	return &ImageManager{
@@ -134,6 +135,9 @@ func (m *ImageManager) GetDimensions(url string) (int32, int32, bool) {
 		slog.Error("DecodeConfig failed", "url", url, "format", format, "error", err, "len", len(data))
 		return 0, 0, false
 	}
+	if !safeImageSize(config.Width, config.Height) {
+		return 0, 0, false
+	}
 
 	m.dimensions[url] = struct{ w, h int32 }{int32(config.Width), int32(config.Height)}
 	return int32(config.Width), int32(config.Height), true
@@ -161,6 +165,10 @@ func (m *ImageManager) GetTexture(url string) (*sdl.Texture, bool) {
 
 	if isSVG(url, data) {
 		return m.loadSVG(url, data), false
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || !safeImageSize(config.Width, config.Height) {
+		return nil, false
 	}
 
 	if isGIF(url, data) {
@@ -219,6 +227,23 @@ func (m *ImageManager) loadStaticImage(url string, data []byte) *sdl.Texture {
 }
 
 func (m *ImageManager) loadGIF(url string, data []byte) (*sdl.Texture, bool) {
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || !safeImageSize(config.Width, config.Height) {
+		return nil, false
+	}
+	if !safeGIFAnimation(data, int64(config.Width)*int64(config.Height)) {
+		// Keep the article usable without allocating an oversized animation.
+		return m.loadStaticImage(url, data), false
+	}
+	if len(m.animated) >= maxAnimatedImages {
+		for key, old := range m.animated {
+			if old.Texture != nil {
+				old.Texture.Destroy()
+			}
+			delete(m.animated, key)
+			break
+		}
+	}
 	parsedGIF, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil || len(parsedGIF.Image) == 0 {
 		return nil, false

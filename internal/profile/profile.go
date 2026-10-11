@@ -14,6 +14,7 @@ import (
 var recorder struct {
 	sync.Mutex
 	file  *os.File
+	path  string
 	bytes int
 }
 
@@ -36,6 +37,7 @@ func Start() func() {
 	}
 	recorder.Lock()
 	recorder.file = f
+	recorder.path = f.Name()
 	recorder.bytes = 0
 	recorder.Unlock()
 	Mark("app.start", map[string]any{"pid": os.Getpid(), "go": runtime.Version()})
@@ -61,7 +63,9 @@ func Start() func() {
 		Mark("app.stop", nil)
 		recorder.Lock()
 		defer recorder.Unlock()
-		_ = f.Close()
+		if recorder.file != nil {
+			_ = recorder.file.Close()
+		}
 		recorder.file = nil
 	}
 }
@@ -71,8 +75,18 @@ func Start() func() {
 func Mark(event string, fields map[string]any) {
 	recorder.Lock()
 	defer recorder.Unlock()
-	if recorder.file == nil || recorder.bytes >= 16<<20 {
+	if recorder.file == nil {
 		return
+	}
+	if recorder.bytes >= 4<<20 {
+		_ = recorder.file.Close()
+		_ = os.Rename(recorder.path, filepath.Join(filepath.Dir(recorder.path), "events.previous.jsonl"))
+		f, err := os.OpenFile(recorder.path, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		recorder.file = f
+		recorder.bytes = 0
+		if err != nil {
+			return
+		}
 	}
 	if fields == nil {
 		fields = make(map[string]any)

@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dendec/zimlite/internal/article"
 	"github.com/dendec/zimlite/internal/document"
 	"github.com/dendec/zimlite/internal/i18n"
 	"github.com/dendec/zimlite/internal/menu"
@@ -42,6 +43,8 @@ type DocumentLoader struct {
 	cacheKeys         []string
 	locations         map[string]articleLocation
 	locationKeys      []string
+	fallbackKey       string
+	fallbackHTML      []byte // One original article, retained until Servo exits.
 	zimReader         ZimReader
 	internetAvailable atomic.Bool
 	pendingMenuReload atomic.Bool
@@ -85,6 +88,7 @@ func (l *DocumentLoader) shutdown() {
 	if viewer, ok := l.host.getViewer().(ArticleViewer); ok {
 		viewer.StopArticle()
 	}
+	l.fallbackKey, l.fallbackHTML = "", nil
 	if l.zimReader != nil {
 		l.zimReader.Close()
 		l.zimReader = nil
@@ -190,19 +194,49 @@ func (l *DocumentLoader) loadResource(rawURL string) ([]byte, error) {
 			return nil, err
 		}
 		defer func() { _ = resp.Body.Close() }()
-		return io.ReadAll(resp.Body)
+		if resp.StatusCode != 200 {
+			return nil, fmt.Errorf("image HTTP status %d", resp.StatusCode)
+		}
+		return readImageResource(resp.Body)
 	}
 	if l.zimReader != nil {
-		data, _, err := l.zimReader.ResolveResource(rawURL)
+		data, _, err := l.zimReader.ResolveResourceLimited(rawURL, article.MaxResourceBytes)
 		return data, err
 	}
 	docPath := l.host.getNavigator().Current()
 	if docPath == "" || strings.HasPrefix(docPath, "virtual:") {
-		return os.ReadFile(rawURL)
+		return readImageFile(rawURL)
 	}
 	dir := filepath.Dir(docPath)
 	fullPath := filepath.Join(dir, rawURL)
-	return os.ReadFile(fullPath)
+	return readImageFile(fullPath)
+}
+
+func readImageResource(reader io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(reader, article.MaxResourceBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > article.MaxResourceBytes {
+		return nil, article.ErrResourceLimit
+	}
+	return data, nil
+}
+
+func readImageFile(filename string) ([]byte, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > article.MaxResourceBytes {
+		return nil, article.ErrResourceLimit
+	}
+	return readImageResource(file)
 }
 
 func (l *DocumentLoader) NavigateLink(url string) {

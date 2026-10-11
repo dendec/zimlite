@@ -50,3 +50,16 @@ func TestRenderInvalidSVG(t *testing.T) {
 		t.Error("Render() should return nil for invalid SVG data")
 	}
 }
+
+func TestRejectOversizedSVGBitmap(t *testing.T) {
+	data := []byte(`<svg width="100000" height="100000" xmlns="http://www.w3.org/2000/svg"><rect width="100%" height="100%"/></svg>`)
+	if Render(data) != nil {
+		t.Fatal("oversized intrinsic bitmap was allocated")
+	}
+	if RenderToSize(data, 100000, 100000) != nil {
+		t.Fatal("oversized requested bitmap was allocated")
+	}
+	if RenderToSize(data, 100, 50) == nil {
+		t.Fatal("a bounded thumbnail should remain available")
+	}
+}
