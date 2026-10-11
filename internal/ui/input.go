@@ -10,13 +10,12 @@ import (
 )
 
 const (
-	scrollStep      = 40
-	axisSensitivity = 16000
-	holdDelay       = 200 * time.Millisecond
-	maxAxisValue    = 32767
-	analogMaxSpeed  = float64(scrollStep * 5)
-	maxHoldSpeedup  = 16.0
-	maxHoldElapsed  = 100 * time.Millisecond
+	scrollStep     = 40
+	holdDelay      = 200 * time.Millisecond
+	maxAxisValue   = 32767
+	analogMaxSpeed = float64(scrollStep * 5)
+	maxHoldSpeedup = 16.0
+	maxHoldElapsed = 100 * time.Millisecond
 )
 
 type scrollHold struct {
@@ -26,17 +25,40 @@ type scrollHold struct {
 	direction int32
 }
 
+type analogScrollHold struct {
+	scrollHold
+	remainder float64
+}
+
+// delta integrates pixels over time, including subpixel motion at low deflection.
+// A held stick keeps scrolling without additional SDL axis events.
+func (h *analogScrollHold) delta(value int16, now time.Time) int32 {
+	direction, strength := analogDirection(value)
+	if direction == 0 {
+		*h = analogScrollHold{}
+		return 0
+	}
+	if !h.active || h.direction != direction {
+		*h = analogScrollHold{scrollHold: scrollHold{active: true, started: now, lastStep: now, direction: direction}}
+		return 0
+	}
+	elapsed := max(time.Duration(0), min(now.Sub(h.lastStep), maxHoldElapsed))
+	h.lastStep = now
+	h.remainder += analogMaxSpeed * strength * holdSpeedup(now.Sub(h.started)-holdDelay) * elapsed.Seconds()
+	pixels := int32(h.remainder)
+	h.remainder -= float64(pixels)
+	return direction * pixels
+}
+
 type InputController struct {
-	app           *App
-	globalKeys    map[sdl.Scancode]func()
-	docKeys       map[sdl.Scancode]func()
-	treeKeys      map[sdl.Scancode]func()
-	treeHold      scrollHold
-	axisHold      scrollHold
-	axisRemainder float64
-	lastAxisTime  time.Time
-	linkHold      scrollHold
-	tableHold     scrollHold
+	app        *App
+	globalKeys map[sdl.Scancode]func()
+	docKeys    map[sdl.Scancode]func()
+	treeKeys   map[sdl.Scancode]func()
+	treeHold   scrollHold
+	axisHold   analogScrollHold
+	linkHold   scrollHold
+	tableHold  analogScrollHold
 }
 
 func NewInputController(app *App) *InputController {
@@ -162,14 +184,10 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 			app.renderTree()
 		}
 
-	case *sdl.ControllerAxisEvent, *sdl.ControllerButtonEvent:
+	case *sdl.ControllerAxisEvent, *sdl.ControllerButtonEvent, *sdl.ControllerDeviceEvent:
 		if action, ok := app.gamepad.TranslateEvent(event, app.mode); ok {
 			if action != ActionNone {
-				var val int16
-				if ax, ok := event.(*sdl.ControllerAxisEvent); ok {
-					val = ax.Value
-				}
-				c.executeGamepadAction(action, val)
+				c.executeGamepadAction(action)
 			}
 		}
 
@@ -236,11 +254,9 @@ func (c *InputController) Update(now time.Time) {
 			direction, strength = axisDirection, axisStrength
 		}
 		c.updateTreeHold(direction, strength, now)
-		c.axisHold.active = false
-		c.lastAxisTime = time.Time{}
-		c.axisRemainder = 0
+		c.axisHold = analogScrollHold{}
 		c.linkHold.active = false
-		c.tableHold.active = false
+		c.tableHold = analogScrollHold{}
 		return
 	}
 	c.treeHold.active = false
@@ -254,34 +270,14 @@ func (c *InputController) Update(now time.Time) {
 	}
 	c.updateLinkHold(linkDirection, now)
 
-	tableDirection, tableStrength := analogDirection(c.app.gamepad.LeftX())
-	c.updateTableHold(tableDirection, tableStrength, now)
-
-	if axisDirection == 0 {
-		c.axisHold.active = false
-		c.lastAxisTime = time.Time{}
-		c.axisRemainder = 0
-		return
+	if delta := c.tableHold.delta(c.app.gamepad.LeftX(), now); delta != 0 {
+		if scroller, ok := c.app.viewer.(TableScroller); ok {
+			scroller.ScrollTableHorizontally(delta)
+		}
 	}
-	if !c.axisHold.active || c.axisHold.direction != axisDirection {
-		c.axisHold = scrollHold{active: true, started: now, lastStep: now, direction: axisDirection}
-		c.lastAxisTime = now
-		c.axisRemainder = 0
-		return
+	if delta := c.axisHold.delta(c.app.gamepad.LeftY(), now); delta != 0 {
+		c.app.scroller.ScrollBy(delta)
 	}
-	seconds := min(now.Sub(c.lastAxisTime), maxHoldElapsed).Seconds()
-	c.lastAxisTime = now
-	speed := analogMaxSpeed * axisStrength
-	if now.Sub(c.axisHold.started) >= holdDelay {
-		speed *= holdSpeedup(now.Sub(c.axisHold.started))
-	}
-	c.axisRemainder += speed * seconds
-	delta := int32(c.axisRemainder)
-	if delta == 0 {
-		return
-	}
-	c.axisRemainder -= float64(delta)
-	c.app.scroller.ScrollBy(axisDirection * delta)
 }
 
 func (c *InputController) updateLinkHold(direction int32, now time.Time) {
@@ -305,41 +301,6 @@ func (c *InputController) updateLinkHold(direction int32, now time.Time) {
 	}
 	c.moveLinkSelection(direction)
 	c.linkHold.lastStep = now
-}
-
-func (c *InputController) updateTableHold(direction int32, strength float64, now time.Time) {
-	if direction == 0 {
-		c.tableHold.active = false
-		return
-	}
-	scroller, ok := c.app.viewer.(TableScroller)
-	if !ok {
-		c.tableHold.active = false
-		return
-	}
-	if !c.tableHold.active || c.tableHold.direction != direction {
-		c.tableHold = scrollHold{active: true, started: now, lastStep: now, direction: direction}
-		scroller.ScrollTableHorizontally(direction)
-		return
-	}
-	if now.Sub(c.tableHold.started) < holdDelay {
-		return
-	}
-	// Each table-scroll command moves most of a viewport, so keep the repeat
-	// rate lower than vertical page scrolling and cap it to avoid overshooting.
-	rate := 1.5 + 2.5*strength
-	if now.Sub(c.tableHold.started) > time.Second {
-		rate *= 1.5
-	}
-	if rate > 4 {
-		rate = 4
-	}
-	interval := time.Duration(float64(time.Second) / rate)
-	if now.Sub(c.tableHold.lastStep) < interval {
-		return
-	}
-	scroller.ScrollTableHorizontally(direction)
-	c.tableHold.lastStep = now
 }
 
 func (c *InputController) updateTreeHold(direction int32, strength float64, now time.Time) {
@@ -380,7 +341,7 @@ func (c *InputController) updateTreeHold(direction int32, strength float64, now 
 // Clamp before exponentiation so even a long hold cannot overflow the scroll
 // delta or produce a zero repeat interval. Limit catch-up separately after stalls.
 func holdSpeedup(held time.Duration) float64 {
-	return math.Pow(2, min(math.Log2(maxHoldSpeedup), max(0, math.Floor(held.Seconds()))))
+	return math.Pow(2, min(math.Log2(maxHoldSpeedup), max(0, held.Seconds())))
 }
 
 func analogDirection(value int16) (int32, float64) {
@@ -402,7 +363,7 @@ func (c *InputController) processJoyB() {
 	c.app.goBack()
 }
 
-func (c *InputController) executeGamepadAction(action Action, val int16) {
+func (c *InputController) executeGamepadAction(action Action) {
 	app := c.app
 	switch action {
 	case ActionOpenEnter:
@@ -423,22 +384,14 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 			app.navState.MoveUp()
 			app.renderTree()
 		} else {
-			if val != 0 {
-				app.scroller.ScrollBy(-scrollStep * int32(-val/axisSensitivity))
-			} else {
-				app.scroller.ScrollBy(-scrollStep)
-			}
+			app.scroller.ScrollBy(-scrollStep)
 		}
 	case ActionScrollDown:
 		if app.mode == modeTree {
 			app.navState.MoveDown()
 			app.renderTree()
 		} else {
-			if val != 0 {
-				app.scroller.ScrollBy(scrollStep * int32(val/axisSensitivity))
-			} else {
-				app.scroller.ScrollBy(scrollStep)
-			}
+			app.scroller.ScrollBy(scrollStep)
 		}
 	case ActionPageUp:
 		app.scroller.ScrollPageUp()

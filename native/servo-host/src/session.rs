@@ -9,10 +9,41 @@ use std::time::{Duration, Instant};
 use dpi::PhysicalSize;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use servo::{DeviceIntRect, DeviceIntSize, JSValue, RenderingContext, Servo, WebView};
+use servo::{
+    DeviceIntRect, DeviceIntSize, DevicePoint, JSValue, RenderingContext, Scroll, Servo, WebView,
+    WebViewPoint, WebViewVector,
+};
 
 const MAX_COMMAND: usize = 8192;
 const MAX_EVENT: usize = 65536;
+
+// Use the same target for input and diagnostics. A link may stay selected far
+// above the current viewport after stick scrolling; it must not hijack input.
+// Without a visible selected table, choose the wide table nearest the centre.
+const TABLE_TARGET_JS: &str = r#"
+    function zimliteScrollTable(selected) {
+      const visible = t => {
+        if (!t || t.scrollWidth <= t.clientWidth + 1) return null;
+        const r = t.getBoundingClientRect();
+        if (r.width <= 0 || r.height <= 0 || r.bottom <= 0 ||
+            r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) return null;
+        return r;
+      };
+      const a = document.querySelectorAll('a[href]')[selected];
+      const preferred = a && a.closest('.zimlite-table-scroll');
+      if (visible(preferred)) return preferred;
+      let best = null, distance = Infinity;
+      const centre = window.innerHeight / 2;
+      for (const t of document.querySelectorAll('.zimlite-table-scroll')) {
+        const r = visible(t);
+        if (!r) continue;
+        const d = Math.max(r.top - centre, centre - r.bottom, 0);
+        if (d < distance) { best = t; distance = d; }
+      }
+      return best;
+    }
+"#;
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Command {
@@ -31,6 +62,203 @@ struct Command {
     scale: f32,
     #[serde(default)]
     text: String,
+}
+
+// Fold queued relative motion before rendering, retaining control commands in
+// order. Bounded draining prevents input from starving the Servo event loop.
+fn next_command(
+    commands: &Receiver<Result<Command, String>>,
+    deferred: &mut Option<Result<Command, String>>,
+) -> Result<Option<(Command, usize)>, String> {
+    let mut command = match deferred.take() {
+        Some(command) => command?,
+        None => match commands.try_recv() {
+            Ok(command) => command?,
+            Err(mpsc::TryRecvError::Empty) => return Ok(None),
+            Err(mpsc::TryRecvError::Disconnected) => return Err("control input closed".into()),
+        },
+    };
+    let mut merged = 0;
+    if matches!(command.op.as_str(), "scroll" | "table_scroll_by") {
+        for _ in 0..15 {
+            match commands.try_recv() {
+                Ok(Ok(next)) if next.op == command.op => {
+                    command.value = command.value.saturating_add(next.value).clamp(-4096, 4096);
+                    merged += 1;
+                }
+                Ok(next) => {
+                    *deferred = Some(next);
+                    break;
+                }
+                Err(_) => break,
+            }
+        }
+    }
+    Ok(Some((command, merged)))
+}
+
+struct FrameProfile {
+    enabled: bool,
+    started: Instant,
+    previous_frame: Instant,
+    frames: u64,
+    commands: u64,
+    merged: u64,
+    paint_us: u128,
+    readback_us: u128,
+    ipc_us: u128,
+    spin_us: u128,
+    max_gap_us: u128,
+    scroll_commands: u64,
+    scroll_delta: i64,
+    table_commands: u64,
+    table_delta: i64,
+}
+
+impl FrameProfile {
+    fn new() -> Self {
+        Self {
+            enabled: std::env::var_os("KIWIX_PROFILE_DIR").is_some(),
+            started: Instant::now(),
+            previous_frame: Instant::now(),
+            frames: 0,
+            commands: 0,
+            merged: 0,
+            paint_us: 0,
+            readback_us: 0,
+            ipc_us: 0,
+            spin_us: 0,
+            max_gap_us: 0,
+            scroll_commands: 0,
+            scroll_delta: 0,
+            table_commands: 0,
+            table_delta: 0,
+        }
+    }
+    fn report(&mut self) {
+        if !self.enabled || self.started.elapsed() < Duration::from_secs(1) {
+            return;
+        }
+        if self.frames > 0 || self.commands > 0 {
+            let seconds = self.started.elapsed().as_secs_f64();
+            let frames = u128::from(self.frames.max(1));
+            eprintln!(
+                "servo.profile.frames pid={} fps={:.2} frames={} commands={} merged={} paint_avg_us={} readback_avg_us={} ipc_avg_us={} spin_total_us={} max_gap_ms={} scroll_commands={} scroll_delta={} table_commands={} table_delta={}",
+                std::process::id(),
+                self.frames as f64 / seconds,
+                self.frames,
+                self.commands,
+                self.merged,
+                self.paint_us / frames,
+                self.readback_us / frames,
+                self.ipc_us / frames,
+                self.spin_us,
+                self.max_gap_us / 1000,
+                self.scroll_commands,
+                self.scroll_delta,
+                self.table_commands,
+                self.table_delta
+            );
+        }
+        let previous = self.previous_frame;
+        *self = Self::new();
+        self.previous_frame = previous;
+    }
+}
+
+// Reduce raster work only while moving. Matching HiDPI and framebuffer scale
+// retains the CSS viewport, font sizes, and scroll offsets. The client scales
+// motion frames on its SDL texture; resizing here would add CPU work and memory.
+struct ScrollRaster {
+    size: PhysicalSize<u32>,
+    motion_scale: f32,
+    moving: bool,
+    last_motion: Instant,
+    transition: Option<Receiver<Result<image::RgbaImage, String>>>,
+    transition_started: Instant,
+}
+impl ScrollRaster {
+    fn new(size: PhysicalSize<u32>) -> Self {
+        let motion_scale = std::env::var("ZIMLITE_SERVO_SCROLL_SCALE")
+            .ok()
+            .and_then(|value| value.parse::<f32>().ok())
+            .filter(|scale| *scale == 0.5 || *scale == 1.0)
+            .unwrap_or(1.0);
+        Self {
+            size,
+            motion_scale,
+            moving: false,
+            last_motion: Instant::now(),
+            transition: None,
+            transition_started: Instant::now(),
+        }
+    }
+    fn pending(&self) -> bool {
+        self.transition.is_some()
+    }
+    fn apply(&mut self, webview: &WebView) {
+        let scale = if self.moving { self.motion_scale } else { 1.0 };
+        webview.resize_with_hidpi_scale_factor(
+            PhysicalSize::new(
+                (self.size.width as f32 * scale).round().max(1.0) as u32,
+                (self.size.height as f32 * scale).round().max(1.0) as u32,
+            ),
+            euclid::Scale::new(scale),
+        );
+        // Keep the previous client frame until Servo has painted the final
+        // viewport. Resizing invalidates the old compositor scene; ordinary
+        // readback here would expose its stale geometry and temporary blanks.
+        let (tx, rx) = mpsc::sync_channel(1);
+        self.transition = Some(rx);
+        self.transition_started = Instant::now();
+        webview.take_screenshot(None, move |result| {
+            let _ =
+                tx.try_send(result.map_err(|error| format!("raster screenshot failed: {error:?}")));
+        });
+        if std::env::var_os("KIWIX_PROFILE_DIR").is_some() {
+            eprintln!(
+                "servo.profile.raster scale={scale} width={} height={}",
+                self.size.width, self.size.height
+            );
+        }
+    }
+    fn completed_frame(&mut self) -> Result<Option<image::RgbaImage>, String> {
+        let Some(rx) = self.transition.as_ref() else {
+            return Ok(None);
+        };
+        match rx.try_recv() {
+            Ok(result) => {
+                self.transition = None;
+                let image = result?;
+                if std::env::var_os("KIWIX_PROFILE_DIR").is_some() {
+                    eprintln!(
+                        "servo.profile.raster.ready width={} height={} elapsed_ms={}",
+                        image.width(),
+                        image.height(),
+                        self.transition_started.elapsed().as_millis()
+                    );
+                }
+                Ok(Some(image))
+            }
+            Err(mpsc::TryRecvError::Empty) => Ok(None),
+            Err(mpsc::TryRecvError::Disconnected) => {
+                Err("raster screenshot callback closed".into())
+            }
+        }
+    }
+    fn motion(&mut self, webview: &WebView) {
+        self.last_motion = Instant::now();
+        if !self.moving && self.motion_scale < 1.0 {
+            self.moving = true;
+            self.apply(webview);
+        }
+    }
+    fn idle(&mut self, webview: &WebView) {
+        if self.moving && self.last_motion.elapsed() >= Duration::from_secs(1) {
+            self.moving = false;
+            self.apply(webview);
+        }
+    }
 }
 
 fn read_commands(tx: SyncSender<Result<Command, String>>) {
@@ -94,12 +322,18 @@ fn evaluate_state(
       const links = document.querySelectorAll('a[href]');
       const n = Math.min(links.length, 2048);
       const i = n === 0 ? -1 : Math.max(-1, Math.min({selected}, n - 1));
-      const selectedElement = i < 0 ? null : links[i];
-      const table = selectedElement ? selectedElement.closest('.zimlite-table-scroll') : null;
+      {TABLE_TARGET_JS}
+      const table = zimliteScrollTable(i);
       const tableScrollLeft = !!table && table.scrollLeft > 1;
       const tableScrollRight = !!table && table.scrollLeft + table.clientWidth < table.scrollWidth - 1;
       return JSON.stringify({{event:'state', title:document.title.slice(0,256),
-        scroll_y:Math.round(window.scrollY), link_count:n, selected_link:i,
+        scroll_y:Math.round(window.scrollY),
+        scroll_height:Math.round((document.scrollingElement||document.documentElement).scrollHeight),
+        viewport_height:Math.round(window.innerHeight),
+        table_scroll_x:table?Math.round(table.scrollLeft):0,
+        table_scroll_width:table?Math.round(table.scrollWidth):0,
+        table_client_width:table?Math.round(table.clientWidth):0,
+        link_count:n, selected_link:i,
         selected_url:i < 0 ? '' : links[i].href.slice(0,8192),
         table_scroll_left:tableScrollLeft, table_scroll_right:tableScrollRight}});
     }})()"#
@@ -133,35 +367,75 @@ pub fn run(
     let command_pending = Rc::new(Cell::new(false));
     let state_pending = Rc::new(Cell::new(false));
     let mut command_started = Instant::now();
+    let mut deferred_command = None;
+    let mut last_state = Instant::now();
+    let mut profile = FrameProfile::new();
+    let mut raster = ScrollRaster::new(context.size());
     evaluate_state(webview, selected, events_tx.clone(), state_pending.clone());
     loop {
         if command_pending.get() && command_started.elapsed() > Duration::from_secs(5) {
             return Err("viewer command timed out".into());
         }
-        if !command_pending.get() {
-            match commands.try_recv() {
-                Ok(Err(error)) => return Err(error.into()),
-                Err(mpsc::TryRecvError::Disconnected) => return Ok(()),
-                Err(mpsc::TryRecvError::Empty) => {}
-                Ok(Ok(command)) => {
+        if raster.pending() && raster.transition_started.elapsed() > Duration::from_secs(5) {
+            return Err("raster transition timed out".into());
+        }
+        if !command_pending.get() && !raster.pending() {
+            match next_command(&commands, &mut deferred_command)? {
+                None => {}
+                Some((command, merged)) => {
+                    profile.merged += merged as u64;
+                    if matches!(
+                        command.op.as_str(),
+                        "scroll" | "table_scroll" | "table_scroll_by"
+                    ) {
+                        raster.motion(webview);
+                        if raster.pending() {
+                            // Apply input only after the resized hit-test and
+                            // scroll trees are ready, preserving motion order.
+                            deferred_command = Some(Ok(command));
+                            continue;
+                        }
+                    }
+                    profile.commands += 1;
+                    if command.op == "scroll" {
+                        profile.scroll_commands += 1;
+                        profile.scroll_delta += i64::from(command.value.clamp(-4096, 4096));
+                    } else if command.op == "table_scroll_by" {
+                        profile.table_commands += 1;
+                        profile.table_delta += i64::from(command.value.clamp(-4096, 4096));
+                    }
                     command_started = Instant::now();
                     let script = match command.op.as_str() {
                         "stop" => return Ok(()),
-                        "scroll" => Some(format!(
-                            "window.scrollBy(0,{});",
-                            command.value.clamp(-4096, 4096)
-                        )),
+                        "scroll" => {
+                            // Compositor scrolling avoids a JS round trip and
+                            // synchronous DOM scrolling/reflow for every tick.
+                            // A point in the outer margin targets the root,
+                            // preserving horizontal table isolation.
+                            webview.notify_scroll_event(
+                                Scroll::Delta(WebViewVector::Page(euclid::Vector2D::new(
+                                    0.0,
+                                    command.value.clamp(-4096, 4096) as f32,
+                                ))),
+                                WebViewPoint::Device(DevicePoint::new(1.0, 1.0)),
+                            );
+                            None
+                        }
                         "scroll_to" => {
                             Some(format!("window.scrollTo(0,{});", command.value.max(0)))
                         }
-                        "table_scroll" => Some(format!(
+                        "table_scroll" | "table_scroll_by" => Some(format!(
                             r#"(() => {{
-                              const a=document.querySelectorAll('a[href]')[{selected}];
-                              const t=a&&a.closest('.zimlite-table-scroll');
+                              {TABLE_TARGET_JS}
+                              const t=zimliteScrollTable({selected});
                               if(t){{const max=t.scrollWidth-t.clientWidth;
-                                t.scrollLeft=Math.max(0,Math.min(max,t.scrollLeft+({direction})*Math.max(80,t.clientWidth*.75)));}}
+                                t.scrollLeft=Math.max(0,Math.min(max,t.scrollLeft+({offset})));}}
                             }})()"#,
-                            direction = command.value.signum(),
+                            offset = if command.op == "table_scroll_by" {
+                                command.value.clamp(-4096, 4096).to_string()
+                            } else {
+                                format!("{}*Math.max(80,t.clientWidth*.75)", command.value.signum())
+                            },
                         )),
                         "select" => {
                             selected = command.value.clamp(-1, 2047);
@@ -202,7 +476,8 @@ pub fn run(
                             {
                                 return Err("resize exceeds pixel budget".into());
                             }
-                            webview.resize(size);
+                            raster.size = size;
+                            raster.apply(webview);
                             None
                         }
                         "zoom" => {
@@ -234,26 +509,58 @@ pub fn run(
                             pending.set(false);
                         });
                     }
-                    evaluate_state(webview, selected, events_tx.clone(), state_pending.clone());
+                    if command.op != "scroll" {
+                        evaluate_state(webview, selected, events_tx.clone(), state_pending.clone());
+                        last_state = Instant::now();
+                    }
                 }
             }
         }
+        if !command_pending.get() && !raster.pending() {
+            raster.idle(webview);
+        }
+        let spin_started = Instant::now();
         servo.spin_event_loop();
+        profile.spin_us += spin_started.elapsed().as_micros();
         for event in events_rx.try_iter() {
             write_event(event)?;
         }
-        if delegate.frame.get() && last_frame.elapsed() >= Duration::from_millis(33) {
-            delegate.frame.set(false);
-            webview.paint();
+        if (delegate.frame.get() || raster.pending())
+            && last_frame.elapsed() >= Duration::from_millis(33)
+        {
+            let paint_started = Instant::now();
+            if delegate.frame.replace(false) {
+                webview.paint();
+            }
+            profile.paint_us += paint_started.elapsed().as_micros();
             let size = context.size();
             let rect =
                 DeviceIntRect::from_size(DeviceIntSize::new(size.width as i32, size.height as i32));
-            if let Some(image) = context.read_to_image(rect) {
+            let read_started = Instant::now();
+            let image = if raster.pending() {
+                raster.completed_frame()?
+            } else {
+                context.read_to_image(rect)
+            };
+            profile.readback_us += read_started.elapsed().as_micros();
+            if let Some(image) = image {
+                let ipc_started = Instant::now();
                 write_frame(&image)?;
+                profile.ipc_us += ipc_started.elapsed().as_micros();
+                profile.frames += 1;
+                let now = Instant::now();
+                profile.max_gap_us = profile
+                    .max_gap_us
+                    .max(now.duration_since(profile.previous_frame).as_micros());
+                profile.previous_frame = now;
             }
-            evaluate_state(webview, selected, events_tx.clone(), state_pending.clone());
             last_frame = Instant::now();
         }
+        if !raster.pending() && last_state.elapsed() >= Duration::from_millis(200) {
+            evaluate_state(webview, selected, events_tx.clone(), state_pending.clone());
+            last_state = Instant::now();
+        }
+        profile.report();
         let _ = wake.recv_timeout(Duration::from_millis(16));
     }
 }

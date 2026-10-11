@@ -50,6 +50,11 @@ type Event struct {
 	SelectedURL      string `json:"selected_url"`
 	TableScrollLeft  bool   `json:"table_scroll_left"`
 	TableScrollRight bool   `json:"table_scroll_right"`
+	ScrollHeight     int32  `json:"scroll_height"`
+	ViewportHeight   int32  `json:"viewport_height"`
+	TableScrollX     int32  `json:"table_scroll_x"`
+	TableScrollWidth int32  `json:"table_scroll_width"`
+	TableClientWidth int32  `json:"table_client_width"`
 }
 
 // Session owns one helper, resource server and Source. NewSession takes Source
@@ -69,9 +74,23 @@ type Session struct {
 	base       string
 }
 
+// SessionOptions controls raster work without depending on application settings.
+type SessionOptions struct {
+	// MotionScale is 0.5 or 1. Zero preserves the helper environment default.
+	MotionScale float32
+}
+
 func NewSession(helper string, source article.Source, entry string, width, height uint32) (*Session, error) {
+	return NewSessionWithOptions(helper, source, entry, width, height, SessionOptions{})
+}
+
+func NewSessionWithOptions(helper string, source article.Source, entry string, width, height uint32, options SessionOptions) (*Session, error) {
 	started := time.Now()
-	profile.Mark("servo.start.begin", map[string]any{"entry": entry, "width": width, "height": height})
+	profile.Mark("servo.start.begin", map[string]any{"entry": entry, "width": width, "height": height, "motion_scale": options.MotionScale})
+	if options.MotionScale != 0 && options.MotionScale != 0.5 && options.MotionScale != 1 {
+		_ = source.Close()
+		return nil, errors.New("unsupported Servo motion scale")
+	}
 	if width == 0 || height == 0 || uint64(width)*uint64(height) > MaxPixels || width > 1280 || height > 1280 {
 		_ = source.Close()
 		return nil, errors.New("servo viewport exceeds memory budget")
@@ -80,7 +99,7 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 		_ = source.Close()
 		return nil, errors.New("previous Servo resource read is still stopping")
 	}
-	budget := memoryBudget{reserveKiB: 128 * 1024, helperKiB: 512 * 1024, helperSwapKiB: 16 * 1024}
+	budget := memoryBudget{reserveKiB: systemReserveKiB, helperSwapKiB: 16 * 1024}
 	if system, e := memory.ReadSystem(); e == nil {
 		budget = budgetFor(system)
 		if budget.helperKiB < minimumHelperKiB {
@@ -107,6 +126,9 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	command := exec.CommandContext(ctx, helper, "--session", server.URL(entry), strconv.FormatUint(uint64(width), 10), strconv.FormatUint(uint64(height), 10))
+	if options.MotionScale != 0 {
+		command.Env = append(os.Environ(), "ZIMLITE_SERVO_SCROLL_SCALE="+strconv.FormatFloat(float64(options.MotionScale), 'f', -1, 32))
+	}
 	command.Stderr = os.Stderr
 	command.WaitDelay = time.Second
 	configureProcess(command)
@@ -170,6 +192,8 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 		}
 	}()
 	go func() {
+		lastStateProfile, lastFrameProfile := time.Time{}, time.Time{}
+		var receivedFrames uint64
 		for {
 			frame, event, e := readPacket(stdout)
 			if e != nil {
@@ -179,6 +203,11 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 				break
 			}
 			if frame != nil {
+				receivedFrames++
+				if time.Since(lastFrameProfile) >= 250*time.Millisecond {
+					profile.Mark("servo.frame", map[string]any{"pid": command.Process.Pid, "sequence": receivedFrames, "width": frame.Rect.Dx(), "height": frame.Rect.Dy()})
+					lastFrameProfile = time.Now()
+				}
 				if !session.firstFrame.Swap(true) {
 					profile.Mark("servo.first_frame", map[string]any{"pid": command.Process.Pid, "elapsed_ms": time.Since(started).Milliseconds(), "width": frame.Rect.Dx(), "height": frame.Rect.Dy()})
 				}
@@ -195,6 +224,10 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 					}
 				}
 			} else if event.Event == "state" {
+				if time.Since(lastStateProfile) >= 250*time.Millisecond {
+					profile.Mark("servo.state", map[string]any{"pid": command.Process.Pid, "scroll_y": event.ScrollY, "scroll_height": event.ScrollHeight, "viewport_height": event.ViewportHeight, "selected_link": event.SelectedLink, "link_count": event.LinkCount, "table_scroll_x": event.TableScrollX, "table_scroll_width": event.TableScrollWidth, "table_client_width": event.TableClientWidth})
+					lastStateProfile = time.Now()
+				}
 				select {
 				case session.States <- event:
 				default:
@@ -229,20 +262,20 @@ func NewSession(helper string, source article.Source, entry string, width, heigh
 			fields["exit_error"] = waitErr.Error()
 		}
 		profile.Mark("servo.helper.exited", fields)
-		go func() {
-			defer close(session.Done)
-			defer activeSessions.Add(-1)
-			_ = server.Close()
-			_ = source.Close()
-			profile.Mark("servo.resources.closed", map[string]any{"pid": command.Process.Pid})
-		}()
-		// Normal reads finish immediately. A blocked storage read must not
-		// hold the SDL thread while the helper's memory has already been freed.
-		select {
-		case <-session.Done:
-		case <-time.After(10 * time.Millisecond):
-		}
+		// Process completion and archive ownership completion are distinct.
+		// Close waits briefly for both, without waiting forever on storage.
 		close(session.stopped)
+		go func() {
+			_ = server.Close()
+			closeErr := source.Close()
+			activeSessions.Add(-1)
+			fields := map[string]any{"pid": command.Process.Pid}
+			if closeErr != nil {
+				fields["error"] = closeErr.Error()
+			}
+			profile.Mark("servo.resources.closed", fields)
+			close(session.Done)
+		}()
 	}()
 	go session.watch(ctx, command.Process.Pid, budget, server.Errors, fail)
 	profile.Mark("servo.started", map[string]any{"pid": command.Process.Pid})
@@ -312,6 +345,14 @@ func (s *Session) Close() {
 			profile.Mark("servo.close.deferred", nil)
 			return // Never block SDL on an uninterruptible kernel/storage wait.
 		}
+		// Normal archive cleanup may lag process exit by a few milliseconds.
+		// Releasing ownership before returning avoids spurious fallback when
+		// immediately opening the next article. Blocked I/O remains bounded.
+		select {
+		case <-s.Done:
+		case <-time.After(100 * time.Millisecond):
+			profile.Mark("servo.resources.deferred", nil)
+		}
 		// The producer has stopped; release queued RGBA and control data.
 		drain(s.Frames)
 		drain(s.States)
@@ -337,10 +378,12 @@ func (s *Session) watch(ctx context.Context, pid int, budget memoryBudget, resou
 	start := time.Now()
 	tick := time.NewTicker(memoryPollInterval)
 	defer tick.Stop()
-	fields := map[string]any{"pid": pid, "reserve_kib": budget.reserveKiB, "helper_budget_kib": budget.helperKiB, "helper_swap_limit_kib": budget.helperSwapKiB, "poll_interval_ms": memoryPollInterval.Milliseconds(), "first_frame_timeout_seconds": firstFrameTimeout.Seconds()}
+	fields := map[string]any{"pid": pid, "reserve_kib": budget.reserveKiB, "helper_budget_kib": budget.helperKiB, "helper_swap_pressure_kib": budget.helperSwapKiB, "swap_pressure_available_kib": 2 * budget.reserveKiB, "poll_interval_ms": memoryPollInterval.Milliseconds(), "first_frame_timeout_seconds": firstFrameTimeout.Seconds()}
 	profile.Mark("servo.watchdog", fields)
-	slog.Info("Servo memory guard", "reserve_kib", budget.reserveKiB, "helper_budget_kib", budget.helperKiB, "helper_swap_limit_kib", budget.helperSwapKiB)
+	slog.Info("Servo memory guard", "reserve_kib", budget.reserveKiB, "helper_budget_kib", budget.helperKiB, "swap_pressure_available_kib", 2*budget.reserveKiB)
+	startupBudgetKiB := budget.helperKiB
 	var previous memory.System
+	previousViewer, _ := memory.ReadProcess(os.Getpid())
 	previousTime, lastSample := time.Time{}, time.Time{}
 	reportedUnavailable := false
 	for {
@@ -355,13 +398,20 @@ func (s *Session) watch(ctx context.Context, pid int, budget memoryBudget, resou
 		now := time.Now()
 		system, err := memory.ReadSystem()
 		helper, helperErr := memory.ReadProcess(pid)
+		viewer, viewerErr := memory.ReadProcess(os.Getpid())
 		if err == nil {
 			// Helper RSS is optional during exec/exit; system reserve still applies.
 			if helperErr != nil {
 				helper = memory.Process{}
+			} else {
+				budget = budgetDuringSession(system, helper)
 			}
-			fields := map[string]any{"pid": pid, "available_kib": system.AvailableKiB, "total_kib": system.TotalKiB, "swap_free_kib": system.SwapFreeKiB, "helper_rss_kib": helper.RSSKiB, "helper_swap_kib": helper.SwapKiB, "helper_peak_kib": helper.PeakKiB, "reserve_kib": budget.reserveKiB, "helper_budget_kib": budget.helperKiB, "first_frame": s.firstFrame.Load()}
-			if e := budget.check(system, helper, previous, now.Sub(previousTime)); e != nil {
+			fields := map[string]any{"pid": pid, "available_kib": system.AvailableKiB, "total_kib": system.TotalKiB, "swap_free_kib": system.SwapFreeKiB, "helper_rss_kib": helper.RSSKiB, "helper_swap_kib": helper.SwapKiB, "helper_peak_kib": helper.PeakKiB, "reserve_kib": budget.reserveKiB, "helper_budget_kib": budget.helperKiB, "startup_helper_budget_kib": startupBudgetKiB, "first_frame": s.firstFrame.Load(), "viewer_rss_kib": viewer.RSSKiB, "viewer_swap_kib": viewer.SwapKiB, "free_kib": system.FreeKiB, "cma_total_kib": system.CMATotalKiB, "cma_free_kib": system.CMAFreeKiB, "cma_valid": system.CMAFreeKiB <= system.CMATotalKiB, "unreclaimable_kib": system.UnreclaimableKiB}
+			e := budget.check(system, helper, previous, now.Sub(previousTime))
+			if e == nil && viewerErr == nil && !previousTime.IsZero() {
+				e = budget.checkViewer(system, viewer, previousViewer, now.Sub(previousTime))
+			}
+			if e != nil {
 				fields["reason"] = e.Error()
 				profile.Mark("servo.memory_pressure", fields)
 				fail(e)
@@ -369,6 +419,9 @@ func (s *Session) watch(ctx context.Context, pid int, budget memoryBudget, resou
 				return
 			}
 			previous, previousTime = system, now
+			if viewerErr == nil {
+				previousViewer = viewer
+			}
 			if now.Sub(lastSample) >= 250*time.Millisecond {
 				profile.Mark("servo.memory_sample", fields)
 				lastSample = now

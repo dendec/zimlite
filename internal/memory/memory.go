@@ -11,7 +11,8 @@ import (
 )
 
 type System struct {
-	TotalKiB, AvailableKiB, SwapTotalKiB, SwapFreeKiB int64
+	TotalKiB, AvailableKiB, SwapTotalKiB, SwapFreeKiB  int64
+	FreeKiB, CMATotalKiB, CMAFreeKiB, UnreclaimableKiB int64
 }
 
 type Process struct {
@@ -51,7 +52,7 @@ func parseSystem(data []byte) (System, error) {
 	if !totalOK || !availableOK || total <= 0 || available > total {
 		return System{}, errors.New("physical memory information unavailable")
 	}
-	return System{TotalKiB: total, AvailableKiB: available, SwapTotalKiB: values["SwapTotal"], SwapFreeKiB: values["SwapFree"]}, nil
+	return System{TotalKiB: total, AvailableKiB: available, SwapTotalKiB: values["SwapTotal"], SwapFreeKiB: values["SwapFree"], FreeKiB: values["MemFree"], CMATotalKiB: values["CmaTotal"], CMAFreeKiB: values["CmaFree"], UnreclaimableKiB: values["SUnreclaim"]}, nil
 }
 
 func parseKiB(data []byte) (map[string]int64, error) {

@@ -128,15 +128,18 @@ func HelpPage(lang string, hasGamepad bool) (*document.Document, error) {
 }
 
 type settingsData struct {
-	RendererName string
-	RendererNext string
-	ThemeName    string
-	ThemePrev    string
-	ThemeNext    string
-	FontSize     int
-	LangName     string
-	LangPrev     string
-	LangNext     string
+	RendererName   string
+	RendererNext   string
+	RenderModeName string
+	RenderModeNext string
+	FullRenderer   bool
+	ThemeName      string
+	ThemePrev      string
+	ThemeNext      string
+	FontSize       int
+	LangName       string
+	LangPrev       string
+	LangNext       string
 }
 
 var themeIDs = []string{"light", "dark", "sepia"}
@@ -168,19 +171,27 @@ func SettingsPage(lang string, cfg config.Config) (*document.Document, error) {
 	}
 
 	data := settingsData{
-		RendererName: i18n.T(lang, "renderer.simple"),
-		RendererNext: config.ArticleRendererServo,
-		ThemeName:    i18n.T(lang, "theme."+themeIDs[themeIdx]),
-		ThemePrev:    themeIDs[(themeIdx-1+n)%n],
-		ThemeNext:    themeIDs[(themeIdx+1)%n],
-		FontSize:     cfg.FontSize,
-		LangName:     langName,
-		LangPrev:     langs[(langIdx-1+m)%m].Code,
-		LangNext:     langs[(langIdx+1)%m].Code,
+		RendererName:   i18n.T(lang, "renderer.simple"),
+		RendererNext:   config.ArticleRendererServo,
+		RenderModeName: i18n.T(lang, "render_mode.quality"),
+		RenderModeNext: config.RenderModeSpeed,
+		ThemeName:      i18n.T(lang, "theme."+themeIDs[themeIdx]),
+		ThemePrev:      themeIDs[(themeIdx-1+n)%n],
+		ThemeNext:      themeIDs[(themeIdx+1)%n],
+		FontSize:       cfg.FontSize,
+		LangName:       langName,
+		LangPrev:       langs[(langIdx-1+m)%m].Code,
+		LangNext:       langs[(langIdx+1)%m].Code,
 	}
 	if cfg.ArticleRenderer == config.ArticleRendererServo {
+		data.FullRenderer = true
 		data.RendererName = i18n.T(lang, "renderer.full")
 		data.RendererNext = config.ArticleRendererNative
+	}
+
+	if cfg.EffectiveRenderMode() == config.RenderModeSpeed {
+		data.RenderModeName = i18n.T(lang, "render_mode.speed")
+		data.RenderModeNext = config.RenderModeQuality
 	}
 
 	buf, err := executeTemplate(settingsTemplate, lang, data)

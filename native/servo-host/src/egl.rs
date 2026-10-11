@@ -229,8 +229,9 @@ impl RenderingContext for EglContext {
             gl::RGBA,
             gl::UNSIGNED_BYTE,
         );
-        let image = RgbaImage::from_raw(w as u32, h as u32, pixels)?;
-        Some(image::imageops::flip_vertical(&image))
+        let mut image = RgbaImage::from_raw(w as u32, h as u32, pixels)?;
+        image::imageops::flip_vertical_in_place(&mut image);
+        Some(image)
     }
     fn size(&self) -> PhysicalSize<u32> {
         self.size.get()

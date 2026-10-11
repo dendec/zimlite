@@ -10,10 +10,10 @@ import (
 func TestHandheldBudgetUsesAvailableRAMWithoutSwap(t *testing.T) {
 	system := memory.System{TotalKiB: 997816, AvailableKiB: 641948, SwapFreeKiB: 498904}
 	budget := budgetFor(system)
-	if budget.reserveKiB < 190*1024 || budget.helperKiB < 270*1024 || budget.helperKiB > 300*1024 {
+	if budget.reserveKiB != 50*1024 || budget.helperKiB != system.AvailableKiB-50*1024 {
 		t.Fatalf("unexpected handheld budget: %+v", budget)
 	}
-	system.AvailableKiB = 400 * 1024
+	system.AvailableKiB = 240 * 1024
 	lower := budgetFor(system)
 	if lower.helperKiB >= budget.helperKiB || lower.helperKiB >= minimumHelperKiB {
 		t.Fatalf("insufficient RAM should decline startup: %+v", lower)
@@ -34,7 +34,7 @@ func TestMemoryGuardRejectsPressureBeforeExhaustion(t *testing.T) {
 		{"normal", 400 * 1024, 220 * 1024, 0, 450 * 1024, false},
 		{"reserve", 199 * 1024, 220 * 1024, 0, 199 * 1024, true},
 		{"helper budget", 400 * 1024, 301 * 1024, 0, 400 * 1024, true},
-		{"swap", 400 * 1024, 220 * 1024, 17 * 1024, 400 * 1024, true},
+		{"swap", 350 * 1024, 220 * 1024, 17 * 1024, 350 * 1024, true},
 		{"forecast", 250 * 1024, 220 * 1024, 0, 300 * 1024, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

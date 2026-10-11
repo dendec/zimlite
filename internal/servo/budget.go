@@ -10,27 +10,38 @@ import (
 const memoryPollInterval = 50 * time.Millisecond
 const firstFrameTimeout = 20 * time.Second
 const minimumHelperKiB int64 = 192 * 1024
+const systemReserveKiB int64 = 50 * 1024
 
 type memoryBudget struct {
 	reserveKiB, helperKiB, helperSwapKiB int64
 }
 
 func budgetFor(system memory.System) memoryBudget {
-	// Leave room for SDL fallback, Go/native allocations, and the rest of the
-	// handheld. Swap is never counted as available RAM for starting Servo.
-	reserve := max(int64(128*1024), min(int64(256*1024), system.TotalKiB/5))
-	helper := min(int64(1024*1024), max(int64(0), (system.AvailableKiB-reserve)*2/3))
-	swap := int64(128 * 1024)
-	if system.TotalKiB <= 2*1024*1024 {
-		helper = min(helper, 384*1024)
-		swap = 16 * 1024 // Abort before zram/reclaim can make the handheld unresponsive.
+	// Use all available physical RAM except the reserve needed to stop the
+	// helper and display fallback. Reclaimable cache counts; swap does not.
+	return memoryBudget{
+		reserveKiB:    systemReserveKiB,
+		helperKiB:     max(int64(0), system.AvailableKiB-systemReserveKiB),
+		helperSwapKiB: 16 * 1024,
 	}
-	return memoryBudget{reserveKiB: reserve, helperKiB: helper, helperSwapKiB: swap}
+}
+
+// Once the helper is resident, MemAvailable already excludes its allocations.
+// Add its resident footprint back when estimating the total allowance so the
+// limit responds to other consumers without charging Servo twice. Swap is not
+// available capacity. There is no additional fixed process cap or fractional
+// allowance: the budget follows the RAM remaining after other consumers.
+func budgetDuringSession(system memory.System, helper memory.Process) memoryBudget {
+	system.AvailableKiB = min(system.TotalKiB, system.AvailableKiB+helper.RSSKiB)
+	return budgetFor(system)
 }
 
 func (b memoryBudget) check(current memory.System, helper memory.Process, previous memory.System, elapsed time.Duration) error {
 	if current.AvailableKiB < b.reserveKiB {
 		return fmt.Errorf("system memory reserve reached (%d KiB available; reserve %d KiB)", current.AvailableKiB, b.reserveKiB)
+	}
+	if current.AvailableKiB < 2*b.reserveKiB && helper.SwapKiB > b.helperSwapKiB {
+		return fmt.Errorf("servo swap pressure with low RAM (%d KiB swap; %d KiB available)", helper.SwapKiB, current.AvailableKiB)
 	}
 	if err := b.checkHelper(helper); err != nil {
 		return err
@@ -49,11 +60,18 @@ func (b memoryBudget) check(current memory.System, helper memory.Process, previo
 }
 
 func (b memoryBudget) checkHelper(helper memory.Process) error {
-	if helper.RSSKiB+helper.SwapKiB > b.helperKiB {
-		return fmt.Errorf("servo resident memory budget reached (%d KiB RSS+swap; budget %d KiB)", helper.RSSKiB+helper.SwapKiB, b.helperKiB)
+	if b.helperKiB > 0 && helper.RSSKiB > b.helperKiB {
+		return fmt.Errorf("servo physical memory allowance reached (%d KiB RSS; allowance %d KiB)", helper.RSSKiB, b.helperKiB)
 	}
-	if helper.SwapKiB > b.helperSwapKiB {
-		return fmt.Errorf("servo swap pressure (%d KiB; limit %d KiB)", helper.SwapKiB, b.helperSwapKiB)
+	return nil
+}
+
+// Existing inactive swap is not evidence of current pressure. Stop for rapid
+// main-process swap growth only when physical headroom is already low.
+func (b memoryBudget) checkViewer(current memory.System, viewer, previous memory.Process, elapsed time.Duration) error {
+	growth := viewer.SwapKiB - previous.SwapKiB
+	if current.AvailableKiB < 2*b.reserveKiB && elapsed > 0 && elapsed <= 250*time.Millisecond && growth >= 4*1024 {
+		return fmt.Errorf("application swap growing with low RAM (%d KiB new swap; %d KiB available)", growth, current.AvailableKiB)
 	}
 	return nil
 }

@@ -92,5 +92,5 @@ type Scroller interface {
 
 // TableScroller is an optional document view capability.
 type TableScroller interface {
-	ScrollTableHorizontally(direction int32) bool
+	ScrollTableHorizontally(delta int32) bool
 }

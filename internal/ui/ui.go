@@ -267,21 +267,24 @@ func (app *App) ReloadCurrentDocument(doc *document.Document) {
 
 // settingsChange describes the result of parsing a settings URL.
 type settingsChange struct {
-	Theme       string
-	Renderer    string
-	Language    string
-	FontSize    int // delta
-	HasTheme    bool
-	HasRenderer bool
-	HasLang     bool
-	HasFs       bool
+	Theme         string
+	Renderer      string
+	RenderMode    string
+	Language      string
+	FontSize      int // delta
+	HasTheme      bool
+	HasRenderer   bool
+	HasRenderMode bool
+	HasLang       bool
+	HasFs         bool
 }
 
 func parseSettingsURL(u *neturl.URL) settingsChange {
 	sc := settingsChange{
-		Theme:    u.Query().Get("theme"),
-		Renderer: u.Query().Get("renderer"),
-		Language: u.Query().Get("lang"),
+		Theme:      u.Query().Get("theme"),
+		Renderer:   u.Query().Get("renderer"),
+		RenderMode: u.Query().Get("render_mode"),
+		Language:   u.Query().Get("lang"),
 	}
 	fsParam := u.Query().Get("fontsize")
 	if fsParam != "" {
@@ -292,6 +295,7 @@ func parseSettingsURL(u *neturl.URL) settingsChange {
 		}
 	}
 	sc.HasRenderer = sc.Renderer == config.ArticleRendererNative || sc.Renderer == config.ArticleRendererServo
+	sc.HasRenderMode = sc.RenderMode == config.RenderModeSpeed || sc.RenderMode == config.RenderModeQuality
 	sc.HasTheme = sc.Theme != ""
 	sc.HasLang = sc.Language != ""
 	return sc
@@ -301,6 +305,10 @@ func applySettings(cfg config.Provider, sc settingsChange) (themeChanged, anyCha
 	cfg.Update(func(c *config.Config) {
 		if sc.HasRenderer && sc.Renderer != c.ArticleRenderer {
 			c.ArticleRenderer = sc.Renderer
+			anyChanged = true
+		}
+		if sc.HasRenderMode && sc.RenderMode != c.EffectiveRenderMode() {
+			c.RenderMode = sc.RenderMode
 			anyChanged = true
 		}
 		if sc.HasTheme && sc.Theme != c.Theme {

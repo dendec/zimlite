@@ -79,6 +79,13 @@ type GamepadState struct {
 
 func (g *GamepadState) SetController(controller *sdl.GameController) {
 	g.controller = controller
+	g.L2, g.R2 = TriggerDebouncer{}, TriggerDebouncer{}
+	g.leftX, g.leftY = AxisDebouncer{}, AxisDebouncer{}
+	g.leftXValue, g.leftYValue = 0, 0
+	if controller != nil {
+		g.leftXValue = controller.Axis(sdl.CONTROLLER_AXIS_LEFTX)
+		g.leftYValue = controller.Axis(sdl.CONTROLLER_AXIS_LEFTY)
+	}
 }
 
 func (g *GamepadState) Controller() *sdl.GameController {
@@ -86,22 +93,23 @@ func (g *GamepadState) Controller() *sdl.GameController {
 }
 
 func (g *GamepadState) LeftY() int16 {
-	if g.controller != nil {
-		return g.controller.Axis(sdl.CONTROLLER_AXIS_LEFTY)
-	}
 	return g.leftYValue
 }
 
 func (g *GamepadState) LeftX() int16 {
-	if g.controller != nil {
-		return g.controller.Axis(sdl.CONTROLLER_AXIS_LEFTX)
-	}
 	return g.leftXValue
 }
 
 // TranslateEvent processes a raw SDL event. If the event is a GameController event, it translates it to an Action and returns true.
 func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bool) {
 	switch e := event.(type) {
+	case *sdl.ControllerDeviceEvent:
+		if e.Type == sdl.CONTROLLERDEVICEREMOVED {
+			if g.controller == nil || g.controller.Joystick().InstanceID() == e.Which {
+				g.SetController(nil)
+			}
+			return ActionNone, true
+		}
 	case *sdl.ControllerAxisEvent:
 		v := e.Value
 		switch e.Axis {
@@ -145,16 +153,9 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 			}
 		} else {
 			switch e.Axis {
-			case sdl.CONTROLLER_AXIS_LEFTY:
-				if !g.leftY.Update(v, analogDeadZone) {
-					return ActionNone, true
-				}
-				if v < 0 {
-					return ActionScrollUp, true
-				}
-				return ActionScrollDown, true
-			case sdl.CONTROLLER_AXIS_LEFTX:
-				// Horizontal stick motion scrolls an overflowing table in Update.
+			case sdl.CONTROLLER_AXIS_LEFTY, sdl.CONTROLLER_AXIS_LEFTX:
+				// Retain the mapped event value until the next axis event, including
+				// release. Update integrates both axes on every frame while held.
 				return ActionNone, true
 			}
 		}

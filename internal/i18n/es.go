@@ -1,13 +1,17 @@
 package i18n
 
 var esTranslations = map[string]string{
-	"tree.load_error":        "No se pudo cargar el árbol de artículos: %s",
-	"settings.renderer":      "🖼️ Renderizador de artículos",
-	"renderer.full":          "Completo",
-	"renderer.simple":        "Simple",
-	"settings.renderer_note": "El renderizador completo cambia automáticamente al simple si falta memoria o se produce un error.",
-	"servo.loading":          "Renderizador completo: cargando artículo…",
-	"servo.fallback":         "Renderizador completo no disponible; usando el simple: %s",
+	"tree.load_error":           "No se pudo cargar el árbol de artículos: %s",
+	"settings.renderer":         "🖼️ Renderizador de artículos",
+	"renderer.full":             "Completo",
+	"renderer.simple":           "Simple",
+	"settings.renderer_note":    "El renderizador completo cambia automáticamente al simple si falta memoria o se produce un error.",
+	"settings.render_mode":      "⚡ Modo de renderizado",
+	"render_mode.speed":         "Velocidad",
+	"render_mode.quality":       "Calidad",
+	"settings.render_mode_note": "Velocidad: resolución fija de hasta 640×480, desplazamiento más rápido con menor nitidez. Calidad: resolución de pantalla, reducida al desplazarse.",
+	"servo.loading":             "Renderizador completo: cargando artículo…",
+	"servo.fallback":            "Renderizador completo no disponible; usando el simple: %s",
 	// Menu
 	"menu.title":          "📖 Menú",
 	"menu.help":           "❓ Ayuda",

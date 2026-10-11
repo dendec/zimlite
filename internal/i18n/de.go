@@ -1,13 +1,17 @@
 package i18n
 
 var deTranslations = map[string]string{
-	"tree.load_error":        "Artikelbaum konnte nicht geladen werden: %s",
-	"settings.renderer":      "🖼️ Artikeldarstellung",
-	"renderer.full":          "Vollständig",
-	"renderer.simple":        "Einfach",
-	"settings.renderer_note": "Die vollständige Darstellung wechselt bei Speichermangel oder Fehlern automatisch zur einfachen Darstellung.",
-	"servo.loading":          "Vollständige Darstellung: Artikel wird geladen…",
-	"servo.fallback":         "Vollständige Darstellung nicht verfügbar; einfache Darstellung wird verwendet: %s",
+	"tree.load_error":           "Artikelbaum konnte nicht geladen werden: %s",
+	"settings.renderer":         "🖼️ Artikeldarstellung",
+	"renderer.full":             "Vollständig",
+	"renderer.simple":           "Einfach",
+	"settings.renderer_note":    "Die vollständige Darstellung wechselt bei Speichermangel oder Fehlern automatisch zur einfachen Darstellung.",
+	"settings.render_mode":      "⚡ Darstellungsmodus",
+	"render_mode.speed":         "Geschwindigkeit",
+	"render_mode.quality":       "Qualität",
+	"settings.render_mode_note": "Geschwindigkeit: feste Auflösung bis 640×480, schnelleres Scrollen bei geringerer Schärfe. Qualität: Bildschirmauflösung, beim Scrollen reduziert.",
+	"servo.loading":             "Vollständige Darstellung: Artikel wird geladen…",
+	"servo.fallback":            "Vollständige Darstellung nicht verfügbar; einfache Darstellung wird verwendet: %s",
 	// Menu
 	"menu.title":          "📖 Menü",
 	"menu.help":           "❓ Hilfe",

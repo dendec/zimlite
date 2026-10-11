@@ -41,7 +41,13 @@ if [ "$ZIMLITE_SERVO_CONTEXT" = software ]; then
     export LD_LIBRARY_PATH="$runtime_prefix/software:$LD_LIBRARY_PATH"
     export LIBGL_DRIVERS_PATH="$runtime_prefix/software/dri"
     export __EGL_VENDOR_LIBRARY_FILENAMES="$runtime_prefix/software/egl_vendor.json"
-    export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe LP_NUM_THREADS=2 EGL_PLATFORM=surfaceless
+    # Give llvmpipe up to four raster workers; the watchdog still bounds RAM.
+    raster_threads=$(getconf _NPROCESSORS_ONLN 2>/dev/null || printf '2')
+    case "$raster_threads" in 1|2|3|4) ;; *) raster_threads=4 ;; esac
+    export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe LP_NUM_THREADS="${LP_NUM_THREADS:-$raster_threads}" EGL_PLATFORM=surfaceless
+    # Half-resolution motion frames preserve CSS layout through HiDPI scaling.
+    # Requires the paired application update; full resolution returns on idle.
+    export ZIMLITE_SERVO_SCROLL_SCALE="${ZIMLITE_SERVO_SCROLL_SCALE:-0.5}"
     export ZIMLITE_SERVO_CONTEXT=gles
 fi
 exec "$runtime_prefix/bin/zimlite-servo-host" "$@"

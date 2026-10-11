@@ -1,13 +1,17 @@
 package i18n
 
 var zhTranslations = map[string]string{
-	"tree.load_error":        "无法加载文章目录：%s",
-	"settings.renderer":      "🖼️ 文章渲染器",
-	"renderer.full":          "完整",
-	"renderer.simple":        "简单",
-	"settings.renderer_note": "内存不足或发生错误时，完整渲染器会自动切换到简单渲染器。",
-	"servo.loading":          "完整渲染器：正在加载文章…",
-	"servo.fallback":         "完整渲染器不可用，正在使用简单渲染器：%s",
+	"tree.load_error":           "无法加载文章目录：%s",
+	"settings.renderer":         "🖼️ 文章渲染器",
+	"renderer.full":             "完整",
+	"renderer.simple":           "简单",
+	"settings.renderer_note":    "内存不足或发生错误时，完整渲染器会自动切换到简单渲染器。",
+	"settings.render_mode":      "⚡ 渲染模式",
+	"render_mode.speed":         "速度",
+	"render_mode.quality":       "画质",
+	"settings.render_mode_note": "速度：固定使用最高640×480的分辨率，滚动更快，但清晰度较低。画质：使用屏幕分辨率，滚动时降低分辨率。",
+	"servo.loading":             "完整渲染器：正在加载文章…",
+	"servo.fallback":            "完整渲染器不可用，正在使用简单渲染器：%s",
 	// Menu
 	"menu.title":          "📖 菜单",
 	"menu.help":           "❓ 帮助",

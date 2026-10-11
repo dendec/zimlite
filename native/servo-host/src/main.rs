@@ -167,6 +167,11 @@ fn run() -> Result<(), Box<dyn Error>> {
     preferences.thread_pool_fallback_workers = 1;
     preferences.thread_pool_canvas_workers = 0;
     preferences.thread_pool_webrender_workers_max = 2;
+    if std::env::var("LIBGL_ALWAYS_SOFTWARE").as_deref() == Ok("1") {
+        // Grayscale AA keeps text smooth without the extra subpixel passes
+        // that are particularly expensive on a CPU rasterizer.
+        preferences.gfx_subpixel_text_antialiasing_enabled = false;
+    }
     preferences.session_history_max_length = 1;
     profile_stage("servo_builder.begin", process_started);
     let servo = ServoBuilder::default()

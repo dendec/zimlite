@@ -1,13 +1,17 @@
 package i18n
 
 var enTranslations = map[string]string{
-	"tree.load_error":        "Cannot load article tree: %s",
-	"settings.renderer":      "🖼️ Article renderer",
-	"renderer.full":          "Full",
-	"renderer.simple":        "Simple",
-	"settings.renderer_note": "The full renderer automatically switches to the simple renderer if memory is low or an error occurs.",
-	"servo.loading":          "Full renderer: loading article…",
-	"servo.fallback":         "Full renderer unavailable; using simple renderer: %s",
+	"tree.load_error":           "Cannot load article tree: %s",
+	"settings.renderer":         "🖼️ Article renderer",
+	"renderer.full":             "Full",
+	"renderer.simple":           "Simple",
+	"settings.renderer_note":    "The full renderer automatically switches to the simple renderer if memory is low or an error occurs.",
+	"settings.render_mode":      "⚡ Render mode",
+	"render_mode.speed":         "Speed",
+	"render_mode.quality":       "Quality",
+	"settings.render_mode_note": "Speed: fixed resolution up to 640×480, faster scrolling with lower sharpness. Quality: screen resolution, reduced while scrolling.",
+	"servo.loading":             "Full renderer: loading article…",
+	"servo.fallback":            "Full renderer unavailable; using simple renderer: %s",
 	// Menu
 	"menu.title":          "📖 Menu",
 	"menu.help":           "❓ Help",

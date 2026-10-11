@@ -55,6 +55,8 @@ if [ -x "$GAMEDIR/servo/run.sh" ]; then
   export KIWIX_APP_DIR="$GAMEDIR"
   app_binary="$app_runtime_dir/zimlite"
 fi
+# Use a fixed small viewport unless the saved config selects quality.
+export KIWIX_DEFAULT_RENDER_MODE=speed
 "$app_binary"
 [ -n "$app_runtime_dir" ] && rm -rf -- "$app_runtime_dir"
 

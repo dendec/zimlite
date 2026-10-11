@@ -1,13 +1,17 @@
 package i18n
 
 var idTranslations = map[string]string{
-	"tree.load_error":        "Tidak dapat memuat pohon artikel: %s",
-	"settings.renderer":      "🖼️ Perender artikel",
-	"renderer.full":          "Lengkap",
-	"renderer.simple":        "Sederhana",
-	"settings.renderer_note": "Perender lengkap otomatis beralih ke perender sederhana jika memori tidak cukup atau terjadi kesalahan.",
-	"servo.loading":          "Perender lengkap: memuat artikel…",
-	"servo.fallback":         "Perender lengkap tidak tersedia; menggunakan perender sederhana: %s",
+	"tree.load_error":           "Tidak dapat memuat pohon artikel: %s",
+	"settings.renderer":         "🖼️ Perender artikel",
+	"renderer.full":             "Lengkap",
+	"renderer.simple":           "Sederhana",
+	"settings.renderer_note":    "Perender lengkap otomatis beralih ke perender sederhana jika memori tidak cukup atau terjadi kesalahan.",
+	"settings.render_mode":      "⚡ Mode render",
+	"render_mode.speed":         "Kecepatan",
+	"render_mode.quality":       "Kualitas",
+	"settings.render_mode_note": "Kecepatan: resolusi tetap hingga 640×480, pengguliran lebih cepat dengan ketajaman lebih rendah. Kualitas: resolusi layar, dikurangi saat menggulir.",
+	"servo.loading":             "Perender lengkap: memuat artikel…",
+	"servo.fallback":            "Perender lengkap tidak tersedia; menggunakan perender sederhana: %s",
 	// Menu
 	"menu.title":          "📖 Menu",
 	"menu.help":           "❓ Bantuan",

@@ -1,13 +1,17 @@
 package i18n
 
 var koTranslations = map[string]string{
-	"tree.load_error":        "문서 트리를 불러올 수 없습니다: %s",
-	"settings.renderer":      "🖼️ 문서 렌더러",
-	"renderer.full":          "전체",
-	"renderer.simple":        "간단",
-	"settings.renderer_note": "메모리가 부족하거나 오류가 발생하면 전체 렌더러가 자동으로 간단 렌더러로 전환됩니다.",
-	"servo.loading":          "전체 렌더러: 문서를 불러오는 중…",
-	"servo.fallback":         "전체 렌더러를 사용할 수 없어 간단 렌더러를 사용합니다: %s",
+	"tree.load_error":           "문서 트리를 불러올 수 없습니다: %s",
+	"settings.renderer":         "🖼️ 문서 렌더러",
+	"renderer.full":             "전체",
+	"renderer.simple":           "간단",
+	"settings.renderer_note":    "메모리가 부족하거나 오류가 발생하면 전체 렌더러가 자동으로 간단 렌더러로 전환됩니다.",
+	"settings.render_mode":      "⚡ 렌더링 모드",
+	"render_mode.speed":         "속도",
+	"render_mode.quality":       "화질",
+	"settings.render_mode_note": "속도: 최대 640×480의 고정 해상도로 선명도를 낮추고 스크롤 속도를 높입니다. 화질: 화면 해상도를 사용하고 스크롤 중에는 해상도를 낮춥니다.",
+	"servo.loading":             "전체 렌더러: 문서를 불러오는 중…",
+	"servo.fallback":            "전체 렌더러를 사용할 수 없어 간단 렌더러를 사용합니다: %s",
 	// Menu
 	"menu.title":          "📖 메뉴",
 	"menu.help":           "❓ 도움말",

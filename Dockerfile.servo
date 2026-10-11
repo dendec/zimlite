@@ -13,8 +13,8 @@ ENV LIBCLANG_PATH=/usr/lib/llvm-16/lib
 FROM toolchain AS builder
 WORKDIR /build
 COPY lib/servo lib/servo
-COPY patches/servo-unifont-fallback.patch patches/
-RUN git apply --directory=lib/servo patches/servo-unifont-fallback.patch
+COPY patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch patches/
+RUN git apply --directory=lib/servo patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch
 COPY native/servo-host native/servo-host
 WORKDIR /build/native/servo-host
 ENV CARGO_TARGET_DIR=/build/target
@@ -48,8 +48,8 @@ ENV CARGO_TARGET_DIR=/build/target \
     PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 WORKDIR /build
 COPY lib/servo lib/servo
-COPY patches/servo-unifont-fallback.patch patches/
-RUN git apply --directory=lib/servo patches/servo-unifont-fallback.patch
+COPY patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch patches/
+RUN git apply --directory=lib/servo patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch
 COPY native/servo-host native/servo-host
 WORKDIR /build/native/servo-host
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

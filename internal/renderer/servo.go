@@ -11,6 +11,7 @@ import (
 	"unsafe"
 
 	"github.com/dendec/zimlite/internal/article"
+	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/i18n"
 	engine "github.com/dendec/zimlite/internal/servo"
 	"github.com/veandco/go-sdl2/sdl"
@@ -23,9 +24,10 @@ type servoView struct {
 	textureWidth, textureHeight int32
 	links                       int
 	selectedURL                 string
-	tableScrollLeft             bool
-	tableScrollRight            bool
 	loading                     string
+	renderMode                  string
+	scrollRemainder             float64
+	tableScrollRemainder        float64
 }
 
 func servoHelper() string {
@@ -60,8 +62,13 @@ func (r *Renderer) OpenArticle(source article.Source, entry string) error {
 	r.treeItems = nil
 	r.layout = PageLayout{}
 	r.width, r.height = r.window.GetSize()
-	width, height := r.servoViewport()
-	session, err := engine.NewSession(helper, source, entry, width, height)
+	renderMode := config.Get().EffectiveRenderMode()
+	width, height := r.servoViewport(renderMode)
+	motionScale := float32(0.5)
+	if renderMode == config.RenderModeSpeed {
+		motionScale = 1
+	}
+	session, err := engine.NewSessionWithOptions(helper, source, entry, width, height, engine.SessionOptions{MotionScale: motionScale})
 	if err != nil {
 		return err
 	}
@@ -70,7 +77,7 @@ func (r *Renderer) OpenArticle(source article.Source, entry string) error {
 	r.hoveredLink = -1
 	r.docTitle = entry
 	r.servoError = nil
-	r.servo = &servoView{session: session, width: width, height: height, loading: i18n.T(r.lang, "servo.loading")}
+	r.servo = &servoView{session: session, width: width, height: height, renderMode: renderMode, loading: i18n.T(r.lang, "servo.loading")}
 	r.SetStatusOverride(r.servo.loading)
 	r.servoSend(engine.Command{Op: "zoom", Scale: float32(r.baseFontSize) / 16})
 	r.sendServoTheme()
@@ -128,17 +135,39 @@ func (r *Renderer) ScrollToAnchor(anchor string) {
 	r.servoSend(engine.Command{Op: "anchor", Text: anchor})
 }
 
-// ScrollTableHorizontally moves the selected link's table without moving the
-// article. It returns false when no selected table can scroll in that direction.
-func (r *Renderer) ScrollTableHorizontally(direction int32) bool {
-	if r.servo == nil {
+// ScrollTableHorizontally lets the helper choose a visible wide table without
+// moving the article. Resolve the target there, rather than gating input on an
+// asynchronous state sample that may describe an earlier viewport/selection.
+func (r *Renderer) ScrollTableHorizontally(delta int32) bool {
+	if r.servo == nil || delta == 0 {
 		return false
 	}
-	if direction == 0 || (direction < 0 && !r.servo.tableScrollLeft) || (direction > 0 && !r.servo.tableScrollRight) {
-		return false
+	if pixels := r.servoDelta(delta, true); pixels != 0 {
+		r.servoSend(engine.Command{Op: "table_scroll_by", Value: pixels})
 	}
-	r.servoSend(engine.Command{Op: "table_scroll", Value: direction})
 	return true
+}
+
+// Convert screen pixels to article pixels, retaining subpixel input when SDL
+// enlarges a small viewport. Reversing direction discards the old remainder.
+func (r *Renderer) servoDelta(delta int32, horizontal bool) int32 {
+	view := r.servo
+	raster, screen := float64(view.height), float64(r.height-r.getStatusBarHeight())
+	remainder := &view.scrollRemainder
+	if horizontal {
+		raster, screen = float64(view.width), float64(r.width)
+		remainder = &view.tableScrollRemainder
+	}
+	if delta == 0 || screen <= 0 {
+		return 0
+	}
+	if (*remainder < 0) != (delta < 0) {
+		*remainder = 0
+	}
+	*remainder += float64(delta) * raster / screen / (float64(r.baseFontSize) / 16)
+	pixels := int32(*remainder)
+	*remainder -= float64(pixels)
+	return pixels
 }
 
 func (r *Renderer) servoSend(command engine.Command) {
@@ -155,7 +184,7 @@ func (r *Renderer) sendServoTheme() {
 	}
 	r.servoSend(engine.Command{Op: "theme", Text: theme})
 }
-func (r *Renderer) servoViewport() (uint32, uint32) {
+func (r *Renderer) servoViewport(renderMode string) (uint32, uint32) {
 	w, h := float64(r.width), float64(r.height-r.getStatusBarHeight())
 	if w < 1 {
 		w = 1
@@ -163,7 +192,11 @@ func (r *Renderer) servoViewport() (uint32, uint32) {
 	if h < 1 {
 		h = 1
 	}
-	scale := math.Min(1, math.Min(1280/w, 1280/h))
+	maxWidth, maxHeight := float64(1280), float64(1280)
+	if renderMode == config.RenderModeSpeed {
+		maxWidth, maxHeight = 640, 480
+	}
+	scale := math.Min(1, math.Min(maxWidth/w, maxHeight/h))
 	scale = math.Min(scale, math.Sqrt(float64(engine.MaxPixels)/(w*h)))
 	return uint32(math.Max(1, math.Floor(w*scale))), uint32(math.Max(1, math.Floor(h*scale)))
 }
@@ -171,7 +204,7 @@ func (r *Renderer) resizeServo() {
 	if r.servo == nil {
 		return
 	}
-	width, height := r.servoViewport()
+	width, height := r.servoViewport(r.servo.renderMode)
 	if width != r.servo.width || height != r.servo.height {
 		r.servo.width, r.servo.height = width, height
 		r.servoSend(engine.Command{Op: "resize", Width: width, Height: height})
@@ -198,15 +231,17 @@ func (r *Renderer) renderServo() {
 		r.docTitle = state.Title
 		if state.SelectedLink == r.selectedLink {
 			view.selectedURL = state.SelectedURL
-			view.tableScrollLeft = state.TableScrollLeft
-			view.tableScrollRight = state.TableScrollRight
 		}
 	default:
 	}
 	select {
 	case frame := <-view.session.Frames:
 		width, height := int32(frame.Rect.Dx()), int32(frame.Rect.Dy())
-		if uint32(width) != view.width || uint32(height) != view.height {
+		// The helper may rasterize at half resolution during motion. SDL
+		// scales that texture; idle frames return to full resolution.
+		fullSize := uint32(width) == view.width && uint32(height) == view.height
+		motionSize := uint32(width) == (view.width+1)/2 && uint32(height) == (view.height+1)/2
+		if !fullSize && !motionSize {
 			break
 		}
 		if view.texture == nil || width != view.textureWidth || height != view.textureHeight {

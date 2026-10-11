@@ -14,6 +14,7 @@ type Config struct {
 	Theme           string `json:"theme"`
 	FontSize        int    `json:"font_size"`
 	ArticleRenderer string `json:"article_renderer"`
+	RenderMode      string `json:"render_mode"`
 }
 
 const (
@@ -21,6 +22,8 @@ const (
 	MaxFontSize           = 32
 	ArticleRendererNative = "native"
 	ArticleRendererServo  = "servo"
+	RenderModeSpeed       = "speed"
+	RenderModeQuality     = "quality"
 )
 
 // Provider abstracts config access for dependency injection.
@@ -52,7 +55,23 @@ func Default() Config {
 		Theme:           "dark",
 		FontSize:        16,
 		ArticleRenderer: ArticleRendererNative,
+		RenderMode:      defaultRenderMode(),
 	}
+}
+
+// EffectiveRenderMode also handles older configurations without a render mode.
+func (c Config) EffectiveRenderMode() string {
+	if c.RenderMode == RenderModeSpeed || c.RenderMode == RenderModeQuality {
+		return c.RenderMode
+	}
+	return defaultRenderMode()
+}
+
+func defaultRenderMode() string {
+	if os.Getenv("KIWIX_DEFAULT_RENDER_MODE") == RenderModeSpeed {
+		return RenderModeSpeed
+	}
+	return RenderModeQuality
 }
 
 // Get returns the current configuration.
@@ -116,6 +135,7 @@ func Load() {
 	if currentConfig.ArticleRenderer != ArticleRendererServo {
 		currentConfig.ArticleRenderer = ArticleRendererNative
 	}
+	currentConfig.RenderMode = currentConfig.EffectiveRenderMode()
 }
 
 // Save writes the current configuration to disk.

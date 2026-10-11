@@ -1,13 +1,17 @@
 package i18n
 
 var trTranslations = map[string]string{
-	"tree.load_error":        "Makale ağacı yüklenemedi: %s",
-	"settings.renderer":      "🖼️ Makale işleyicisi",
-	"renderer.full":          "Tam",
-	"renderer.simple":        "Basit",
-	"settings.renderer_note": "Bellek yetersizse veya bir hata oluşursa tam işleyici otomatik olarak basit işleyiciye geçer.",
-	"servo.loading":          "Tam işleyici: makale yükleniyor…",
-	"servo.fallback":         "Tam işleyici kullanılamıyor; basit işleyici kullanılıyor: %s",
+	"tree.load_error":           "Makale ağacı yüklenemedi: %s",
+	"settings.renderer":         "🖼️ Makale işleyicisi",
+	"renderer.full":             "Tam",
+	"renderer.simple":           "Basit",
+	"settings.renderer_note":    "Bellek yetersizse veya bir hata oluşursa tam işleyici otomatik olarak basit işleyiciye geçer.",
+	"settings.render_mode":      "⚡ İşleme modu",
+	"render_mode.speed":         "Hız",
+	"render_mode.quality":       "Kalite",
+	"settings.render_mode_note": "Hız: 640×480’e kadar sabit çözünürlük, daha düşük netlikle daha hızlı kaydırma. Kalite: ekran çözünürlüğü, kaydırma sırasında azaltılır.",
+	"servo.loading":             "Tam işleyici: makale yükleniyor…",
+	"servo.fallback":            "Tam işleyici kullanılamıyor; basit işleyici kullanılıyor: %s",
 	// Menu
 	"menu.title":          "📖 Menü",
 	"menu.help":           "❓ Yardım",

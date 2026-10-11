@@ -1,13 +1,17 @@
 package i18n
 
 var jaTranslations = map[string]string{
-	"tree.load_error":        "記事ツリーを読み込めませんでした：%s",
-	"settings.renderer":      "🖼️ 記事の描画",
-	"renderer.full":          "フル",
-	"renderer.simple":        "シンプル",
-	"settings.renderer_note": "メモリ不足やエラーが発生した場合、フル描画からシンプル描画に自動で切り替わります。",
-	"servo.loading":          "フル描画：記事を読み込み中…",
-	"servo.fallback":         "フル描画を利用できないため、シンプル描画を使用します：%s",
+	"tree.load_error":           "記事ツリーを読み込めませんでした：%s",
+	"settings.renderer":         "🖼️ 記事の描画",
+	"renderer.full":             "フル",
+	"renderer.simple":           "シンプル",
+	"settings.renderer_note":    "メモリ不足やエラーが発生した場合、フル描画からシンプル描画に自動で切り替わります。",
+	"settings.render_mode":      "⚡ 描画モード",
+	"render_mode.speed":         "速度",
+	"render_mode.quality":       "画質",
+	"settings.render_mode_note": "速度：最大640×480の固定解像度で、鮮明さを抑えてスクロールを高速化します。画質：画面の解像度を使用し、スクロール中は解像度を下げます。",
+	"servo.loading":             "フル描画：記事を読み込み中…",
+	"servo.fallback":            "フル描画を利用できないため、シンプル描画を使用します：%s",
 	// Menu
 	"menu.title":          "📖 メニュー",
 	"menu.help":           "❓ ヘルプ",

@@ -570,8 +570,6 @@ func (r *Renderer) SetSelectedLinkIndex(idx int) {
 	if r.servo != nil {
 		r.selectedLink = idx
 		r.servo.selectedURL = ""
-		r.servo.tableScrollLeft = false
-		r.servo.tableScrollRight = false
 		r.servoSend(engine.Command{Op: "select", Value: int32(idx)})
 		return
 	}
@@ -715,11 +713,9 @@ func (r *Renderer) clampSelection() {
 
 func (r *Renderer) ScrollBy(delta int32) {
 	if r.servo != nil {
-		h := r.height - r.getStatusBarHeight()
-		if h > 0 {
-			delta = int32(float64(delta) * float64(r.servo.height) / float64(h) / (float64(r.baseFontSize) / 16))
+		if pixels := r.servoDelta(delta, false); pixels != 0 {
+			r.servoSend(engine.Command{Op: "scroll", Value: pixels})
 		}
-		r.servoSend(engine.Command{Op: "scroll", Value: delta})
 		return
 	}
 	r.scrollY += delta
