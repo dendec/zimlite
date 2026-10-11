@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/document"
@@ -163,18 +164,6 @@ func (c *TextureCache[K]) DestroyAll() {
 	c.evictList.Init()
 }
 
-type ResourceLoader func(url string) ([]byte, error)
-
-// TreeItem describes one item in the tree view for structured rendering.
-type TreeItem struct {
-	Text       string
-	Path       string
-	IsLeaf     bool
-	IsCursor   bool
-	LabelStart int // rune offset where label begins in Text
-	LabelEnd   int // rune offset where label ends in Text (exclusive)
-}
-
 type imageEntry struct {
 	x, y, w, h int32
 	url        string
@@ -196,7 +185,7 @@ type Renderer struct {
 	servo      *servoView
 	servoError error
 
-	treeItems []TreeItem // cached for theme toggle
+	treeItems []document.TreeItem // cached for theme toggle
 
 	doc *document.Document
 
@@ -224,6 +213,7 @@ type Renderer struct {
 	fontPath            string
 	docTitle            string
 	statusOverride      string
+	statusMu            sync.RWMutex
 	hasActiveAnimations bool
 	hoveredLink         int
 	hoveredTreeLine     int // index of hovered tree line (-1 = none)
@@ -357,7 +347,7 @@ func (r *Renderer) ClearCache() {
 	}
 }
 
-func (r *Renderer) SetResourceLoader(loader ResourceLoader) {
+func (r *Renderer) SetResourceLoader(loader document.ResourceLoader) {
 	if r.imgManager != nil {
 		r.imgManager.SetLoader(loader)
 	}
@@ -485,7 +475,7 @@ func (r *Renderer) Relayout() {
 // --- Text line mode (for tree view, etc.) ---
 
 // SetTextLines configures the renderer for simple text-line display mode.
-func (r *Renderer) SetTextLines(title string, items []TreeItem) {
+func (r *Renderer) SetTextLines(title string, items []document.TreeItem) {
 	r.StopArticle()
 	r.treeItems = items
 	r.layout = PageLayout{}
@@ -580,6 +570,8 @@ func (r *Renderer) SetSelectedLinkIndex(idx int) {
 	if r.servo != nil {
 		r.selectedLink = idx
 		r.servo.selectedURL = ""
+		r.servo.tableScrollLeft = false
+		r.servo.tableScrollRight = false
 		r.servoSend(engine.Command{Op: "select", Value: int32(idx)})
 		return
 	}
@@ -967,11 +959,15 @@ func (r *Renderer) Zoom(delta int) error {
 
 // SetStatusOverride sets a custom status bar message to override help legends.
 func (r *Renderer) SetStatusOverride(status string) {
+	r.statusMu.Lock()
+	defer r.statusMu.Unlock()
 	r.statusOverride = status
 }
 
 // GetStatusOverride returns the current custom status bar message.
 func (r *Renderer) GetStatusOverride() string {
+	r.statusMu.RLock()
+	defer r.statusMu.RUnlock()
 	return r.statusOverride
 }
 

@@ -82,6 +82,7 @@ func (r *Renderer) StopArticle() {
 	}
 	view := r.servo
 	r.servo = nil
+	r.servoError = nil
 	view.session.Close()
 	if view.texture != nil {
 		view.texture.Destroy()
@@ -193,12 +194,12 @@ func (r *Renderer) renderServo() {
 			return
 		}
 		view.links = state.LinkCount
-		view.tableScrollLeft = state.TableScrollLeft
-		view.tableScrollRight = state.TableScrollRight
 		r.scrollY = state.ScrollY
 		r.docTitle = state.Title
 		if state.SelectedLink == r.selectedLink {
 			view.selectedURL = state.SelectedURL
+			view.tableScrollLeft = state.TableScrollLeft
+			view.tableScrollRight = state.TableScrollRight
 		}
 	default:
 	}
@@ -211,6 +212,7 @@ func (r *Renderer) renderServo() {
 		if view.texture == nil || width != view.textureWidth || height != view.textureHeight {
 			if view.texture != nil {
 				view.texture.Destroy()
+				view.texture = nil
 			}
 			texture, err := r.sdlRenderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STREAMING, width, height)
 			if err != nil {

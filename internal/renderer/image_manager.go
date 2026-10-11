@@ -13,6 +13,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/dendec/zimlite/internal/document"
 	"github.com/dendec/zimlite/internal/svg"
 	"github.com/veandco/go-sdl2/sdl"
 	_ "golang.org/x/image/webp"
@@ -31,7 +32,7 @@ type AnimatedTexture struct {
 }
 
 type ImageManager struct {
-	loader     ResourceLoader
+	loader     document.ResourceLoader
 	cache      *TextureCache[string]
 	animated   map[string]*AnimatedTexture
 	dimensions map[string]struct{ w, h int32 }
@@ -52,7 +53,7 @@ func NewImageManager(renderer *sdl.Renderer) *ImageManager {
 	}
 }
 
-func (m *ImageManager) SetLoader(loader ResourceLoader) {
+func (m *ImageManager) SetLoader(loader document.ResourceLoader) {
 	m.loader = loader
 }
 
@@ -302,6 +303,7 @@ func (m *ImageManager) createTextureFromImage(url string, img image.Image) *sdl.
 
 func (m *ImageManager) ClearCache() {
 	m.cache.Clear()
+	clear(m.dimensions)
 	for k, anim := range m.animated {
 		if anim.Texture != nil {
 			anim.Texture.Destroy()

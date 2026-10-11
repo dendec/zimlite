@@ -6,6 +6,7 @@ import (
 	"github.com/dendec/zimlite/internal/article"
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/navigation"
 )
 
 // LoaderHost is the interface DocumentLoader uses to communicate back to the App.
@@ -13,7 +14,7 @@ import (
 type LoaderHost interface {
 	showDocument(doc *document.Document, navKey string)
 	showArticle(article.Source, string, string) error
-	getNavigator() DocNavigator
+	getNavigator() navigation.Navigator
 	getViewer() DocViewer
 	getScroller() Scroller
 	getLinks() LinkBrowser
@@ -26,9 +27,9 @@ type LoaderHost interface {
 // Ensure App implements LoaderHost at compile time.
 var _ LoaderHost = (*App)(nil)
 
-func (app *App) getNavigator() DocNavigator { return app.navigator }
-func (app *App) getViewer() DocViewer       { return app.viewer }
-func (app *App) getScroller() Scroller      { return app.scroller }
-func (app *App) getLinks() LinkBrowser      { return app.links }
-func (app *App) getConfig() config.Provider { return app.config }
-func (app *App) navStateClear()             { app.navState = nil }
+func (app *App) getNavigator() navigation.Navigator { return app.navigator }
+func (app *App) getViewer() DocViewer               { return app.viewer }
+func (app *App) getScroller() Scroller              { return app.scroller }
+func (app *App) getLinks() LinkBrowser              { return app.links }
+func (app *App) getConfig() config.Provider         { return app.config }
+func (app *App) navStateClear()                     { app.navState = nil }

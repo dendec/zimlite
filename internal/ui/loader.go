@@ -17,7 +17,6 @@ import (
 	"github.com/dendec/zimlite/internal/menu"
 	"github.com/dendec/zimlite/internal/storage"
 	"github.com/dendec/zimlite/internal/util"
-	"github.com/dendec/zimlite/internal/zim"
 	"github.com/veandco/go-sdl2/sdl"
 )
 
@@ -131,7 +130,6 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 		}
 	}
 	var absPath string
-	var isZIM bool
 	var doc *document.Document
 	var err error
 
@@ -162,43 +160,22 @@ func (l *DocumentLoader) OpenFile(pathStr string) error {
 			absPath = pathStr
 		}
 
-		isZIM = strings.ToLower(filepath.Ext(absPath)) == ".zim"
-		if !isZIM {
-			l.shutdown()
-		}
-
+		l.shutdown()
 		var ok bool
 		doc, ok = l.docCache[absPath]
-		if !ok || (isZIM && l.zimReader == nil) {
-			if isZIM {
-				var zr *zim.Reader
-				l.shutdown()
-				zr, doc, err = storage.OpenZIM(absPath)
-				if err != nil {
-					return err
-				}
-				l.zimReader = zr
-			} else {
-				doc, err = storage.OpenFile(absPath)
-				if err != nil {
-					return err
-				}
+		if !ok {
+			doc, err = storage.OpenFile(absPath)
+			if err != nil {
+				return err
 			}
 			l.cacheDocument(absPath, doc)
 		}
 	}
 
-	if isZIM && l.zimReader != nil {
-		mainPath := l.zimReader.MainPagePath()
-		navKey := "zim:" + mainPath
-		l.cacheDocument(navKey, doc)
-		l.host.getViewer().SetHasTree(l.zimReader.ArticleCount() > 1)
-		l.host.showDocument(doc, navKey)
-	} else {
-		l.host.showDocument(doc, absPath)
-	}
+	l.host.getViewer().SetHasTree(false)
+	l.host.showDocument(doc, absPath)
 
-	slog.Info("Successfully loaded document", "path", pathStr, "isZIM", isZIM)
+	slog.Info("Successfully loaded document", "path", pathStr)
 	return nil
 }
 
@@ -424,13 +401,7 @@ func (l *DocumentLoader) navigateZIMArticle(rawURL string) {
 		return
 	}
 	current := l.locations[l.host.getNavigator().Current()]
-	resolver, ok := l.zimReader.(interface {
-		ResolveArticlePath(string, string) (string, error)
-	})
-	if !ok {
-		return
-	}
-	entry, err := resolver.ResolveArticlePath(rawURL, current.Entry)
+	entry, err := l.zimReader.ResolveArticlePath(rawURL, current.Entry)
 	if err != nil {
 		slog.Error("Resolve article failed", "error", err)
 		return

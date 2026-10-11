@@ -4,11 +4,12 @@ package ui
 import (
 	"github.com/dendec/zimlite/internal/article"
 	"github.com/dendec/zimlite/internal/document"
-	"github.com/dendec/zimlite/internal/renderer"
+	"github.com/dendec/zimlite/internal/trie"
 )
 
 // ArticleViewer is optional: virtual pages and Markdown keep using DocViewer.
 type ArticleViewer interface {
+	// OpenArticle takes ownership of Source, including on failure.
 	OpenArticle(article.Source, string) error
 	StopArticle()
 	ArticleActive() bool
@@ -20,12 +21,10 @@ type ArticleViewer interface {
 
 // ZimReader is the interface for reading ZIM archives. Implemented by zim.Reader.
 type ZimReader interface {
+	trie.TitleIndex
 	Close()
-	ArticleCount() int
-	ListArticles() []document.ArticleEntry
-	MainPage() ([]byte, string, error)
 	MainPagePath() string
-	ResolveArticle(rawURL string, referrer string) ([]byte, string, error)
+	ResolveArticlePath(rawURL string, referrer string) (string, error)
 	ResolveResource(rawURL string) ([]byte, string, error)
 	FilePath() string
 }
@@ -33,7 +32,7 @@ type ZimReader interface {
 // DocRenderer handles document rendering and display.
 type DocRenderer interface {
 	SetDocument(doc *document.Document)
-	SetResourceLoader(loader renderer.ResourceLoader)
+	SetResourceLoader(loader document.ResourceLoader)
 	Relayout()
 	Render()
 	ToggleTheme()
@@ -86,16 +85,12 @@ type Scroller interface {
 	ScrollToY(y int32)
 	CurrentScrollY() int32
 	SetScrollY(scrollY int32)
-	SetTextLines(title string, items []renderer.TreeItem)
+	SetTextLines(title string, items []document.TreeItem)
 	ScrollToLine(lineIdx int)
 	HandleTreeClick(mx, my int32) int
 }
 
-// DocNavigator manages document history and back navigation.
-type DocNavigator interface {
-	Open(id string)
-	UpdateCurrentState(state document.ViewState)
-	Back() (bool, document.ViewState)
-	Current() string
-	CurrentState() document.ViewState
+// TableScroller is an optional document view capability.
+type TableScroller interface {
+	ScrollTableHorizontally(direction int32) bool
 }

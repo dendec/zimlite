@@ -13,7 +13,7 @@ import (
 	"github.com/dendec/zimlite/internal/document"
 	"github.com/dendec/zimlite/internal/i18n"
 	"github.com/dendec/zimlite/internal/menu"
-	"github.com/dendec/zimlite/internal/renderer"
+	"github.com/dendec/zimlite/internal/navigation"
 	"github.com/dendec/zimlite/internal/trie"
 	"github.com/veandco/go-sdl2/sdl"
 )
@@ -35,7 +35,7 @@ type App struct {
 	viewer    DocViewer
 	links     LinkBrowser
 	scroller  Scroller
-	navigator DocNavigator
+	navigator navigation.Navigator
 	running   atomic.Bool
 	mode      appMode
 	navState  *trie.NavState
@@ -48,7 +48,7 @@ type App struct {
 }
 
 // New creates the app with injected dependencies.
-func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n DocNavigator, cfg config.Provider) *App {
+func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n navigation.Navigator, cfg config.Provider) *App {
 	app := &App{
 		viewer:    viewer,
 		links:     links,
@@ -91,12 +91,25 @@ func (app *App) showDocument(doc *document.Document, navKey string) {
 	app.viewer.Relayout()
 }
 
-func (app *App) restoreCachedDocument(doc *document.Document, state document.ViewState) {
-	app.mode = modeDoc
-	app.viewer.SetDocument(doc)
-	app.viewer.Relayout()
+// restoreView applies history state only after the target document loads.
+func (app *App) restoreView(key string, state document.ViewState) error {
+	if _, ok := app.loader.locations[key]; ok {
+		if err := app.loader.restoreArticle(key, false); err != nil {
+			return err
+		}
+	} else if doc, ok := app.loader.docCache[key]; ok {
+		app.loader.shutdown()
+		app.viewer.SetHasTree(false)
+		app.mode = modeDoc
+		app.viewer.SetDocument(doc)
+		app.viewer.Relayout()
+	} else if err := app.loader.OpenFile(key); err != nil {
+		return err
+	}
 	app.scroller.SetScrollY(state.ScrollY)
 	app.links.SetSelectedLinkIndex(state.SelectedLink)
+	app.navigator.UpdateCurrentState(state)
+	return nil
 }
 
 func (app *App) goBack() {
@@ -119,20 +132,9 @@ func (app *App) goBack() {
 			app.enterTreeMode()
 			return
 		}
-		if _, ok := app.loader.locations[prevPath]; ok {
-			if err := app.loader.restoreArticle(prevPath, false); err != nil {
-				slog.Error("Cannot restore article", "error", err)
-			}
-			app.scroller.SetScrollY(state.ScrollY)
-			app.links.SetSelectedLinkIndex(state.SelectedLink)
-			app.navigator.UpdateCurrentState(state)
-		} else if doc, ok := app.loader.docCache[prevPath]; ok {
-			app.restoreCachedDocument(doc, state)
-		} else {
-			_ = app.loader.OpenFile(prevPath)
-			app.scroller.SetScrollY(state.ScrollY)
-			app.links.SetSelectedLinkIndex(state.SelectedLink)
-			app.navigator.UpdateCurrentState(state)
+		if err := app.restoreView(prevPath, state); err != nil {
+			slog.Error("Cannot restore document", "path", prevPath, "error", err)
+			app.viewer.SetStatusOverride(err.Error())
 		}
 	} else if app.loader.zimReader != nil && app.mode == modeDoc {
 		app.enterTreeMode()
@@ -152,14 +154,7 @@ func (app *App) enterTreeMode() {
 		viewer.StopArticle()
 	}
 	if app.navState == nil {
-		var root *trie.RadixNode
-		var err error
-		if index, ok := app.loader.zimReader.(trie.TitleIndex); ok {
-			root, err = trie.NewIndexedTree(index)
-		} else {
-			articles := filterDisplayableArticles(app.loader.zimReader.ListArticles())
-			root = trie.NewTree(articles)
-		}
+		root, err := trie.NewIndexedTree(app.loader.zimReader)
 		if err != nil || len(root.Children()) == 0 {
 			if err := app.loader.restoreArticle(app.navigator.Current(), false); err != nil {
 				slog.Error("Restore article after empty tree", "error", err)
@@ -176,28 +171,6 @@ func (app *App) enterTreeMode() {
 	app.renderTree()
 }
 
-func filterDisplayableArticles(allArticles []document.ArticleEntry) []document.ArticleEntry {
-	var articles []document.ArticleEntry
-	for _, a := range allArticles {
-		runes := []rune(a.Title)
-		if len(runes) == 0 {
-			continue
-		}
-		if _, _, ok := document.EmojiSequence(runes, 0); ok {
-			articles = append(articles, a)
-			continue
-		}
-		r := runes[0]
-		// Unifont primarily supports BMP. Filter out SMP (>0xFFFF),
-		// Private Use Area, and Replacement Character.
-		if r > 0xFFFF || (r >= 0xE000 && r <= 0xF8FF) || r == 0xFFFD {
-			continue
-		}
-		articles = append(articles, a)
-	}
-	return articles
-}
-
 func (app *App) exitTreeMode() {
 	app.mode = modeDoc
 	// Restore last viewed document from history.
@@ -206,13 +179,9 @@ func (app *App) exitTreeMode() {
 	}
 	prevPath := app.navigator.Current()
 	state := app.navigator.CurrentState()
-	if _, ok := app.loader.locations[prevPath]; ok {
-		_ = app.loader.restoreArticle(prevPath, false)
-		app.scroller.SetScrollY(state.ScrollY)
-		app.links.SetSelectedLinkIndex(state.SelectedLink)
-		app.navigator.UpdateCurrentState(state)
-	} else if doc, ok := app.loader.docCache[prevPath]; ok {
-		app.restoreCachedDocument(doc, state)
+	if err := app.restoreView(prevPath, state); err != nil {
+		slog.Error("Cannot restore document after tree", "path", prevPath, "error", err)
+		app.viewer.SetStatusOverride(err.Error())
 	}
 }
 
@@ -243,7 +212,7 @@ func (app *App) renderTree() {
 		return
 	}
 	lines := app.navState.VisibleNodes()
-	items := make([]renderer.TreeItem, 0, len(lines))
+	items := make([]document.TreeItem, 0, len(lines))
 	for _, l := range lines {
 		text := l.TreePrefix + l.Label
 		labelStart := len([]rune(l.TreePrefix))
@@ -251,7 +220,7 @@ func (app *App) renderTree() {
 		if l.Suffix != "" {
 			text += " (" + l.Suffix + ")"
 		}
-		items = append(items, renderer.TreeItem{
+		items = append(items, document.TreeItem{
 			Text:       text,
 			Path:       l.Path,
 			IsLeaf:     l.IsLeaf,

@@ -30,7 +30,13 @@ func containWideTables(data []byte) []byte {
 			break
 		}
 
-		name, _ := tokenizer.TagName()
+		// TagName lowercases the tag in the tokenizer's shared raw buffer.
+		// Preserve markup before inspecting a tag (text tokens need no copy).
+		var name []byte
+		if tokenType == html.StartTagToken || tokenType == html.SelfClosingTagToken || tokenType == html.EndTagToken {
+			raw = bytes.Clone(raw)
+			name, _ = tokenizer.TagName()
+		}
 		closeWrapper := false
 		if tokenType == html.StartTagToken || tokenType == html.SelfClosingTagToken {
 			if bytes.EqualFold(name, []byte("table")) {

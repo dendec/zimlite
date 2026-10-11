@@ -47,23 +47,23 @@ func (td *TriggerDebouncer) Update(value int16) bool {
 }
 
 // AxisDebouncer debounces dual-direction analog axes (thumbsticks, D-pad-as-axis).
-// Fires once on transition from neutral to an active direction, ignores subsequent
-// same-direction values until released back to neutral.
+// Fires once on transition to an active direction, ignores subsequent
+// same-direction values until released or reversed.
 type AxisDebouncer struct {
-	active bool
+	direction int16
 }
 
-// Update returns true only on the rising edge: neutral → active.
+// Update fires on a transition from neutral or the opposite direction.
 func (ad *AxisDebouncer) Update(value int16, threshold int16) bool {
-	active := value < -threshold || value > threshold
-	if active && !ad.active {
-		ad.active = true
-		return true
+	direction := int16(0)
+	if value < -threshold {
+		direction = -1
+	} else if value > threshold {
+		direction = 1
 	}
-	if !active {
-		ad.active = false
-	}
-	return false
+	changed := direction != 0 && direction != ad.direction
+	ad.direction = direction
+	return changed
 }
 
 // GamepadState groups all tracked inputs for a controller and translates raw events to logical Actions.
@@ -87,14 +87,14 @@ func (g *GamepadState) Controller() *sdl.GameController {
 
 func (g *GamepadState) LeftY() int16 {
 	if g.controller != nil {
-		return g.controller.Joystick().Axis(int(sdl.CONTROLLER_AXIS_LEFTY))
+		return g.controller.Axis(sdl.CONTROLLER_AXIS_LEFTY)
 	}
 	return g.leftYValue
 }
 
 func (g *GamepadState) LeftX() int16 {
 	if g.controller != nil {
-		return g.controller.Joystick().Axis(int(sdl.CONTROLLER_AXIS_LEFTX))
+		return g.controller.Axis(sdl.CONTROLLER_AXIS_LEFTX)
 	}
 	return g.leftXValue
 }
@@ -104,9 +104,10 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 	switch e := event.(type) {
 	case *sdl.ControllerAxisEvent:
 		v := e.Value
-		if e.Axis == sdl.CONTROLLER_AXIS_LEFTY {
+		switch e.Axis {
+		case sdl.CONTROLLER_AXIS_LEFTY:
 			g.leftYValue = v
-		} else if e.Axis == sdl.CONTROLLER_AXIS_LEFTX {
+		case sdl.CONTROLLER_AXIS_LEFTX:
 			g.leftXValue = v
 		}
 		// Handle triggers

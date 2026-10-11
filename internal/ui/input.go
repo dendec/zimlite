@@ -15,6 +15,8 @@ const (
 	holdDelay       = 200 * time.Millisecond
 	maxAxisValue    = 32767
 	analogMaxSpeed  = float64(scrollStep * 5)
+	maxHoldSpeedup  = 16.0
+	maxHoldElapsed  = 100 * time.Millisecond
 )
 
 type scrollHold struct {
@@ -29,8 +31,7 @@ type InputController struct {
 	globalKeys    map[sdl.Scancode]func()
 	docKeys       map[sdl.Scancode]func()
 	treeKeys      map[sdl.Scancode]func()
-	upHold        scrollHold
-	downHold      scrollHold
+	treeHold      scrollHold
 	axisHold      scrollHold
 	axisRemainder float64
 	lastAxisTime  time.Time
@@ -242,6 +243,7 @@ func (c *InputController) Update(now time.Time) {
 		c.tableHold.active = false
 		return
 	}
+	c.treeHold.active = false
 
 	linkDirection := int32(0)
 	switch {
@@ -267,11 +269,11 @@ func (c *InputController) Update(now time.Time) {
 		c.axisRemainder = 0
 		return
 	}
-	seconds := now.Sub(c.lastAxisTime).Seconds()
+	seconds := min(now.Sub(c.lastAxisTime), maxHoldElapsed).Seconds()
 	c.lastAxisTime = now
 	speed := analogMaxSpeed * axisStrength
 	if now.Sub(c.axisHold.started) >= holdDelay {
-		speed *= math.Pow(2, math.Floor(now.Sub(c.axisHold.started).Seconds()))
+		speed *= holdSpeedup(now.Sub(c.axisHold.started))
 	}
 	c.axisRemainder += speed * seconds
 	delta := int32(c.axisRemainder)
@@ -310,7 +312,7 @@ func (c *InputController) updateTableHold(direction int32, strength float64, now
 		c.tableHold.active = false
 		return
 	}
-	scroller, ok := c.app.viewer.(interface{ ScrollTableHorizontally(int32) bool })
+	scroller, ok := c.app.viewer.(TableScroller)
 	if !ok {
 		c.tableHold.active = false
 		return
@@ -341,13 +343,9 @@ func (c *InputController) updateTableHold(direction int32, strength float64, now
 }
 
 func (c *InputController) updateTreeHold(direction int32, strength float64, now time.Time) {
-	h := &c.upHold
-	if direction > 0 {
-		h = &c.downHold
-	}
+	h := &c.treeHold
 	if direction == 0 {
-		c.upHold.active = false
-		c.downHold.active = false
+		h.active = false
 		return
 	}
 	if !h.active || h.direction != direction {
@@ -357,12 +355,17 @@ func (c *InputController) updateTreeHold(direction int32, strength float64, now 
 	if now.Sub(h.started) < holdDelay {
 		return
 	}
-	rate := 5 * math.Pow(2, math.Floor(now.Sub(h.started).Seconds())) * strength
+	rate := min(40, 5*holdSpeedup(now.Sub(h.started))*strength)
+	if rate <= 0 {
+		return
+	}
 	interval := time.Duration(float64(time.Second) / rate)
 	if now.Sub(h.lastStep) < interval {
 		return
 	}
-	steps := int(now.Sub(h.lastStep) / interval)
+	steps := int(min(now.Sub(h.lastStep), maxHoldElapsed) / interval)
+	// Low deflection can have an interval longer than the catch-up budget.
+	steps = max(1, steps)
 	for i := 0; i < steps; i++ {
 		if direction < 0 {
 			c.app.navState.MoveUp()
@@ -372,6 +375,12 @@ func (c *InputController) updateTreeHold(direction int32, strength float64, now 
 	}
 	c.app.renderTree()
 	h.lastStep = now
+}
+
+// Clamp before exponentiation so even a long hold cannot overflow the scroll
+// delta or produce a zero repeat interval. Limit catch-up separately after stalls.
+func holdSpeedup(held time.Duration) float64 {
+	return math.Pow(2, min(math.Log2(maxHoldSpeedup), max(0, math.Floor(held.Seconds()))))
 }
 
 func analogDirection(value int16) (int32, float64) {

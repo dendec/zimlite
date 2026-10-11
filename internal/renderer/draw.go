@@ -320,8 +320,8 @@ func (r *Renderer) renderStatusBar() {
 		return
 	}
 
-	if r.statusOverride != "" {
-		r.renderStatusText(r.statusOverride, statusTextXPadding, r.width-statusTextMaxW)
+	if status := r.GetStatusOverride(); status != "" {
+		r.renderStatusText(status, statusTextXPadding, r.width-statusTextMaxW)
 		return
 	}
 
