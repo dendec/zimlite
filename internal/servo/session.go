@@ -30,14 +30,15 @@ var activeSessions atomic.Int32
 
 // Command contains semantic viewer operations, never arbitrary scripts.
 type Command struct {
-	Op     string  `json:"op"`
-	Value  int32   `json:"value,omitempty"`
-	X      int32   `json:"x,omitempty"`
-	Y      int32   `json:"y,omitempty"`
-	Width  uint32  `json:"width,omitempty"`
-	Height uint32  `json:"height,omitempty"`
-	Scale  float32 `json:"scale,omitempty"`
-	Text   string  `json:"text,omitempty"`
+	Op          string  `json:"op"`
+	Value       int32   `json:"value,omitempty"`
+	X           int32   `json:"x,omitempty"`
+	Y           int32   `json:"y,omitempty"`
+	Width       uint32  `json:"width,omitempty"`
+	Height      uint32  `json:"height,omitempty"`
+	Scale       float32 `json:"scale,omitempty"`
+	Text        string  `json:"text,omitempty"`
+	SelectionID uint64  `json:"selection_id,omitempty"`
 }
 
 type Event struct {
@@ -48,6 +49,7 @@ type Event struct {
 	LinkCount        int    `json:"link_count"`
 	SelectedLink     int    `json:"selected_link"`
 	SelectedURL      string `json:"selected_url"`
+	SelectionID      uint64 `json:"selection_id"`
 	TableScrollLeft  bool   `json:"table_scroll_left"`
 	TableScrollRight bool   `json:"table_scroll_right"`
 	ScrollHeight     int32  `json:"scroll_height"`

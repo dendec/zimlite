@@ -570,7 +570,8 @@ func (r *Renderer) SetSelectedLinkIndex(idx int) {
 	if r.servo != nil {
 		r.selectedLink = idx
 		r.servo.selectedURL = ""
-		r.servoSend(engine.Command{Op: "select", Value: int32(idx)})
+		r.servo.selectionID++
+		r.servoSend(engine.Command{Op: "select", Value: int32(idx), SelectionID: r.servo.selectionID})
 		return
 	}
 	r.selectedLink = idx
@@ -639,17 +640,11 @@ func backwardLinkIdx(links []linkEntry, top, bottom int32) int {
 
 func (r *Renderer) moveLink(delta int) {
 	if r.servo != nil {
-		n := r.servo.links
-		if n > 0 {
-			idx := r.selectedLink + delta
-			if idx < 0 {
-				idx = n - 1
-			}
-			if idx >= n {
-				idx = 0
-			}
-			r.SetSelectedLinkIndex(idx)
-		}
+		// Resolve selection against the live DOM after preceding scroll input.
+		// Cached SDL state can lag behind both compositor and table scrolling.
+		r.servo.selectedURL = ""
+		r.servo.selectionID++
+		r.servoSend(engine.Command{Op: "move_link", Value: int32(delta), SelectionID: r.servo.selectionID})
 		return
 	}
 	if len(r.layout.links) == 0 {
@@ -663,7 +658,15 @@ func (r *Renderer) moveLink(delta int) {
 	selVisible := r.selectedLink >= 0 && r.selectedLink < len(r.layout.links) &&
 		linkHasVisibleRect(r.layout.links[r.selectedLink], visibleTop, visibleBottom)
 
-	if !selVisible && r.selectedLink >= 0 {
+	if !selVisible {
+		// Re-enter link navigation at the first visible link for every direction.
+		// Keep the viewport still, including links with partially visible lines.
+		for i, link := range r.layout.links {
+			if linkHasVisibleRect(link, visibleTop, visibleBottom) {
+				r.selectedLink = i
+				return
+			}
+		}
 		if delta > 0 {
 			r.selectedLink = forwardLinkIdx(r.layout.links, visibleTop, visibleBottom)
 		} else {

@@ -405,8 +405,8 @@ func TestMoveLink_backward_jump_to_visible(t *testing.T) {
 
 	r.moveLink(-1)
 
-	if r.selectedLink != 2 {
-		t.Errorf("expected last visible link (2), got %d", r.selectedLink)
+	if r.selectedLink != 1 {
+		t.Errorf("expected first visible link (1), got %d", r.selectedLink)
 	}
 }
 

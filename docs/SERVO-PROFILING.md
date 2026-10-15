@@ -235,3 +235,12 @@ used. Selection is optional, including for tables without links. Target
 resolution is shared by helper input and state diagnostics. The SDL adapter
 forwards motion without gating it on potentially stale table state; when no
 wide table is visible, the helper leaves the article still.
+
+The D-pad navigates links in all four directions; the left stick scrolls the
+article vertically and wide tables horizontally. If the selected link has left
+the viewport, the next D-pad press selects the first visible link, independent
+of direction, without moving the viewport. Partially visible link lines count
+as visible. Servo resolves `move_link` against live DOM geometry, including
+overflow clipping in tables. Selection IDs prevent older state packets from
+restoring a stale selected URL while navigation is pending. On a Servo viewport
+without visible links the selection stays unchanged until a link is visible.

@@ -17,7 +17,8 @@ COPY patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch pat
 RUN git apply --directory=lib/servo patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch
 COPY native/servo-host native/servo-host
 WORKDIR /build/native/servo-host
-ENV CARGO_TARGET_DIR=/build/target
+ENV CARGO_TARGET_DIR=/build/target \
+    PATH=/usr/lib/llvm-16/bin:$PATH
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \

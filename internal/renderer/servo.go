@@ -24,6 +24,7 @@ type servoView struct {
 	textureWidth, textureHeight int32
 	links                       int
 	selectedURL                 string
+	selectionID                 uint64
 	loading                     string
 	renderMode                  string
 	scrollRemainder             float64
@@ -229,7 +230,9 @@ func (r *Renderer) renderServo() {
 		view.links = state.LinkCount
 		r.scrollY = state.ScrollY
 		r.docTitle = state.Title
-		if state.SelectedLink == r.selectedLink {
+		// Relative link navigation is resolved by the helper using its live DOM.
+		if state.SelectionID == view.selectionID {
+			r.selectedLink = state.SelectedLink
 			view.selectedURL = state.SelectedURL
 		}
 	default:

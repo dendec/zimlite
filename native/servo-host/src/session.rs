@@ -17,6 +17,56 @@ use servo::{
 const MAX_COMMAND: usize = 8192;
 const MAX_EVENT: usize = 65536;
 
+// Selection belongs to the DOM so queued navigation uses current scroll and
+// layout geometry, rather than an index predicted from an older state packet.
+const LINK_STATE_JS: &str = r#"
+    const links = document.querySelectorAll('a[href]');
+    const n = Math.min(links.length, 2048);
+    const selected = Array.prototype.indexOf.call(links,
+      document.querySelector('[data-zimlite-selected]'));
+"#;
+
+const LINK_SELECTION_JS: &str = r#"
+    function zimliteLinkVisible(a) {
+      if (!a) return false;
+      // Reject offscreen links before walking their clipping ancestors.
+      const rects = Array.from(a.getClientRects()).filter(r =>
+        r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight &&
+        r.right > 0 && r.left < innerWidth);
+      if (!rects.length || getComputedStyle(a).visibility !== 'visible') return false;
+      let left = 0, top = 0, right = innerWidth, bottom = innerHeight;
+      for (let p = a.parentElement; p; p = p.parentElement) {
+        // Root scrolling is already represented by the viewport bounds.
+        if (p === document.scrollingElement || p === document.documentElement) continue;
+        const s = getComputedStyle(p);
+        if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+        const r = p.getBoundingClientRect();
+        if (s.overflowX !== 'visible') {
+          left = Math.max(left, r.left + p.clientLeft);
+          right = Math.min(right, r.left + p.clientLeft + p.clientWidth);
+        }
+        if (s.overflowY !== 'visible') {
+          top = Math.max(top, r.top + p.clientTop);
+          bottom = Math.min(bottom, r.top + p.clientTop + p.clientHeight);
+        }
+      }
+      return right > left && bottom > top && rects.some(r =>
+        r.bottom > top && r.top < bottom &&
+        r.right > left && r.left < right);
+    }
+    function zimliteSelectLink(index, reveal) {
+      for (const e of document.querySelectorAll('[data-zimlite-selected]')) {
+        e.style.outline = ''; e.removeAttribute('data-zimlite-selected');
+      }
+      const e = index >= 0 && index < n ? links[index] : null;
+      if (!e) return;
+      e.setAttribute('data-zimlite-selected', '');
+      e.style.outline = '2px solid #e09020';
+      e.focus({preventScroll:true});
+      if (reveal) e.scrollIntoView({block:'nearest', inline:'nearest'});
+    }
+"#;
+
 // Use the same target for input and diagnostics. A link may stay selected far
 // above the current viewport after stick scrolling; it must not hijack input.
 // Without a visible selected table, choose the wide table nearest the centre.
@@ -48,6 +98,8 @@ const TABLE_TARGET_JS: &str = r#"
 #[serde(deny_unknown_fields)]
 struct Command {
     op: String,
+    #[serde(default)]
+    selection_id: u64,
     #[serde(default)]
     value: i32,
     #[serde(default)]
@@ -307,7 +359,7 @@ fn write_event(event: Value) -> Result<(), Box<dyn Error>> {
 
 fn evaluate_state(
     webview: &WebView,
-    selected: i32,
+    selection_id: u64,
     tx: SyncSender<Value>,
     pending: Rc<Cell<bool>>,
 ) {
@@ -319,9 +371,8 @@ fn evaluate_state(
     webview.evaluate_javascript(
         format!(
             r#"(() => {{
-      const links = document.querySelectorAll('a[href]');
-      const n = Math.min(links.length, 2048);
-      const i = n === 0 ? -1 : Math.max(-1, Math.min({selected}, n - 1));
+      {LINK_STATE_JS}
+      const i = selected >= 0 && selected < n ? selected : -1;
       {TABLE_TARGET_JS}
       const table = zimliteScrollTable(i);
       const tableScrollLeft = !!table && table.scrollLeft > 1;
@@ -333,7 +384,7 @@ fn evaluate_state(
         table_scroll_x:table?Math.round(table.scrollLeft):0,
         table_scroll_width:table?Math.round(table.scrollWidth):0,
         table_client_width:table?Math.round(table.clientWidth):0,
-        link_count:n, selected_link:i,
+        link_count:n, selected_link:i, selection_id:{selection_id},
         selected_url:i < 0 ? '' : links[i].href.slice(0,8192),
         table_scroll_left:tableScrollLeft, table_scroll_right:tableScrollRight}});
     }})()"#
@@ -362,7 +413,7 @@ pub fn run(
 ) -> Result<(), Box<dyn Error>> {
     let (tx, commands) = mpsc::sync_channel(16);
     std::thread::spawn(move || read_commands(tx));
-    let mut selected = -1;
+    let mut selection_id = 0;
     let mut last_frame = Instant::now();
     let command_pending = Rc::new(Cell::new(false));
     let state_pending = Rc::new(Cell::new(false));
@@ -371,7 +422,12 @@ pub fn run(
     let mut last_state = Instant::now();
     let mut profile = FrameProfile::new();
     let mut raster = ScrollRaster::new(context.size());
-    evaluate_state(webview, selected, events_tx.clone(), state_pending.clone());
+    evaluate_state(
+        webview,
+        selection_id,
+        events_tx.clone(),
+        state_pending.clone(),
+    );
     loop {
         if command_pending.get() && command_started.elapsed() > Duration::from_secs(5) {
             return Err("viewer command timed out".into());
@@ -405,6 +461,9 @@ pub fn run(
                         profile.table_delta += i64::from(command.value.clamp(-4096, 4096));
                     }
                     command_started = Instant::now();
+                    if matches!(command.op.as_str(), "select" | "move_link") {
+                        selection_id = command.selection_id;
+                    }
                     let script = match command.op.as_str() {
                         "stop" => return Ok(()),
                         "scroll" => {
@@ -427,7 +486,8 @@ pub fn run(
                         "table_scroll" | "table_scroll_by" => Some(format!(
                             r#"(() => {{
                               {TABLE_TARGET_JS}
-                              const t=zimliteScrollTable({selected});
+                              {LINK_STATE_JS}
+                              const t=zimliteScrollTable(selected);
                               if(t){{const max=t.scrollWidth-t.clientWidth;
                                 t.scrollLeft=Math.max(0,Math.min(max,t.scrollLeft+({offset})));}}
                             }})()"#,
@@ -437,17 +497,37 @@ pub fn run(
                                 format!("{}*Math.max(80,t.clientWidth*.75)", command.value.signum())
                             },
                         )),
-                        "select" => {
-                            selected = command.value.clamp(-1, 2047);
-                            Some(format!(
-                                r#"(() => {{ const a=document.querySelectorAll('a[href]');
-                          for(const e of document.querySelectorAll('[data-zimlite-selected]')) {{
-                            e.style.outline=''; e.removeAttribute('data-zimlite-selected'); }}
-                          const e=a[{selected}]; if(e){{e.setAttribute('data-zimlite-selected','');
-                            e.style.outline='2px solid #e09020'; e.focus(); e.scrollIntoView({{block:'nearest'}});}}
-                        }})()"#
-                            ))
-                        }
+                        "select" => Some(format!(
+                            r#"(() => {{
+                              {LINK_STATE_JS}
+                              {LINK_SELECTION_JS}
+                              zimliteSelectLink({}, true);
+                            }})()"#,
+                            command.value.clamp(-1, 2047),
+                        )),
+                        "move_link" => Some(format!(
+                            r#"(() => {{
+                              {LINK_STATE_JS}
+                              {LINK_SELECTION_JS}
+                              if (!n) return;
+                              if (selected < 0 || !zimliteLinkVisible(links[selected])) {{
+                                for (let i = 0; i < n; i++) {{
+                                  if (zimliteLinkVisible(links[i])) {{
+                                    zimliteSelectLink(i, false); return;
+                                  }}
+                                }}
+                                return;
+                              }}
+                              for (let step = 1; step <= n; step++) {{
+                                const i = (selected + ({direction}) * step + n) % n;
+                                if (links[i].getClientRects().length &&
+                                    getComputedStyle(links[i]).visibility === 'visible') {{
+                                  zimliteSelectLink(i, !zimliteLinkVisible(links[i])); return;
+                                }}
+                              }}
+                            }})()"#,
+                            direction = if command.value < 0 { -1 } else { 1 },
+                        )),
                         "anchor" => {
                             let id = serde_json::to_string(&command.text)?;
                             Some(format!(
@@ -510,7 +590,12 @@ pub fn run(
                         });
                     }
                     if command.op != "scroll" {
-                        evaluate_state(webview, selected, events_tx.clone(), state_pending.clone());
+                        evaluate_state(
+                            webview,
+                            selection_id,
+                            events_tx.clone(),
+                            state_pending.clone(),
+                        );
                         last_state = Instant::now();
                     }
                 }
@@ -557,7 +642,12 @@ pub fn run(
             last_frame = Instant::now();
         }
         if !raster.pending() && last_state.elapsed() >= Duration::from_millis(200) {
-            evaluate_state(webview, selected, events_tx.clone(), state_pending.clone());
+            evaluate_state(
+                webview,
+                selection_id,
+                events_tx.clone(),
+                state_pending.clone(),
+            );
             last_state = Instant::now();
         }
         profile.report();
