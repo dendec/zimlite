@@ -111,14 +111,17 @@ PORTS_DIR    := /userdata/roms/ports
 PORT_SCRIPT  := Zimlite.sh
 PM_AUTOINSTALL := /userdata/system/.local/share/PortMaster/autoinstall
 
-dist-arm64:
+dist-arm64: input-runtime-arm64
 	docker build -t $(DOCKER_IMAGE) -f $(DOCKER_FILE) .
 	@mkdir -p dist
 	@docker rm -f zimlite-extract >/dev/null 2>&1 || true
 	docker create --name zimlite-extract $(DOCKER_IMAGE) >/dev/null 2>&1
 	rm -rf dist/zimlite
 	docker cp zimlite-extract:/dist/zimlite/. dist/zimlite/
+	docker cp zimlite-extract:/dist/fts-probe dist/fts-probe-arm64
 	docker rm zimlite-extract >/dev/null 2>&1
+	cp -a dist/input-arm64 dist/zimlite/input
+	cp -a licenses dist/zimlite/licenses
 	@echo "=== dist/zimlite/ ==="
 	@ls -lh dist/zimlite/
 	rm -f dist/zimlite-linux-arm64.zip && cd dist/zimlite && zip -r ../zimlite-linux-arm64.zip .
@@ -135,15 +138,18 @@ dist-windows:
 	@echo "=== dist/windows/ ==="
 	@ls -lh dist/windows/
 
-dist-amd64: build
+dist-amd64: build input-runtime-amd64
 	@rm -rf dist/linux-amd64
 	@mkdir -p dist/linux-amd64
 	cp zimlite dist/linux-amd64/
+	cp -a dist/input-amd64 dist/linux-amd64/input
+	cp -a licenses dist/linux-amd64/licenses
 	rm -f dist/zimlite-linux-amd64.zip && cd dist/linux-amd64 && zip -r ../zimlite-linux-amd64.zip .
 	@echo "=== Generated dist/zimlite-linux-amd64.zip ==="
 
 deploy: dist-arm64
 	adb push dist/zimlite/zimlite $(DEVICE_DIR)/
+	adb push dist/zimlite/input $(DEVICE_DIR)/
 	adb push portmaster/Zimlite.sh '$(PORTS_DIR)/$(PORT_SCRIPT)'
 	adb shell "chmod +x '$(PORTS_DIR)/$(PORT_SCRIPT)' && killall -9 zimlite 2>/dev/null; true"
 	@echo "=== Deployed ==="
@@ -158,6 +164,8 @@ dist-portmaster: dist-arm64
 	cp "portmaster/screenshot.png" dist/portmaster_build/
 	cp -r "portmaster/licenses" dist/portmaster_build/zimlite/
 	cp dist/zimlite/zimlite dist/portmaster_build/zimlite/
+	cp -a dist/zimlite/input dist/portmaster_build/zimlite/input
+	cp -a licenses/. dist/portmaster_build/zimlite/licenses/
 	rm -f dist/zimlite.zip && cd dist/portmaster_build && zip -r ../zimlite.zip "Zimlite.sh" README.md gameinfo.xml port.json screenshot.png zimlite
 	@echo "=== Generated dist/zimlite.zip ==="
 	@ls -lh dist/zimlite.zip
@@ -188,3 +196,50 @@ dist-portmaster-servo: dist-portmaster servo-runtime-arm64
 	python3 -c 'import json,pathlib; p=pathlib.Path("dist/portmaster_build/port.json"); d=json.loads(p.read_text()); d["name"]="zimlite-servo.zip"; p.write_text(json.dumps(d,indent=2)+"\n")'
 	rm -f dist/zimlite-servo.zip
 	cd dist/portmaster_build && zip -r ../zimlite-servo.zip Zimlite.sh README.md gameinfo.xml port.json screenshot.png zimlite
+
+# Build the FTS benchmark without SDL/application compilation.
+.PHONY: fts-probe-arm64
+fts-probe-arm64:
+	docker build --target fts-probe -t zimlite-fts-probe-arm64 -f Dockerfile.arm64 .
+	@mkdir -p dist
+	@set -e; fts_container=$$(docker create zimlite-fts-probe-arm64 /bin/true); \
+		trap 'docker rm "$$fts_container" >/dev/null' EXIT; \
+		docker cp "$$fts_container:/fts-probe" dist/fts-probe-arm64
+
+# Linux x86_64 benchmark using the official prebuilt libzim with Xapian.
+.PHONY: fts-probe-pc
+fts-probe-pc:
+	@test -f "$(ZIM_LIBDIR)/lib/x86_64-linux-gnu/libzim.so.$(ZIM_VER)" || $(MAKE) download-libzim-prebuilt
+	@mkdir -p dist/fts
+	$(CXX) -std=c++17 -O2 -Wall -Wextra -Werror -I$(ZIM_LIBDIR)/include \
+		native/fts-probe/main.cpp -L$(ZIM_LIBDIR)/lib/x86_64-linux-gnu \
+		-Wl,-rpath,'$$ORIGIN/../../$(ZIM_LIBDIR)/lib/x86_64-linux-gnu' \
+		-lzim -o dist/fts/fts-probe-pc
+
+# Offline m17n, Anthy dictionaries, shaping fonts and isolated FTS workers.
+# PC search uses the official libzim binary (glibc >= 2.34, libstdc++ >= GCC 12).
+.PHONY: input-toolchain-arm64 input-toolchain-amd64 input-runtime-arm64 input-runtime-amd64
+input-toolchain-arm64: fts-probe-arm64
+	docker build -t zimlite-input-toolchain-arm64 -f Dockerfile.input-toolchain .
+
+input-toolchain-amd64: fts-probe-arm64
+	docker build --build-arg DEB_ARCH=amd64 --build-arg TRIPLE=x86_64-linux-gnu \
+		-t zimlite-input-toolchain-amd64 -f Dockerfile.input-toolchain .
+
+input-runtime-arm64: input-toolchain-arm64
+	@test -f "$(ZIM_LIBDIR)/lib/x86_64-linux-gnu/libzim.so.$(ZIM_VER)" || $(MAKE) download-libzim-prebuilt
+	docker build -t zimlite-input-runtime-arm64 -f Dockerfile.input .
+	@mkdir -p dist/input-arm64
+	@set -e; input_container=$$(docker create zimlite-input-runtime-arm64 /bin/true); \
+		trap 'docker rm "$$input_container" >/dev/null' EXIT; \
+		docker cp "$$input_container:/dist/input/." dist/input-arm64/
+
+input-runtime-amd64: input-toolchain-amd64
+	@test -f "$(ZIM_LIBDIR)/lib/x86_64-linux-gnu/libzim.so.$(ZIM_VER)" || $(MAKE) download-libzim-prebuilt
+	docker build --build-arg INPUT_TOOLCHAIN=zimlite-input-toolchain-amd64 \
+		--build-arg DEB_ARCH=amd64 --build-arg TRIPLE=x86_64-linux-gnu \
+		-t zimlite-input-runtime-amd64 -f Dockerfile.input .
+	@mkdir -p dist/input-amd64
+	@set -e; input_container=$$(docker create zimlite-input-runtime-amd64 /bin/true); \
+		trap 'docker rm "$$input_container" >/dev/null' EXIT; \
+		docker cp "$$input_container:/dist/input/." dist/input-amd64/

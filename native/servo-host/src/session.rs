@@ -344,7 +344,7 @@ pub fn write_frame(image: &image::RgbaImage) -> io::Result<()> {
     out.write_all(image.as_raw())?;
     out.flush()
 }
-fn write_event(event: Value) -> Result<(), Box<dyn Error>> {
+pub(crate) fn write_event(event: Value) -> Result<(), Box<dyn Error>> {
     let data = serde_json::to_vec(&event)?;
     if data.len() > MAX_EVENT {
         return Err("event exceeds protocol budget".into());
@@ -377,7 +377,21 @@ fn evaluate_state(
       const table = zimliteScrollTable(i);
       const tableScrollLeft = !!table && table.scrollLeft > 1;
       const tableScrollRight = !!table && table.scrollLeft + table.clientWidth < table.scrollWidth - 1;
+      const body = document.body;
+      let contentReady = false;
+      if (location.protocol === 'http:' && body && body.getBoundingClientRect().height > 0) {{
+        // Inspect a bounded prefix of text nodes, not the full article text.
+        const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+        for (let checked = 0, node; checked < 64 && (node = walker.nextNode()); checked++) {{
+          const tag = node.parentElement && node.parentElement.tagName;
+          if (tag === 'STYLE' || tag === 'SCRIPT' || tag === 'NOSCRIPT') continue;
+          if (/\S/.test(node.nodeValue.slice(0,256))) {{contentReady = true; break;}}
+        }}
+        if (!contentReady) contentReady = !!body.querySelector('img,svg,canvas,math');
+      }}
       return JSON.stringify({{event:'state', title:document.title.slice(0,256),
+        content_ready:contentReady,
+        dom_ready:location.protocol==='http:' && document.readyState!=='loading',
         scroll_y:Math.round(window.scrollY),
         scroll_height:Math.round((document.scrollingElement||document.documentElement).scrollHeight),
         viewport_height:Math.round(window.innerHeight),
@@ -422,6 +436,15 @@ pub fn run(
     let mut last_state = Instant::now();
     let mut profile = FrameProfile::new();
     let mut raster = ScrollRaster::new(context.size());
+    let mut last_load_status = servo::LoadStatus::Started;
+    let mut content_ready = false;
+    let mut dom_ready = false;
+    let load_started = Instant::now();
+    let mut published_frame = false;
+    // Restore commands may arrive before their anchors/links exist. Retain
+    // only the latest absolute position, selection and anchor (at most three)
+    // until the whole HTML has been parsed, including targets near its end.
+    let mut initial_commands: Vec<Command> = Vec::new();
     evaluate_state(
         webview,
         selection_id,
@@ -429,6 +452,22 @@ pub fn run(
         state_pending.clone(),
     );
     loop {
+        if !published_frame && load_started.elapsed() > crate::TIMEOUT {
+            return Err("timed out waiting for the first document frame".into());
+        }
+        let load_status = delegate.load_status.get();
+        if load_status != last_load_status {
+            let phase = match load_status {
+                servo::LoadStatus::Started => "document",
+                servo::LoadStatus::HeadParsed => "resources",
+                servo::LoadStatus::Complete => "complete",
+            };
+            write_event(json!({"event":"progress", "phase":phase}))?;
+            last_load_status = load_status;
+            if load_status == servo::LoadStatus::Complete {
+                delegate.frame.set(true);
+            }
+        }
         if command_pending.get() && command_started.elapsed() > Duration::from_secs(5) {
             return Err("viewer command timed out".into());
         }
@@ -436,9 +475,39 @@ pub fn run(
             return Err("raster transition timed out".into());
         }
         if !command_pending.get() && !raster.pending() {
-            match next_command(&commands, &mut deferred_command)? {
+            let ready = content_ready || load_status == servo::LoadStatus::Complete;
+            let document_ready = dom_ready || load_status == servo::LoadStatus::Complete;
+            let next = if document_ready && !initial_commands.is_empty() {
+                Some((initial_commands.remove(0), 0))
+            } else {
+                next_command(&commands, &mut deferred_command)?
+            };
+            match next {
                 None => {}
                 Some((command, merged)) => {
+                    if !document_ready {
+                        match command.op.as_str() {
+                            "scroll_to" | "select" | "anchor" => {
+                                if let Some(index) =
+                                    initial_commands.iter().position(|c| c.op == command.op)
+                                {
+                                    initial_commands[index] = command;
+                                } else {
+                                    initial_commands.push(command);
+                                }
+                                continue;
+                            }
+                            _ => {}
+                        }
+                    }
+                    if !ready
+                        && matches!(
+                            command.op.as_str(),
+                            "scroll" | "table_scroll" | "table_scroll_by" | "move_link" | "click"
+                        )
+                    {
+                        continue;
+                    }
                     profile.merged += merged as u64;
                     if matches!(
                         command.op.as_str(),
@@ -608,16 +677,37 @@ pub fn run(
         servo.spin_event_loop();
         profile.spin_us += spin_started.elapsed().as_micros();
         for event in events_rx.try_iter() {
+            if event.get("event").and_then(Value::as_str) == Some("state") {
+                let ready = event
+                    .get("content_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                if ready && !content_ready {
+                    delegate.frame.set(true);
+                }
+                content_ready = ready;
+                dom_ready = event
+                    .get("dom_ready")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+            }
             write_event(event)?;
         }
         if (delegate.frame.get() || raster.pending())
             && last_frame.elapsed() >= Duration::from_millis(33)
         {
             let paint_started = Instant::now();
+            crate::gl_profile::begin_frame();
             if delegate.frame.replace(false) {
+                // The parent watchdog can abort a blocked driver call even
+                // when the helper cannot return to its event loop.
+                write_event(json!({"event":"paint", "phase":"begin"}))?;
                 webview.paint();
+                write_event(json!({"event":"paint", "phase":"end"}))?;
             }
-            profile.paint_us += paint_started.elapsed().as_micros();
+            let paint_elapsed = paint_started.elapsed();
+            crate::gl_profile::end_frame(paint_elapsed);
+            profile.paint_us += paint_elapsed.as_micros();
             let size = context.size();
             let rect =
                 DeviceIntRect::from_size(DeviceIntSize::new(size.width as i32, size.height as i32));
@@ -628,9 +718,17 @@ pub fn run(
                 context.read_to_image(rect)
             };
             profile.readback_us += read_started.elapsed().as_micros();
-            if let Some(image) = image {
+            // A document's first visible layout can precede load completion by
+            // seconds. Publish it without waiting for offscreen images/fonts.
+            // Keep about:blank/startup frames out of the first-frame watchdog.
+            if let Some(image) = image.filter(|_| {
+                content_ready || delegate.load_status.get() == servo::LoadStatus::Complete
+            }) {
                 let ipc_started = Instant::now();
                 write_frame(&image)?;
+                if !published_frame {
+                    published_frame = true;
+                }
                 profile.ipc_us += ipc_started.elapsed().as_micros();
                 profile.frames += 1;
                 let now = Instant::now();

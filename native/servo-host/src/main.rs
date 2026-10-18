@@ -9,12 +9,13 @@ use std::time::{Duration, Instant};
 
 use dpi::PhysicalSize;
 use servo::{
-    EventLoopWaker, NavigationRequest, Preferences, RenderingContext, ServoBuilder,
+    EventLoopWaker, LoadStatus, NavigationRequest, Preferences, RenderingContext, ServoBuilder,
     SoftwareRenderingContext, WebResourceLoad, WebResourceResponse, WebView, WebViewBuilder,
     WebViewDelegate,
 };
 use url::Url;
 mod egl;
+mod gl_profile;
 mod session;
 
 const MAX_PIXELS: u32 = 1280 * 720;
@@ -57,10 +58,19 @@ struct Delegate {
     origin: Url,
     frame: Cell<bool>,
     navigation: Option<SyncSender<serde_json::Value>>,
+    load_status: Cell<LoadStatus>,
 }
 impl WebViewDelegate for Delegate {
     fn notify_new_frame_ready(&self, _: WebView) {
         self.frame.set(true);
+    }
+    fn notify_load_status_changed(&self, webview: WebView, status: LoadStatus) {
+        if webview
+            .url()
+            .is_some_and(|url| url.origin() == self.origin.origin())
+        {
+            self.load_status.set(status);
+        }
     }
     fn request_navigation(&self, _: WebView, request: NavigationRequest) {
         if let Some(tx) = &self.navigation {
@@ -136,6 +146,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         .map_err(|_| "failed to install TLS provider")?;
 
     let size = PhysicalSize::new(width, height);
+    if persistent {
+        session::write_event(serde_json::json!({"event":"progress", "phase":"context"}))?;
+    }
     profile_stage("context.begin", process_started);
     let context: Rc<dyn RenderingContext> = match std::env::var("ZIMLITE_SERVO_CONTEXT").as_deref()
     {
@@ -157,6 +170,9 @@ fn run() -> Result<(), Box<dyn Error>> {
         .make_current()
         .map_err(|error| format!("make context current: {error:?}"))?;
     profile_stage("context.ready", process_started);
+    if persistent {
+        session::write_event(serde_json::json!({"event":"progress", "phase":"engine"}))?;
+    }
     let (tx, rx) = mpsc::sync_channel(1);
     let mut preferences = Preferences::default();
     preferences.layout_threads = 1;
@@ -184,14 +200,37 @@ fn run() -> Result<(), Box<dyn Error>> {
         origin: url.clone(),
         frame: Cell::new(false),
         navigation: persistent.then(|| events_tx.clone()),
+        load_status: Cell::new(LoadStatus::Started),
     });
     profile_stage("webview.begin", process_started);
     let webview = WebViewBuilder::new(&servo, context.clone())
         .url(url)
         .delegate(delegate.clone())
         .build();
+    if let Ok(theme) = std::env::var("ZIMLITE_SERVO_THEME") {
+        match theme.as_str() {
+            "dark" => webview.notify_theme_change(servo::Theme::Dark),
+            "light" => webview.notify_theme_change(servo::Theme::Light),
+            _ => return Err("unknown initial theme".into()),
+        }
+    }
+    if let Ok(scale) = std::env::var("ZIMLITE_SERVO_ZOOM") {
+        let scale: f32 = scale.parse()?;
+        if !scale.is_finite() || !(0.5..=2.0).contains(&scale) {
+            return Err("initial zoom outside budget".into());
+        }
+        if scale != webview.page_zoom() {
+            webview.set_page_zoom(scale);
+        }
+    }
     webview.show();
     profile_stage("webview.ready", process_started);
+    if persistent {
+        session::write_event(serde_json::json!({"event":"progress", "phase":"document"}))?;
+        return session::run(
+            &servo, &webview, context, &delegate, &rx, events_tx, events_rx,
+        );
+    }
     let (screenshot_tx, screenshot_rx) = mpsc::sync_channel(1);
     // The screenshot API waits for fonts, images, stylesheets and final layout.
     webview.take_screenshot(None, move |result| {
@@ -231,11 +270,6 @@ fn run() -> Result<(), Box<dyn Error>> {
                 process_started.elapsed().as_millis(),
                 started.elapsed().as_millis()
             );
-            if persistent {
-                return session::run(
-                    &servo, &webview, context, &delegate, &rx, events_tx, events_rx,
-                );
-            }
             return Ok(());
         }
         if started.elapsed() > TIMEOUT {

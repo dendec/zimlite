@@ -40,19 +40,20 @@ const (
 // Server serves one article source on loopback. It owns neither Source nor SDL.
 // Close waits for resource reads before the caller may close Source.
 type Server struct {
-	source   Source
-	token    string
-	address  string
-	server   *http.Server
-	done     chan struct{}
-	readMu   sync.Mutex
-	closing  atomic.Bool
-	stopOnce sync.Once
-	Errors   chan error // Fatal resource-budget failures; ordinary missing links are tolerated.
-	bytes    atomic.Int64
-	failures atomic.Int64
-	slots    chan struct{}
-	pending  chan struct{}
+	source    Source
+	token     string
+	address   string
+	server    *http.Server
+	done      chan struct{}
+	readMu    sync.Mutex
+	closing   atomic.Bool
+	stopOnce  sync.Once
+	Errors    chan error // Fatal resource-budget failures; ordinary missing links are tolerated.
+	bytes     atomic.Int64
+	failures  atomic.Int64
+	completed atomic.Int64
+	slots     chan struct{}
+	pending   chan struct{}
 }
 
 func StartServer(source Source) (*Server, error) {
@@ -82,6 +83,12 @@ func (s *Server) URL(articlePath string) string {
 }
 
 func (s *Server) Failures() int64 { return s.failures.Load() }
+
+// ResourceProgress counts completed requests and queued/active requests.
+// The total is unknown until the browser has discovered all dependencies.
+func (s *Server) ResourceProgress() (int64, int) {
+	return s.completed.Load(), len(s.pending)
+}
 
 // Stop rejects new resource reads and closes HTTP connections immediately.
 // It does not wait for a native archive read that the OS cannot cancel.
@@ -133,7 +140,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	select {
 	case s.pending <- struct{}{}:
-		defer func() { <-s.pending }()
+		defer func() { s.completed.Add(1); <-s.pending }()
 	default:
 		if s.failures.Add(1) <= 8 {
 			slog.Warn("Article resource queue full", "path", r.URL.Path)

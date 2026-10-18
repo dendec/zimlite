@@ -14,3 +14,5 @@ config.json
 library_cache.json
 lib/servo/
 native/
+!native/fts-probe/
+!native/fts-probe/main.cpp

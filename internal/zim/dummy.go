@@ -2,7 +2,10 @@
 
 package zim
 
-import "github.com/dendec/zimlite/internal/document"
+import (
+	"fmt"
+	"github.com/dendec/zimlite/internal/document"
+)
 
 type Reader struct {
 	rootPrefix   string
@@ -51,3 +54,6 @@ func (r *Reader) GetResource(path string) ([]byte, string, error) {
 func (r *Reader) ResolveResource(rawURL string) ([]byte, string, error) {
 	return nil, "", nil
 }
+
+func (r *Reader) Metadata(name string) (string, error) { return "", fmt.Errorf("libzim unavailable") }
+func (r *Reader) ArchiveID() string                    { return "" }

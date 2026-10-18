@@ -20,6 +20,9 @@ GAMEDIR="/$directory/ports/zimlite"
 
 cd "$GAMEDIR"
 
+# Helpers and fonts stay on disk when the application is staged in RAM.
+export KIWIX_INPUT_RUNTIME_DIR="${KIWIX_INPUT_RUNTIME_DIR:-$GAMEDIR/input}"
+
 [ -f "$GAMEDIR/log.txt" ] && cp "$GAMEDIR/log.txt" "$GAMEDIR/log.previous.txt"
 profile_monitor_pid=''
 if [ "${ZIMLITE_PROFILE:-0}" = 1 ] || [ -f "$GAMEDIR/servo/profile.enabled" ]; then

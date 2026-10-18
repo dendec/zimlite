@@ -32,6 +32,26 @@ type Source interface {
 	Close() error
 }
 
+type prefetchedSource struct {
+	Source
+	name     string
+	resource Resource
+}
+
+// WithPrefetchedResource shares a validated, immutable article body with the
+// resource server, avoiding a second archive read/decompression. Ownership of
+// the underlying Source is unchanged; readers must not modify Resource.Data.
+func WithPrefetchedResource(source Source, name string, resource Resource) Source {
+	return &prefetchedSource{Source: source, name: name, resource: resource}
+}
+
+func (s *prefetchedSource) ReadResource(name string) (Resource, error) {
+	if name == s.name {
+		return s.resource, nil
+	}
+	return s.Source.ReadResource(name)
+}
+
 type FileSource struct {
 	root *os.Root
 }

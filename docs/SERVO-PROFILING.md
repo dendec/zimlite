@@ -244,3 +244,78 @@ as visible. Servo resolves `move_link` against live DOM geometry, including
 overflow clipping in tables. Selection IDs prevent older state packets from
 restoring a stale selected URL while navigation is pending. On a Servo viewport
 without visible links the selection stays unchanged until a link is visible.
+
+## Progressive article loading
+
+Persistent helpers enter the control/render loop immediately after WebView
+creation. They publish available document frames while images/fonts continue
+loading. The one-shot screenshot/export path still waits for a complete page.
+Startup/about:blank frames are filtered using document load state and a bounded
+DOM readiness check. Readiness transitions trigger a fresh paint so a static
+article is not stranded after an early frame was discarded.
+
+`servo.load.progress` records `context`, `engine`, `document`, `resources` and
+`complete` phases. The contextual line shows the localized stage, seconds since
+helper startup and completed/pending HTTP requests. Resource discovery has no
+known total; these counters are not a percentage or a count of successful
+responses. Loading status remains visible after partial frames until document
+load completion and receipt of a displayable texture.
+
+Initial theme/zoom are passed through validated session options and applied
+before the first event-loop spin. The server shares the immutable preflight
+HTML buffer with fallback, avoiding a second read/decompression of that body.
+Existing per-resource and per-session budgets still apply to the cached body.
+
+Relative input during startup is discarded instead of filling IPC queues.
+Absolute restore commands (scroll position, link selection, anchor) retain at
+most one pending value per operation until the HTML has finished parsing, so
+targets near the end of the document are available. The
+20-second first-frame watchdog and physical memory guard remain active.
+
+Archive opening, preflight and simple layout currently remain synchronous.
+Their status is presented before entering that work, but UI input and elapsed
+time updates can still pause there. Moving those stages to cancellable workers
+is a separate follow-up; progressive Servo output does not resolve blocked
+native storage I/O.
+
+
+## Долгие кадры и software JIT (2026-10-15)
+
+`patches/servo-llvmpipe-shaders.patch` выбирает исходные GLSL-шейдеры WebRender
+для драйвера, сообщающего `llvmpipe` в `GL_RENDERER`, когда его
+`GALLIVM_PERF` содержит флаг `nopt`. При обычной LLVM-оптимизации и для
+остальных драйверов сохраняются предварительно оптимизированные шейдеры. На TrimUI исходные
+шейдеры заметно сокращают компиляцию LLVM при первых командах рисования;
+изменение не уменьшает разрешение и не отключает SVG или эффекты статьи.
+
+В режиме «Скорость» приложение передаёт `ZIMLITE_SERVO_FAST_SHADERS=1`.
+Software launcher выбирает `GALLIVM_PERF=nopt`, сокращая LLVM-оптимизацию
+новых вариантов шейдеров. Это уменьшает первые паузы, но может снизить
+производительность уже скомпилированного шейдера. В режиме «Качество»
+сохраняются обычные LLVM-проходы. Явно заданный `GALLIVM_PERF`, включая
+пустую строку, имеет приоритет над настройкой launcher.
+
+Для точечного замера границы драйвера задать `ZIMLITE_SERVO_GL_PROFILE=1`:
+
+- `servo.profile.gl`: отдельный вызов GLES, занявший не менее 100 мс;
+- `servo.profile.paint`: кадр от 100 мс, суммарное время измеренных GL-вызовов,
+  их число и самый долгий вызов. Неизмеренные GL-функции и работа WebRender
+  входят только в общее время кадра. Время GL может включать компиляцию и
+  ожидание рабочих потоков драйвера, поэтому оно не равно растеризации;
+- без этого флага GL-функции вызываются напрямую, без обёрток замеров.
+
+Эти замеры перехватывают GLES нашего `EglContext`. Контекст Surfman
+`SoftwareRenderingContext` не проходит через эти обёртки.
+
+Persistent helper отправляет `paint/begin` и `paint/end` вокруг `WebView::paint`.
+Отдельный Go watchdog завершает helper при незавершённой отрисовке дольше
+10 секунд и запускает обычный фоллбек. Таймаут действует и после первого
+кадра, не применяется к неподвижной странице и не требует ответа от
+заблокированного драйвера. `servo.paint.slow` записывает вызовы от 100 мс.
+Он не ограничивает любой возможный застой Servo: например, блокировка вне
+`paint` после первого кадра этим таймером не охвачена. Проверка памяти
+по-прежнему работает независимо каждые 50 мс.
+
+Нужна согласованная пара приложения/helper: прежнее приложение не знает
+событий `paint`. Результаты замеров и ограничения — в
+[исследовании отрисовки](SERVO-PAINT-2026-10-15.md).

@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 
 	"github.com/dendec/zimlite/internal/document"
@@ -32,7 +33,7 @@ func (r *Renderer) viewportEach(n int, getYH func(i int) (int32, int32), fn func
 		y, h := getYH(i)
 		return y+h > r.scrollY
 	})
-	vpBottom := r.height - r.getStatusBarHeight()
+	vpBottom := r.contentHeight()
 	for i := startIdx; i < n; i++ {
 		y, _ := getYH(i)
 		screenY := y - r.scrollY
@@ -47,8 +48,12 @@ func (r *Renderer) Render() {
 	r.hasActiveAnimations = false
 	r.sdlRenderer.SetDrawColor(r.theme.BgColor.R, r.theme.BgColor.G, r.theme.BgColor.B, r.theme.BgColor.A)
 	r.sdlRenderer.Clear()
+	clip := sdl.Rect{W: r.width, H: r.contentHeight()}
+	r.setClipRect(&clip)
 	if r.servo != nil {
 		r.renderServo()
+		r.setClipRect(nil)
+		r.renderKeyboard()
 		r.renderStatusBar()
 		r.sdlRenderer.Present()
 		return
@@ -60,8 +65,16 @@ func (r *Renderer) Render() {
 	r.renderLinkUnderline()
 	r.renderLines()
 	r.renderScrollbar()
+	r.setClipRect(nil)
+	r.renderKeyboard()
 	r.renderStatusBar()
 	r.sdlRenderer.Present()
+}
+
+func (r *Renderer) setClipRect(rect *sdl.Rect) {
+	if err := r.sdlRenderer.SetClipRect(rect); err != nil {
+		slog.Debug("set SDL render clip rectangle", "error", err)
+	}
 }
 
 func (r *Renderer) renderImages() {
@@ -384,7 +397,7 @@ func (r *Renderer) computeRightStatus() string {
 		return ""
 	}
 
-	vpH := r.height - r.getStatusBarHeight()
+	vpH := r.contentHeight()
 	totalH := r.layout.totalHeight
 	scrollPct := 0
 	if totalH > vpH {
@@ -438,7 +451,7 @@ func (r *Renderer) renderStatusText(text string, x int32, maxW int32) {
 }
 
 func (r *Renderer) renderScrollbar() {
-	vpHeight := r.height - r.getStatusBarHeight()
+	vpHeight := r.contentHeight()
 	totalH := r.layout.totalHeight
 
 	if totalH <= vpHeight {

@@ -375,3 +375,31 @@ func (r *Reader) ResolveArticlePath(rawURL, referrer string) (string, error) {
 	}
 	return "", fmt.Errorf("article not found: %s", rawURL)
 }
+
+// Metadata reads bounded archive metadata. Missing fields return an error.
+func (r *Reader) Metadata(name string) (string, error) {
+	if r.handle == nil {
+		return "", errors.New("archive is closed")
+	}
+	key := C.CString(name)
+	defer C.free(unsafe.Pointer(key))
+	value := C.zim_metadata(r.handle, key)
+	if value == nil {
+		return "", fmt.Errorf("missing or invalid ZIM metadata: %s", name)
+	}
+	defer C.free(unsafe.Pointer(value))
+	return C.GoString(value), nil
+}
+
+// ArchiveID identifies an archive independently of its filename.
+func (r *Reader) ArchiveID() string {
+	if r.handle == nil {
+		return ""
+	}
+	value := C.zim_archive_id(r.handle)
+	if value == nil {
+		return ""
+	}
+	defer C.free(unsafe.Pointer(value))
+	return C.GoString(value)
+}

@@ -43,8 +43,8 @@ ENV PATH=/usr/lib/llvm-16/bin:$PATH \
     PKG_CONFIG_LIBDIR=/opt/servo-sysroot/usr/lib/aarch64-linux-gnu/pkgconfig:/opt/servo-sysroot/usr/share/pkgconfig
 WORKDIR /build
 COPY lib/servo lib/servo
-COPY patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch patches/
-RUN git apply --directory=lib/servo patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch
+COPY patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch patches/servo-llvmpipe-shaders.patch patches/
+RUN git apply --directory=lib/servo patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch patches/servo-llvmpipe-shaders.patch
 COPY native/servo-host native/servo-host
 WORKDIR /build/native/servo-host
 COPY scripts/relocate-servo-sysroot.py /build/scripts/relocate-servo-sysroot.py
@@ -69,7 +69,7 @@ COPY --from=runtime-software /usr/share/doc/ /opt/servo-sysroot/usr/share/doc/
 COPY --from=runtime-fonts /usr/share/doc/ /opt/servo-sysroot/usr/share/doc/
 COPY scripts/collect-servo-runtime.py scripts/collect-servo-licenses.py scripts/servo-runtime.sh scripts/servo-runtime-fonts.conf scripts/servo-profile.sh /build/scripts/
 COPY LICENSE /build/LICENSE
-COPY patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch /build/patches/
+COPY patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch patches/servo-llvmpipe-shaders.patch /build/patches/
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     python3 /build/scripts/collect-servo-runtime.py --helper /dist/zimlite-servo-host --sysroot /opt/servo-sysroot --output /opt/servo/aarch64-runtime && \
@@ -81,7 +81,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp /build/LICENSE /opt/servo/aarch64-runtime/licenses/zimlite.LICENSE && \
     cp /build/lib/servo/LICENSE /opt/servo/aarch64-runtime/licenses/servo.LICENSE && \
     cp /build/lib/servo/LICENSE_WHATWG_SPECS /opt/servo/aarch64-runtime/licenses/servo.LICENSE_WHATWG_SPECS && \
-    cp /build/patches/servo-unifont-fallback.patch /build/patches/servo-viewport-scale.patch /opt/servo/aarch64-runtime/licenses/ && \
+    cp /build/patches/servo-unifont-fallback.patch /build/patches/servo-viewport-scale.patch /build/patches/servo-llvmpipe-shaders.patch /opt/servo/aarch64-runtime/licenses/ && \
     cp Cargo.toml Cargo.lock /opt/servo/aarch64-runtime/licenses/ && \
     mkdir -p /opt/servo/aarch64-runtime/licenses/helper-source && \
     cp -a src .cargo Cargo.toml Cargo.lock /opt/servo/aarch64-runtime/licenses/helper-source/ && \

@@ -3,18 +3,23 @@ package config
 import (
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 )
 
 // Config represents the application settings.
 type Config struct {
-	Language        string `json:"language"`
-	Theme           string `json:"theme"`
-	FontSize        int    `json:"font_size"`
-	ArticleRenderer string `json:"article_renderer"`
-	RenderMode      string `json:"render_mode"`
+	InputMethods    map[string]string   `json:"input_methods,omitempty"`
+	InputLanguage   map[string]string   `json:"input_language,omitempty"`
+	InputLanguages  map[string][]string `json:"input_languages,omitempty"`
+	Language        string              `json:"language"`
+	Theme           string              `json:"theme"`
+	FontSize        int                 `json:"font_size"`
+	ArticleRenderer string              `json:"article_renderer"`
+	RenderMode      string              `json:"render_mode"`
 }
 
 const (
@@ -78,14 +83,14 @@ func defaultRenderMode() string {
 func Get() Config {
 	mu.RLock()
 	defer mu.RUnlock()
-	return currentConfig
+	return cloneConfig(currentConfig)
 }
 
 // Set updates the current configuration in memory.
 func Set(c Config) {
 	mu.Lock()
 	defer mu.Unlock()
-	currentConfig = c
+	currentConfig = cloneConfig(c)
 }
 
 // Update atomically applies mutate to the current configuration under a single
@@ -95,7 +100,7 @@ func Update(mutate func(c *Config)) Config {
 	mu.Lock()
 	defer mu.Unlock()
 	mutate(&currentConfig)
-	return currentConfig
+	return cloneConfig(currentConfig)
 }
 
 // configFilePath returns the absolute path to the config.json file.
@@ -141,7 +146,7 @@ func Load() {
 // Save writes the current configuration to disk.
 func Save() error {
 	mu.RLock()
-	cfg := currentConfig
+	cfg := cloneConfig(currentConfig)
 	mu.RUnlock()
 
 	path := configFilePath()
@@ -165,4 +170,15 @@ func Save() error {
 
 	slog.Info("Config saved successfully", "path", path)
 	return nil
+}
+
+// Clone map-backed preferences at the lock boundary, including nested slices.
+func cloneConfig(c Config) Config {
+	c.InputMethods = maps.Clone(c.InputMethods)
+	c.InputLanguage = maps.Clone(c.InputLanguage)
+	c.InputLanguages = maps.Clone(c.InputLanguages)
+	for k, v := range c.InputLanguages {
+		c.InputLanguages[k] = slices.Clone(v)
+	}
+	return c
 }

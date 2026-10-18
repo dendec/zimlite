@@ -21,12 +21,11 @@ const (
 	ActionPageUp
 	ActionPageDown
 	ActionToggleTree
-	ActionGoHome
 	ActionZoomIn
 	ActionZoomOut
 	ActionSelectPrevLink
 	ActionSelectNextLink
-	ActionShowHelp
+	ActionShowSearch
 	ActionShowSettings
 )
 
@@ -176,7 +175,7 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 			if e.State == sdl.RELEASED {
 				return ActionNone, true
 			}
-			return ActionShowHelp, true
+			return ActionShowSearch, true
 		default:
 			if e.State != sdl.PRESSED {
 				return ActionNone, true
@@ -188,8 +187,6 @@ func (g *GamepadState) TranslateEvent(event sdl.Event, mode appMode) (Action, bo
 				return ActionOpenEnter, true
 			case sdl.CONTROLLER_BUTTON_X:
 				return ActionToggleTree, true
-			case sdl.CONTROLLER_BUTTON_Y:
-				return ActionGoHome, true
 			case sdl.CONTROLLER_BUTTON_LEFTSHOULDER:
 				return ActionPageUp, true
 			case sdl.CONTROLLER_BUTTON_RIGHTSHOULDER:

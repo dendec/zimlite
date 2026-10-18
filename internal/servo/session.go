@@ -50,6 +50,8 @@ type Event struct {
 	SelectedLink     int    `json:"selected_link"`
 	SelectedURL      string `json:"selected_url"`
 	SelectionID      uint64 `json:"selection_id"`
+	Phase            string `json:"phase"`
+	ContentReady     bool   `json:"content_ready"`
 	TableScrollLeft  bool   `json:"table_scroll_left"`
 	TableScrollRight bool   `json:"table_scroll_right"`
 	ScrollHeight     int32  `json:"scroll_height"`
@@ -73,13 +75,37 @@ type Session struct {
 	cancel     context.CancelFunc
 	closeOnce  sync.Once
 	firstFrame atomic.Bool
+	paintStart atomic.Pointer[time.Time]
 	base       string
+	phase      atomic.Value // Validated native loading phase (string).
+	server     *article.Server
 }
 
 // SessionOptions controls raster work without depending on application settings.
 type SessionOptions struct {
 	// MotionScale is 0.5 or 1. Zero preserves the helper environment default.
 	MotionScale float32
+	Theme       string  // "light"/"dark"; empty preserves the helper environment.
+	FontScale   float32 // 0.5..2; zero preserves the helper environment.
+	FastShaders bool    // Prefer short software JIT pauses over peak raster throughput.
+}
+
+// LoadProgress is a bounded snapshot; resource discovery has no known total.
+type LoadProgress struct {
+	Phase              string
+	CompletedResources int64
+	PendingResources   int
+}
+
+func (s *Session) LoadProgress() LoadProgress {
+	progress := LoadProgress{Phase: "starting"}
+	if phase, ok := s.phase.Load().(string); ok {
+		progress.Phase = phase
+	}
+	if s.server != nil {
+		progress.CompletedResources, progress.PendingResources = s.server.ResourceProgress()
+	}
+	return progress
 }
 
 func NewSession(helper string, source article.Source, entry string, width, height uint32) (*Session, error) {
@@ -92,6 +118,14 @@ func NewSessionWithOptions(helper string, source article.Source, entry string, w
 	if options.MotionScale != 0 && options.MotionScale != 0.5 && options.MotionScale != 1 {
 		_ = source.Close()
 		return nil, errors.New("unsupported Servo motion scale")
+	}
+	if options.Theme != "" && options.Theme != "dark" && options.Theme != "light" {
+		_ = source.Close()
+		return nil, errors.New("unsupported initial Servo theme")
+	}
+	if options.FontScale != 0 && !(options.FontScale >= 0.5 && options.FontScale <= 2) {
+		_ = source.Close()
+		return nil, errors.New("unsupported initial Servo font scale")
 	}
 	if width == 0 || height == 0 || uint64(width)*uint64(height) > MaxPixels || width > 1280 || height > 1280 {
 		_ = source.Close()
@@ -128,8 +162,18 @@ func NewSessionWithOptions(helper string, source article.Source, entry string, w
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	command := exec.CommandContext(ctx, helper, "--session", server.URL(entry), strconv.FormatUint(uint64(width), 10), strconv.FormatUint(uint64(height), 10))
+	command.Env = os.Environ()
 	if options.MotionScale != 0 {
-		command.Env = append(os.Environ(), "ZIMLITE_SERVO_SCROLL_SCALE="+strconv.FormatFloat(float64(options.MotionScale), 'f', -1, 32))
+		command.Env = append(command.Env, "ZIMLITE_SERVO_SCROLL_SCALE="+strconv.FormatFloat(float64(options.MotionScale), 'f', -1, 32))
+	}
+	if options.Theme != "" {
+		command.Env = append(command.Env, "ZIMLITE_SERVO_THEME="+options.Theme)
+	}
+	if options.FontScale != 0 {
+		command.Env = append(command.Env, "ZIMLITE_SERVO_ZOOM="+strconv.FormatFloat(float64(options.FontScale), 'f', -1, 32))
+	}
+	if options.FastShaders {
+		command.Env = append(command.Env, "ZIMLITE_SERVO_FAST_SHADERS=1")
 	}
 	command.Stderr = os.Stderr
 	command.WaitDelay = time.Second
@@ -157,6 +201,8 @@ func NewSessionWithOptions(helper string, source article.Source, entry string, w
 	helperStarted = true
 	cancelAll := func() { server.Stop(); cancel(); _ = stdout.Close() }
 	session := &Session{Frames: make(chan *image.RGBA, 1), States: make(chan Event, 1), Navigation: make(chan Event, 16), Errors: make(chan error, 1), Done: make(chan struct{}), commands: make(chan []byte, 16), cancel: cancelAll, stopped: make(chan struct{}), base: server.URL("")}
+	session.server = server
+	session.phase.Store("starting")
 	prioritizeHelperOOM(command.Process.Pid)
 	var failureOnce sync.Once
 	fail := func(err error) {
@@ -224,6 +270,32 @@ func NewSessionWithOptions(helper string, source article.Source, entry string, w
 					case session.Frames <- frame:
 					default:
 					}
+				}
+			} else if event.Event == "paint" {
+				switch event.Phase {
+				case "begin":
+					now := time.Now()
+					if session.paintStart.Swap(&now) != nil {
+						fail(errors.New("overlapping Servo paint"))
+					}
+				case "end":
+					if begin := session.paintStart.Swap(nil); begin != nil {
+						if elapsed := time.Since(*begin); elapsed >= 100*time.Millisecond {
+							profile.Mark("servo.paint.slow", map[string]any{"pid": command.Process.Pid, "elapsed_ms": elapsed.Milliseconds()})
+						}
+					} else {
+						fail(errors.New("servo paint ended without a start"))
+					}
+				default:
+					fail(errors.New("invalid Servo paint phase"))
+				}
+			} else if event.Event == "progress" {
+				switch event.Phase {
+				case "context", "engine", "document", "resources", "complete":
+					session.phase.Store(event.Phase)
+					profile.Mark("servo.load.progress", map[string]any{"pid": command.Process.Pid, "phase": event.Phase, "elapsed_ms": time.Since(started).Milliseconds()})
+				default:
+					fail(errors.New("invalid Servo loading phase"))
 				}
 			} else if event.Event == "state" {
 				if time.Since(lastStateProfile) >= 250*time.Millisecond {
@@ -316,17 +388,25 @@ func readPacket(r io.Reader) (*image.RGBA, Event, error) {
 // Send never blocks SDL on a pipe. Overflow terminates the helper so stale input
 // cannot build an unlimited queue or keep consuming memory in the background.
 func (s *Session) Send(command Command) error {
+	select {
+	case <-s.stopped:
+		return errors.New("servo session closed")
+	default:
+	}
+	// Relative input during startup has no visible target. Dropping it here
+	// also keeps a slow context/engine initialization from filling the pipe.
+	if !s.firstFrame.Load() {
+		switch command.Op {
+		case "scroll", "table_scroll", "table_scroll_by", "move_link", "click":
+			return nil
+		}
+	}
 	data, err := json.Marshal(command)
 	if err != nil {
 		return err
 	}
 	if len(data) > maxCommandBytes {
 		return errors.New("servo command exceeds memory budget")
-	}
-	select {
-	case <-s.stopped:
-		return errors.New("servo session closed")
-	default:
 	}
 	select {
 	case s.commands <- data:
@@ -380,7 +460,7 @@ func (s *Session) watch(ctx context.Context, pid int, budget memoryBudget, resou
 	start := time.Now()
 	tick := time.NewTicker(memoryPollInterval)
 	defer tick.Stop()
-	fields := map[string]any{"pid": pid, "reserve_kib": budget.reserveKiB, "helper_budget_kib": budget.helperKiB, "helper_swap_pressure_kib": budget.helperSwapKiB, "swap_pressure_available_kib": 2 * budget.reserveKiB, "poll_interval_ms": memoryPollInterval.Milliseconds(), "first_frame_timeout_seconds": firstFrameTimeout.Seconds()}
+	fields := map[string]any{"pid": pid, "reserve_kib": budget.reserveKiB, "helper_budget_kib": budget.helperKiB, "helper_swap_pressure_kib": budget.helperSwapKiB, "swap_pressure_available_kib": 2 * budget.reserveKiB, "poll_interval_ms": memoryPollInterval.Milliseconds(), "first_frame_timeout_seconds": firstFrameTimeout.Seconds(), "paint_timeout_seconds": paintTimeout.Seconds()}
 	profile.Mark("servo.watchdog", fields)
 	slog.Info("Servo memory guard", "reserve_kib", budget.reserveKiB, "helper_budget_kib", budget.helperKiB, "swap_pressure_available_kib", 2*budget.reserveKiB)
 	startupBudgetKiB := budget.helperKiB
@@ -398,6 +478,10 @@ func (s *Session) watch(ctx context.Context, pid int, budget memoryBudget, resou
 		case <-tick.C:
 		}
 		now := time.Now()
+		if begin := s.paintStart.Load(); begin != nil && now.Sub(*begin) > paintTimeout {
+			fail(errors.New("servo paint timed out"))
+			return
+		}
 		system, err := memory.ReadSystem()
 		helper, helperErr := memory.ReadProcess(pid)
 		viewer, viewerErr := memory.ReadProcess(os.Getpid())

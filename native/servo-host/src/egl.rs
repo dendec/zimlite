@@ -57,14 +57,15 @@ impl Api {
         }
     }
     fn proc(&self, name: &str) -> *const c_void {
-        let name = CString::new(name).expect("GL function name");
-        unsafe {
+        let symbol = CString::new(name).expect("GL function name");
+        let address = unsafe {
             // PowerVR does not expose core GLES symbols via eglGetProcAddress.
             self._gles
-                .get::<*const c_void>(name.as_bytes_with_nul())
+                .get::<*const c_void>(symbol.as_bytes_with_nul())
                 .map(|p| *p)
-                .unwrap_or_else(|_| (self.get_proc)(name.as_ptr()))
-        }
+                .unwrap_or_else(|_| (self.get_proc)(symbol.as_ptr()))
+        };
+        crate::gl_profile::wrap(name, address)
     }
     fn error(&self, operation: &str) -> Box<dyn std::error::Error> {
         format!("{operation} failed: EGL 0x{:x}", unsafe {

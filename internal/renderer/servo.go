@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/dendec/zimlite/internal/article"
@@ -26,6 +27,7 @@ type servoView struct {
 	selectedURL                 string
 	selectionID                 uint64
 	loading                     string
+	loadStarted                 time.Time
 	renderMode                  string
 	scrollRemainder             float64
 	tableScrollRemainder        float64
@@ -69,7 +71,11 @@ func (r *Renderer) OpenArticle(source article.Source, entry string) error {
 	if renderMode == config.RenderModeSpeed {
 		motionScale = 1
 	}
-	session, err := engine.NewSessionWithOptions(helper, source, entry, width, height, engine.SessionOptions{MotionScale: motionScale})
+	loadStarted := time.Now()
+	session, err := engine.NewSessionWithOptions(helper, source, entry, width, height, engine.SessionOptions{
+		MotionScale: motionScale, Theme: r.servoTheme(), FontScale: float32(r.baseFontSize) / 16,
+		FastShaders: renderMode == config.RenderModeSpeed,
+	})
 	if err != nil {
 		return err
 	}
@@ -78,10 +84,8 @@ func (r *Renderer) OpenArticle(source article.Source, entry string) error {
 	r.hoveredLink = -1
 	r.docTitle = entry
 	r.servoError = nil
-	r.servo = &servoView{session: session, width: width, height: height, renderMode: renderMode, loading: i18n.T(r.lang, "servo.loading")}
+	r.servo = &servoView{session: session, width: width, height: height, renderMode: renderMode, loading: i18n.T(r.lang, "servo.stage.starting"), loadStarted: loadStarted}
 	r.SetStatusOverride(r.servo.loading)
-	r.servoSend(engine.Command{Op: "zoom", Scale: float32(r.baseFontSize) / 16})
-	r.sendServoTheme()
 	return nil
 }
 func (r *Renderer) StopArticle() {
@@ -178,12 +182,14 @@ func (r *Renderer) servoSend(command engine.Command) {
 		}
 	}
 }
-func (r *Renderer) sendServoTheme() {
-	theme := "light"
+func (r *Renderer) servoTheme() string {
 	if r.ThemeName() == "dark" {
-		theme = "dark"
+		return "dark"
 	}
-	r.servoSend(engine.Command{Op: "theme", Text: theme})
+	return "light"
+}
+func (r *Renderer) sendServoTheme() {
+	r.servoSend(engine.Command{Op: "theme", Text: r.servoTheme()})
 }
 func (r *Renderer) servoViewport(renderMode string) (uint32, uint32) {
 	w, h := float64(r.width), float64(r.height-r.getStatusBarHeight())
@@ -264,12 +270,32 @@ func (r *Renderer) renderServo() {
 			r.servoError = err
 			return
 		}
-		if r.GetStatusOverride() == view.loading {
-			r.SetStatusOverride("")
-		}
 	default:
 	}
+	r.updateServoLoadingStatus(view)
 	if view.texture != nil {
 		r.sdlRenderer.Copy(view.texture, nil, &sdl.Rect{W: r.width, H: r.height - r.getStatusBarHeight()})
+	}
+}
+
+func (r *Renderer) updateServoLoadingStatus(view *servoView) {
+	// A navigation/error message may temporarily own the contextual line.
+	if r.GetStatusOverride() != view.loading {
+		return
+	}
+	progress := view.session.LoadProgress()
+	if progress.Phase == "complete" && view.texture != nil {
+		r.SetStatusOverride("")
+		return
+	}
+	phase := progress.Phase
+	if phase == "complete" {
+		phase = "rendering"
+	}
+	status := i18n.Tf(r.lang, "servo.progress", i18n.T(r.lang, "servo.stage."+phase),
+		int(time.Since(view.loadStarted).Seconds()), progress.CompletedResources, progress.PendingResources)
+	if status != view.loading {
+		view.loading = status
+		r.SetStatusOverride(status)
 	}
 }

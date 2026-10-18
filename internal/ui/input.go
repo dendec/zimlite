@@ -12,6 +12,7 @@ import (
 const (
 	scrollStep     = 40
 	holdDelay      = 200 * time.Millisecond
+	homeHoldDelay  = 700 * time.Millisecond
 	maxAxisValue   = 32767
 	analogMaxSpeed = float64(scrollStep * 5)
 	maxHoldSpeedup = 16.0
@@ -51,14 +52,17 @@ func (h *analogScrollHold) delta(value int16, now time.Time) int32 {
 }
 
 type InputController struct {
-	app        *App
-	globalKeys map[sdl.Scancode]func()
-	docKeys    map[sdl.Scancode]func()
-	treeKeys   map[sdl.Scancode]func()
-	treeHold   scrollHold
-	axisHold   analogScrollHold
-	linkHold   scrollHold
-	tableHold  analogScrollHold
+	app                  *App
+	globalKeys           map[sdl.Scancode]func()
+	docKeys              map[sdl.Scancode]func()
+	treeKeys             map[sdl.Scancode]func()
+	treeHold             scrollHold
+	axisHold             analogScrollHold
+	linkHold             scrollHold
+	tableHold            analogScrollHold
+	homePressedAt        time.Time
+	homeButtonPressed    bool
+	homeLongPressHandled bool
 }
 
 func NewInputController(app *App) *InputController {
@@ -68,7 +72,8 @@ func NewInputController(app *App) *InputController {
 		sdl.SCANCODE_H:         func() { app.goHome() },
 		sdl.SCANCODE_M:         func() { _ = app.loader.OpenFile("virtual:menu") },
 		sdl.SCANCODE_F1:        func() { _ = app.loader.OpenFile("virtual:help") },
-		sdl.SCANCODE_F2:        func() { _ = app.loader.OpenFile("virtual:settings") },
+		sdl.SCANCODE_F3:        func() { app.openSearch(true) },
+		sdl.SCANCODE_F2:        func() { app.openSettings() },
 		sdl.SCANCODE_RETURN2:   func() { app.toggleMode() },
 		sdl.SCANCODE_T:         func() { app.toggleMode() },
 		sdl.SCANCODE_EQUALS:    func() { c.zoom(1) },
@@ -150,6 +155,29 @@ func (c *InputController) treeActionRight() {
 
 func (c *InputController) ProcessEvent(event sdl.Event) {
 	app := c.app
+	if e, ok := event.(*sdl.ControllerButtonEvent); ok {
+		// TrimUI's printed X/Y labels use the Nintendo layout, while SDL reports
+		// these face buttons in the opposite logical slots. Normalize once here
+		// so every context and the help labels use the buttons printed on-device.
+		normalized := *e
+		switch normalized.Button {
+		case sdl.CONTROLLER_BUTTON_X:
+			normalized.Button = sdl.CONTROLLER_BUTTON_Y
+		case sdl.CONTROLLER_BUTTON_Y:
+			normalized.Button = sdl.CONTROLLER_BUTTON_X
+		}
+		e = &normalized
+		event = e
+		if e.Button == sdl.CONTROLLER_BUTTON_Y {
+			c.handleHomeButton(e)
+			return
+		}
+	}
+	if app.search != nil {
+		app.search.process(event)
+		return
+	}
+
 	switch e := event.(type) {
 	case *sdl.QuitEvent:
 		app.running.Store(false)
@@ -234,8 +262,44 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 	}
 }
 
+func (c *InputController) handleHomeButton(event *sdl.ControllerButtonEvent) {
+	if event.State == sdl.PRESSED {
+		if !c.homeButtonPressed {
+			c.homeButtonPressed = true
+			c.homePressedAt = time.Now()
+			c.homeLongPressHandled = false
+		}
+		return
+	}
+	if event.State != sdl.RELEASED || !c.homeButtonPressed {
+		return
+	}
+	if !c.homeLongPressHandled {
+		c.app.goHome()
+	}
+	c.homeButtonPressed = false
+	c.homeLongPressHandled = false
+}
+
 // Update advances held D-pad navigation and analog scrolling once per frame.
 func (c *InputController) Update(now time.Time) {
+	if c.homeButtonPressed {
+		if c.app.gamepad.Controller() == nil {
+			c.homeButtonPressed = false
+			c.homeLongPressHandled = false
+		} else if !c.homeLongPressHandled && now.Sub(c.homePressedAt) >= homeHoldDelay {
+			c.homeLongPressHandled = true
+			c.app.goToMainMenu()
+		}
+	}
+	if c.app.search != nil {
+		c.treeHold = scrollHold{}
+		c.linkHold = scrollHold{}
+		c.axisHold = analogScrollHold{}
+		c.tableHold = analogScrollHold{}
+		c.app.search.update(now)
+		return
+	}
 	controller := c.app.gamepad.Controller()
 	upHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_UP) != 0
 	downHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_DOWN) != 0
@@ -399,8 +463,6 @@ func (c *InputController) executeGamepadAction(action Action) {
 		app.scroller.ScrollPageDown()
 	case ActionToggleTree:
 		app.toggleMode()
-	case ActionGoHome:
-		app.goHome()
 	case ActionZoomIn:
 		c.zoom(1)
 	case ActionZoomOut:
@@ -409,10 +471,14 @@ func (c *InputController) executeGamepadAction(action Action) {
 		c.moveLinkSelection(-1)
 	case ActionSelectNextLink:
 		c.moveLinkSelection(1)
-	case ActionShowHelp:
-		_ = app.loader.OpenFile("virtual:help")
+	case ActionShowSearch:
+		if app.loader.zimReader != nil {
+			app.openSearch(false)
+		} else {
+			_ = app.loader.OpenFile("virtual:help")
+		}
 	case ActionShowSettings:
-		_ = app.loader.OpenFile("virtual:settings")
+		app.openSettings()
 	}
 }
 

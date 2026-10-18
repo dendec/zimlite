@@ -19,6 +19,23 @@ zim_archive_t zim_open(const char* path) {
     }
 }
 
+const char* zim_metadata(zim_archive_t archive, const char* name) {
+    if (!archive || !name) return nullptr;
+    try {
+        auto value = static_cast<zim::Archive*>(archive)->getMetadata(name);
+        if (value.size() > 16384) return nullptr;
+        return strdup(value.c_str());
+    } catch (...) { return nullptr; }
+}
+
+const char* zim_archive_id(zim_archive_t archive) {
+    if (!archive) return nullptr;
+    try {
+        auto value = static_cast<std::string>(static_cast<zim::Archive*>(archive)->getUuid());
+        return strdup(value.c_str());
+    } catch (...) { return nullptr; }
+}
+
 void zim_close(zim_archive_t archive) {
     if (archive) {
         delete static_cast<zim::Archive*>(archive);

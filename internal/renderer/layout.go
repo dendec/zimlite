@@ -53,8 +53,8 @@ func (r *Renderer) relayout() {
 
 	document.VisitBlocks(r.doc.Blocks, ls)
 
-	if ls.y < r.height-ls.r.getStatusBarHeight() {
-		ls.y = r.height - ls.r.getStatusBarHeight()
+	if ls.y < r.contentHeight() {
+		ls.y = r.contentHeight()
 	}
 	r.layout.totalHeight = ls.y
 	r.clampScroll()

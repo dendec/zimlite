@@ -33,12 +33,14 @@ Project homepage: [dendec.github.io/zimlite](https://dendec.github.io/zimlite/)
 | Left Analog Stick Left / Right | Scroll a wide table horizontally |
 | A | Open selected link |
 | B | Go back in history |
-| X | Toggle the article tree view / search |
-| Y | Go to the main page / home |
+| X | Toggle the article tree; in search, switch Shift or focus the input |
+| Y (tap) | Go to the archive's main article |
+| Y (hold) | Open the application menu |
 | L1 / R1 | Page Up / Page Down |
-| Select + Menu | Quit |
-| Menu | Open Settings |
-| Start | Show Help |
+| Menu / Select | Open Settings; Select focuses the input during Search |
+| Start | Open Search in a ZIM archive; in Search, switch between input and results |
+
+Tap Y returns to the archive's main article, or to the application menu when no archive is open. Hold Y opens the application menu.
 
 ## Compile
 

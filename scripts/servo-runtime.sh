@@ -38,6 +38,12 @@ export ZIMLITE_SERVO_SOFTWARE_LIB_DIR="$runtime_prefix/software"
 # until that driver/device combination has been validated with the full app.
 export ZIMLITE_SERVO_CONTEXT="${ZIMLITE_SERVO_CONTEXT:-software}"
 if [ "$ZIMLITE_SERVO_CONTEXT" = software ]; then
+    # LLVM optimization of a new shader variant can stall a frame for seconds.
+    # Speed mode prefers shorter JIT pauses; an explicit value (even empty)
+    # preserves the user's override. Quality mode retains normal LLVM passes.
+    if [ "${ZIMLITE_SERVO_FAST_SHADERS:-0}" = 1 ]; then
+        export GALLIVM_PERF="${GALLIVM_PERF-nopt}"
+    fi
     export LD_LIBRARY_PATH="$runtime_prefix/software:$LD_LIBRARY_PATH"
     export LIBGL_DRIVERS_PATH="$runtime_prefix/software/dri"
     export __EGL_VENDOR_LIBRARY_FILENAMES="$runtime_prefix/software/egl_vendor.json"

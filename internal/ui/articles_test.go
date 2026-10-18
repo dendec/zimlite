@@ -23,6 +23,8 @@ func (v *fallbackTestView) SetDocument(doc *document.Document) {
 	v.doc = doc
 	v.state = document.ViewState{SelectedLink: -1}
 }
+func (*fallbackTestView) GetStatusOverride() string        { return "" }
+func (*fallbackTestView) Render()                          {}
 func (*fallbackTestView) Relayout()                        {}
 func (*fallbackTestView) SetStatusOverride(string)         {}
 func (v *fallbackTestView) CurrentScrollY() int32          { return v.state.ScrollY }

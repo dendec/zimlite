@@ -32,6 +32,7 @@ const (
 
 // App is the top-level application state.
 type App struct {
+	search    *searchState
 	viewer    DocViewer
 	links     LinkBrowser
 	scroller  Scroller
@@ -70,6 +71,7 @@ func New(viewer DocViewer, links LinkBrowser, scroller Scroller, n navigation.Na
 }
 
 func (app *App) shutdown() {
+	app.closeSearch(false)
 	close(app.stopCh)
 	app.loader.shutdown()
 }
@@ -77,6 +79,9 @@ func (app *App) shutdown() {
 // saveCurrentState records the current scroll position and selected link into
 // the navigator's current history entry.
 func (app *App) saveCurrentState() {
+	if app.search != nil {
+		return
+	}
 	app.navigator.UpdateCurrentState(document.ViewState{
 		ScrollY:      app.scroller.CurrentScrollY(),
 		SelectedLink: app.links.SelectedLinkIndex(),
@@ -185,13 +190,40 @@ func (app *App) exitTreeMode() {
 	}
 }
 
-func (app *App) goHome() {
-	if app.loader.zimReader == nil {
-		return
+func (app *App) navigateFromSearch(navigate func() error) error {
+	search := app.search
+	if search != nil {
+		search.release()
 	}
-	location := articleLocation{File: app.loader.zimReader.FilePath(), Entry: app.loader.zimReader.MainPagePath(), ZIM: true}
-	if err := app.loader.displayArticle(location, false); err != nil {
-		slog.Error("Cannot open main page", "error", err)
+	err := navigate()
+	if app.search == search {
+		app.search = nil
+	}
+	return err
+}
+
+func (app *App) goHome() {
+	err := app.navigateFromSearch(func() error {
+		if app.loader.zimReader == nil {
+			return app.loader.OpenFile("virtual:menu")
+		}
+		location := articleLocation{File: app.loader.zimReader.FilePath(), Entry: app.loader.zimReader.MainPagePath(), ZIM: true}
+		return app.loader.displayArticle(location, false)
+	})
+	if err != nil {
+		slog.Error("Cannot open home", "error", err)
+	}
+}
+
+func (app *App) goToMainMenu() {
+	if err := app.navigateFromSearch(func() error { return app.loader.OpenFile("virtual:menu") }); err != nil {
+		slog.Error("Cannot open main menu", "error", err)
+	}
+}
+
+func (app *App) openSettings() {
+	if err := app.navigateFromSearch(func() error { return app.loader.OpenFile("virtual:settings") }); err != nil {
+		slog.Error("Cannot open settings", "error", err)
 	}
 }
 

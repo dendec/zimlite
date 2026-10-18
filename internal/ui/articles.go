@@ -26,6 +26,21 @@ type articleLocation struct {
 	ZIM               bool
 }
 
+// Present the stage before entering synchronous native preparation/layout.
+// The helper's live progress takes ownership once its session has started.
+func (l *DocumentLoader) articleStatus(key string) func() {
+	viewer := l.host.getViewer()
+	previous := viewer.GetStatusOverride()
+	status := i18n.T(l.uiLang(), key)
+	viewer.SetStatusOverride(status)
+	viewer.Render()
+	return func() {
+		if viewer.GetStatusOverride() == status {
+			viewer.SetStatusOverride(previous)
+		}
+	}
+}
+
 func (app *App) showArticle(source article.Source, entry, navKey string) error {
 	viewer, ok := app.viewer.(ArticleViewer)
 	if !ok {
@@ -93,6 +108,7 @@ func (l *DocumentLoader) ensureArchive(filename string) error {
 	return nil
 }
 func (l *DocumentLoader) openArticleFile(filename string) error {
+	defer l.articleStatus("article.stage.archive")()
 	abs, err := filepath.Abs(filename)
 	if err != nil {
 		return err
@@ -109,6 +125,7 @@ func (l *DocumentLoader) openArticleFile(filename string) error {
 	return l.displayArticle(location, false)
 }
 func (l *DocumentLoader) displayArticle(location articleLocation, forceNative bool) error {
+	defer l.articleStatus("servo.stage.document")()
 	started := time.Now()
 	profile.Mark("article.open.begin", map[string]any{"file": location.File, "entry": location.Entry, "zim": location.ZIM, "force_native": forceNative})
 	key := l.locationKey(location)
@@ -162,6 +179,7 @@ func (l *DocumentLoader) displayArticle(location articleLocation, forceNative bo
 	var fallback error
 	if !forceNative && l.host.getConfig().Get().ArticleRenderer == config.ArticleRendererServo {
 		l.fallbackKey, l.fallbackHTML = key, resource.Data
+		source = article.WithPrefetchedResource(source, location.Entry, resource)
 		fallback = l.host.showArticle(source, location.Entry, key)
 		if fallback == nil {
 			return nil
@@ -177,6 +195,7 @@ func (l *DocumentLoader) displayArticle(location articleLocation, forceNative bo
 }
 
 func (l *DocumentLoader) showSimpleArticle(key string, data []byte, fallback error) error {
+	defer l.articleStatus("article.stage.simple")()
 	started := time.Now()
 	profile.Mark("article.simple.parse.begin", map[string]any{"bytes": len(data)})
 	doc, err := html.Parse(bytes.NewReader(data))
@@ -186,6 +205,7 @@ func (l *DocumentLoader) showSimpleArticle(key string, data []byte, fallback err
 	l.fallbackKey, l.fallbackHTML = "", nil
 	profile.Mark("article.simple.parse.end", map[string]any{"elapsed_ms": time.Since(started).Milliseconds()})
 	l.cacheDocument(key, doc)
+	defer l.articleStatus("article.stage.layout")()
 	l.host.showDocument(doc, key)
 	if fallback != nil {
 		slog.Warn("Servo unavailable, using SDL", "error", fallback)

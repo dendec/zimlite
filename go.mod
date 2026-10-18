@@ -10,4 +10,7 @@ require (
 	golang.org/x/net v0.55.0
 )
 
-require github.com/JohannesKaufmann/dom v0.3.1 // indirect
+require (
+	github.com/JohannesKaufmann/dom v0.3.1 // indirect
+	github.com/clipperhouse/uax29/v2 v2.7.0
+)

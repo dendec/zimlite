@@ -9,6 +9,7 @@ import (
 
 const memoryPollInterval = 50 * time.Millisecond
 const firstFrameTimeout = 20 * time.Second
+const paintTimeout = 10 * time.Second
 const minimumHelperKiB int64 = 192 * 1024
 const systemReserveKiB int64 = 50 * 1024
 

@@ -13,6 +13,7 @@ import (
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/document"
 	engine "github.com/dendec/zimlite/internal/servo"
+	"github.com/dendec/zimlite/internal/textinput"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -176,10 +177,12 @@ type fontSlot struct {
 
 // Renderer owns the SDL window and renders documents.
 type Renderer struct {
-	window      *sdl.Window
-	sdlRenderer *sdl.Renderer
-	controller  *sdl.GameController
-	fonts       [fontCount]fontSlot
+	keyboard         *textinput.View
+	keyboardTextures map[string]keyboardTexture
+	window           *sdl.Window
+	sdlRenderer      *sdl.Renderer
+	controller       *sdl.GameController
+	fonts            [fontCount]fontSlot
 
 	layout     PageLayout
 	servo      *servoView
@@ -359,6 +362,7 @@ func (r *Renderer) GameController() *sdl.GameController {
 }
 
 func (r *Renderer) Destroy() {
+	r.SetKeyboard(nil)
 	r.StopArticle()
 	r.ClearCache()
 	if r.controller != nil {
@@ -513,8 +517,8 @@ func (r *Renderer) SetTextLines(title string, items []document.TreeItem) {
 		})
 		y += th
 	}
-	if y < r.height-r.getStatusBarHeight() {
-		y = r.height - r.getStatusBarHeight()
+	if y < r.contentHeight() {
+		y = r.contentHeight()
 	}
 	r.layout.totalHeight = y
 	r.clampScroll()
@@ -536,8 +540,8 @@ func (r *Renderer) ScrollToLine(lineIdx int) {
 	screenY := line.y - r.scrollY
 	if screenY < r.marginY {
 		r.scrollY = line.y - r.marginY
-	} else if screenY+line.h > r.height-r.marginY-r.getStatusBarHeight() {
-		r.scrollY = line.y + line.h - r.height + r.marginY + r.getStatusBarHeight()
+	} else if screenY+line.h > r.contentHeight()-r.marginY {
+		r.scrollY = line.y + line.h - r.contentHeight() + r.marginY
 	}
 	r.clampScroll()
 }
@@ -652,7 +656,7 @@ func (r *Renderer) moveLink(delta int) {
 	}
 
 	visibleTop := r.scrollY + r.marginY
-	visibleBottom := r.scrollY + r.height - r.marginY - r.getStatusBarHeight()
+	visibleBottom := r.scrollY + r.contentHeight() - r.marginY
 
 	// check if current selection is in the viewport
 	selVisible := r.selectedLink >= 0 && r.selectedLink < len(r.layout.links) &&
@@ -692,7 +696,7 @@ func (r *Renderer) moveLink(delta int) {
 			if first.Y < visibleTop {
 				r.scrollY = first.Y - r.marginY
 			} else if last.Y+last.H > visibleBottom {
-				r.scrollY = last.Y + last.H - r.height + r.marginY + r.getStatusBarHeight()
+				r.scrollY = last.Y + last.H - r.contentHeight() + r.marginY
 			}
 			r.clampScroll()
 		}
@@ -727,19 +731,19 @@ func (r *Renderer) ScrollBy(delta int32) {
 
 func (r *Renderer) ScrollPageUp() {
 	if r.servo != nil {
-		r.ScrollBy(-(r.height - r.getStatusBarHeight()) * 3 / 4)
+		r.ScrollBy(-r.contentHeight() * 3 / 4)
 		return
 	}
-	r.scrollY -= (r.height - r.getStatusBarHeight()) * 3 / 4
+	r.scrollY -= r.contentHeight() * 3 / 4
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollPageDown() {
 	if r.servo != nil {
-		r.ScrollBy((r.height - r.getStatusBarHeight()) * 3 / 4)
+		r.ScrollBy(r.contentHeight() * 3 / 4)
 		return
 	}
-	r.scrollY += (r.height - r.getStatusBarHeight()) * 3 / 4
+	r.scrollY += r.contentHeight() * 3 / 4
 	r.clampScroll()
 }
 
@@ -749,7 +753,7 @@ func (r *Renderer) ScrollToBottom() {
 		r.SetScrollY(2147483647)
 		return
 	}
-	r.scrollY = r.layout.totalHeight - (r.height - r.getStatusBarHeight())
+	r.scrollY = r.layout.totalHeight - r.contentHeight()
 	r.clampScroll()
 }
 
@@ -835,7 +839,7 @@ func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
 }
 
 func (r *Renderer) clampScroll() {
-	maxScroll := r.layout.totalHeight - (r.height - r.getStatusBarHeight())
+	maxScroll := r.layout.totalHeight - r.contentHeight()
 	if maxScroll < 0 {
 		maxScroll = 0
 	}

@@ -14,6 +14,8 @@ typedef void* zim_entry_t;
 typedef void* zim_item_t;
 
 zim_archive_t zim_open(const char* path);
+const char*   zim_metadata(zim_archive_t archive, const char* name);
+const char*   zim_archive_id(zim_archive_t archive);
 void          zim_close(zim_archive_t archive);
 int           zim_get_article_count(zim_archive_t archive);
 zim_entry_t   zim_get_main_entry(zim_archive_t archive);

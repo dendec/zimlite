@@ -1,0 +1,27 @@
+ARG INPUT_TOOLCHAIN=zimlite-input-toolchain-arm64
+FROM ${INPUT_TOOLCHAIN} AS build
+ARG TRIPLE=aarch64-linux-gnu
+ARG DEB_ARCH=arm64
+RUN apt-get update && apt-get install -y --no-install-recommends gettext locales && rm -rf /var/lib/apt/lists/*
+ARG M17N_DB_VER=1.8.14
+RUN wget -q --timeout=30 --tries=2 "https://download.savannah.nongnu.org/releases/m17n/m17n-db-${M17N_DB_VER}.tar.gz" -O /tmp/db.tar.gz \
+    && mkdir /tmp/db && tar xf /tmp/db.tar.gz -C /tmp/db --strip-components=1 \
+    && cd /tmp/db && ./configure --prefix=/opt/input && make -j4 && make install
+COPY native/input-host /source
+COPY scripts/package-input-runtime.py /tmp/package-input-runtime.py
+COPY internal/renderer/assets/unifont.otf /tmp/unifont.otf
+COPY lib/libzim_linux-x86_64-9.7.0/lib/x86_64-linux-gnu/libzim.so.9.7.0 /pc-zim/libzim.so.9.7.0
+RUN ln -s libzim.so.9.7.0 /pc-zim/libzim.so.9 \
+    && ${TRIPLE}-g++ -std=c++17 -O2 -Wall -Wextra -I/opt/input/include /source/main.cpp \
+    -L/opt/input/lib -lm17n -lm17n-core -lanthy -licui18n -licuuc -Wl,-rpath,'$ORIGIN/lib' -o /tmp/zimlite-input-host \
+    && ${TRIPLE}-g++ -std=c++17 -O2 -Wall -Wextra -shared -fPIC /source/text.cpp \
+       $(PKG_CONFIG_LIBDIR=/usr/lib/${TRIPLE}/pkgconfig pkg-config --cflags --libs freetype2 harfbuzz fribidi) \
+       -Wl,--disable-new-dtags,-rpath,'$ORIGIN' -o /tmp/libzimlite-text.so \
+    && if [ "$DEB_ARCH" = amd64 ]; then \
+         ${TRIPLE}-g++ -std=c++17 -O2 -I${ZIM_INC} /source/search.cpp -L/pc-zim -l:libzim.so.9.7.0 -Wl,--allow-shlib-undefined -Wl,-rpath,'$ORIGIN/lib' -o /tmp/zimlite-search-host; \
+       else \
+         ${TRIPLE}-g++ -std=c++17 -O2 -I${ZIM_INC} /source/search.cpp -L${ZIM_LIB} ${ZIM_LINK_LIBS} -o /tmp/zimlite-search-host; \
+       fi \
+    && python3 /tmp/package-input-runtime.py ${TRIPLE} /dist/input \
+    && find /dist/input -type f -name '*.so*' -exec ${TRIPLE}-strip {} \; \
+    && ${TRIPLE}-strip /dist/input/zimlite-input-host /dist/input/zimlite-search-host

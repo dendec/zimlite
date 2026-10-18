@@ -25,3 +25,11 @@ config.json
 library_cache.json
 TODO.md
 testdata
+
+# Keep the reproducible console FTS benchmark sources.
+!/native/fts-probe/
+!/native/fts-probe/main.cpp
+
+# Offline keyboard worker sources.
+!/native/input-host/
+!/native/input-host/*.cpp
