@@ -7,6 +7,7 @@ var zhTranslations = map[string]string{
 	"search.help":          "Start：结果 · A：选择 · X：Shift · B/L1：删除",
 	"search.results_help":  "Start：键盘 · A：打开 · B：返回",
 	"search.desktop_help":  "Enter：搜索/打开 · F3：键盘 · Esc：返回",
+	"search.kbd_help":      "屏幕键盘：方向键移动 · Enter 按下选中的键 · Esc 返回",
 	"search.typing_help":   "Enter：结果 · A：打开 · B/L1：删除",
 	"search.picker_help":   "选择：方向键/摇杆移动 · A 选择 · B/X 关闭 · R1 翻页",
 	"search.previous":      "上一页结果",
@@ -52,6 +53,7 @@ var zhTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ 帮助",
 	"help.navigation":      "🧭 导航",
+	"help.select_link":     "选择链接",
 	"help.scroll":          "📜 滚动页面",
 	"help.table_scroll":    "↔️ 横向滚动宽表格",
 	"help.page_scroll":     "📄 上一页/下一页",

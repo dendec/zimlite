@@ -4,7 +4,7 @@ Three small adapters with separate responsibilities:
 
 - `main.cpp`: one m17n input method per process, UTF-8 composition and candidates.
 - `search.cpp`: one libzim/Xapian query per process, ten title/path results, no snippets.
-- `text.cpp`: optional SDL keyboard shaping backend (HarfBuzz, FreeType, FriBidi).
+- `text.cpp`: optional SDL text-shaping backend (HarfBuzz, FreeType, FriBidi), used by the keyboard and the Markdown renderer for bidirectional text.
 
 `make input-runtime-arm64` and `make input-runtime-amd64` build the offline
 runtime in Docker. Keep the resulting directory next to the application as

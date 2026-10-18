@@ -7,6 +7,7 @@ var idTranslations = map[string]string{
 	"search.help":          "Start: hasil · A: pilih · X: Shift · B/L1: hapus",
 	"search.results_help":  "Start: papan ketik · A: buka · B: kembali",
 	"search.desktop_help":  "Enter: cari/buka · F3: papan ketik · Esc: kembali",
+	"search.kbd_help":      "Papan ketik layar: tombol panah bergerak · Enter menekan tombol terpilih · Esc kembali",
 	"search.typing_help":   "Enter: hasil · A: buka · B/L1: hapus",
 	"search.picker_help":   "Pilihan: D-pad/stik bergerak · A memilih · B/X menutup · R1 halaman",
 	"search.previous":      "Hasil sebelumnya",
@@ -52,6 +53,7 @@ var idTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ Bantuan",
 	"help.navigation":      "🧭 Navigasi",
+	"help.select_link":     "pilih tautan",
 	"help.scroll":          "📜 Gulir halaman",
 	"help.table_scroll":    "↔️ Gulir tabel lebar",
 	"help.page_scroll":     "📄 Halaman atas/bawah",

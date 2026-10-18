@@ -7,6 +7,7 @@ var frTranslations = map[string]string{
 	"search.help":          "Start : résultats · A : choisir · X : Shift · B/L1 : effacer",
 	"search.results_help":  "Start : clavier · A : ouvrir · B : retour",
 	"search.desktop_help":  "Entrée : chercher/ouvrir · F3 : clavier · Échap : retour",
+	"search.kbd_help":      "Clavier à l’écran : les flèches déplacent · Entrée appuie sur la touche sélectionnée · Échap revient",
 	"search.typing_help":   "Entrée : résultats · A : ouvrir · B/L1 : effacer",
 	"search.picker_help":   "Choix : croix/stick navigue · A choisit · B/X ferme · R1 page",
 	"search.previous":      "Résultats précédents",
@@ -52,6 +53,7 @@ var frTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ Aide",
 	"help.navigation":      "🧭 Navigation",
+	"help.select_link":     "sélectionner les liens",
 	"help.scroll":          "📜 Défiler",
 	"help.table_scroll":    "↔️ Faire défiler un tableau large",
 	"help.page_scroll":     "📄 Page précédente/suivante",

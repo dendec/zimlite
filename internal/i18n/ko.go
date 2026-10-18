@@ -7,6 +7,7 @@ var koTranslations = map[string]string{
 	"search.help":          "Start: 검색 결과 · A: 선택 · X: Shift · B/L1: 삭제",
 	"search.results_help":  "Start: 키보드 · A: 열기 · B: 뒤로",
 	"search.desktop_help":  "Enter: 검색/열기 · F3: 키보드 · Esc: 뒤로",
+	"search.kbd_help":      "화면 키보드: 방향키로 이동 · Enter로 선택한 키 입력 · Esc 뒤로",
 	"search.typing_help":   "Enter: 결과 · A: 열기 · B/L1: 삭제",
 	"search.picker_help":   "선택: 방향키/스틱 이동 · A 선택 · B/X 닫기 · R1 페이지",
 	"search.previous":      "이전 결과",
@@ -52,6 +53,7 @@ var koTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ 도움말",
 	"help.navigation":      "🧭 탐색",
+	"help.select_link":     "링크 선택",
 	"help.scroll":          "📜 스크롤",
 	"help.table_scroll":    "↔️ 넓은 표 스크롤",
 	"help.page_scroll":     "📄 페이지 위/아래",

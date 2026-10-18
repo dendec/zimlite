@@ -7,6 +7,7 @@ var ptTranslations = map[string]string{
 	"search.help":          "Start: resultados · A: escolher · X: Shift · B/L1: apagar",
 	"search.results_help":  "Start: teclado · A: abrir · B: voltar",
 	"search.desktop_help":  "Enter: buscar/abrir · F3: teclado · Esc: voltar",
+	"search.kbd_help":      "Teclado na tela: setas movem · Enter pressiona a tecla selecionada · Esc volta",
 	"search.typing_help":   "Enter: resultados · A: abrir · B/L1: apagar",
 	"search.picker_help":   "Escolha: direcional/analógico navega · A seleciona · B/X fecha · R1 página",
 	"search.previous":      "Resultados anteriores",
@@ -52,6 +53,7 @@ var ptTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ Ajuda",
 	"help.navigation":      "🧭 Navegação",
+	"help.select_link":     "selecionar links",
 	"help.scroll":          "📜 Rolar página",
 	"help.table_scroll":    "↔️ Rolar tabela larga",
 	"help.page_scroll":     "📄 Página acima/abaixo",

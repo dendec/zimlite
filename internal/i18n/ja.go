@@ -7,6 +7,7 @@ var jaTranslations = map[string]string{
 	"search.help":          "Start: 検索結果 · A: 選択 · X: Shift · B/L1: 削除",
 	"search.results_help":  "Start: キーボード · A: 開く · B: 戻る",
 	"search.desktop_help":  "Enter: 検索/開く · F3: キーボード · Esc: 戻る",
+	"search.kbd_help":      "画面キーボード：矢印で移動 · Enterで選択キーを入力 · Escで戻る",
 	"search.typing_help":   "Enter: 結果 · A: 開く · B/L1: 削除",
 	"search.picker_help":   "選択: 十字キー/スティックで移動 · Aで選択 · B/Xで閉じる · R1でページ",
 	"search.previous":      "前の検索結果",
@@ -52,6 +53,7 @@ var jaTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ ヘルプ",
 	"help.navigation":      "🧭 ナビゲーション",
+	"help.select_link":     "リンクを選択",
 	"help.scroll":          "📜 スクロール",
 	"help.table_scroll":    "↔️ 横長の表をスクロール",
 	"help.page_scroll":     "📄 ページ上下",

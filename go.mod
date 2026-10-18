@@ -4,10 +4,16 @@ go 1.25.0
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
+	github.com/benoitkugler/textprocessing v0.0.6
 	github.com/veandco/go-sdl2 v0.4.40
 	github.com/yuin/goldmark v1.8.2
 	golang.org/x/image v0.43.0
 	golang.org/x/net v0.55.0
+)
+
+require (
+	github.com/benoitkugler/textlayout v0.3.2 // indirect
+	golang.org/x/text v0.38.0 // indirect
 )
 
 require (

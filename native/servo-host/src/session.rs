@@ -65,6 +65,38 @@ const LINK_SELECTION_JS: &str = r#"
       e.focus({preventScroll:true});
       if (reveal) e.scrollIntoView({block:'nearest', inline:'nearest'});
     }
+    function zimliteMoveLink(direction) {
+      if (!n) return;
+      if (selected < 0 || !zimliteLinkVisible(links[selected])) {
+        for (let i = 0; i < n; i++) {
+          if (zimliteLinkVisible(links[i])) {
+            zimliteSelectLink(i, false); return;
+          }
+        }
+        // A screen of plain text or a tall image can separate links. Resume
+        // at the closest link beyond this viewport in the requested direction.
+        let nearest = -1, distance = Infinity, boundary = -1;
+        for (let i = 0; i < n; i++) {
+          const a = links[i];
+          if (getComputedStyle(a).visibility !== 'visible') continue;
+          const rects = Array.from(a.getClientRects()).filter(r => r.width > 0 && r.height > 0);
+          if (!rects.length) continue;
+          if (boundary < 0 || direction > 0) boundary = i;
+          for (const r of rects) {
+            const gap = direction > 0 ? r.top - innerHeight : -r.bottom;
+            if (gap >= 0 && gap < distance) {nearest = i; distance = gap;}
+          }
+        }
+        if (nearest >= 0 || boundary >= 0) zimliteSelectLink(nearest >= 0 ? nearest : boundary, true);
+        return;
+      }
+      for (let step = 1; step <= n; step++) {
+        const i = (selected + direction * step + n) % n;
+        if (links[i].getClientRects().length && getComputedStyle(links[i]).visibility === 'visible') {
+          zimliteSelectLink(i, !zimliteLinkVisible(links[i])); return;
+        }
+      }
+    }
 "#;
 
 // Use the same target for input and diagnostics. A link may stay selected far
@@ -378,6 +410,8 @@ fn evaluate_state(
       const tableScrollLeft = !!table && table.scrollLeft > 1;
       const tableScrollRight = !!table && table.scrollLeft + table.clientWidth < table.scrollWidth - 1;
       const body = document.body;
+      const h1 = document.querySelector('h1');
+      const title = h1 ? h1.textContent.slice(0,256) : '';
       let contentReady = false;
       if (location.protocol === 'http:' && body && body.getBoundingClientRect().height > 0) {{
         // Inspect a bounded prefix of text nodes, not the full article text.
@@ -389,7 +423,7 @@ fn evaluate_state(
         }}
         if (!contentReady) contentReady = !!body.querySelector('img,svg,canvas,math');
       }}
-      return JSON.stringify({{event:'state', title:document.title.slice(0,256),
+      return JSON.stringify({{event:'state', title:title,
         content_ready:contentReady,
         dom_ready:location.protocol==='http:' && document.readyState!=='loading',
         scroll_y:Math.round(window.scrollY),
@@ -570,7 +604,7 @@ pub fn run(
                             r#"(() => {{
                               {LINK_STATE_JS}
                               {LINK_SELECTION_JS}
-                              zimliteSelectLink({}, true);
+                              zimliteSelectLink({}, false);
                             }})()"#,
                             command.value.clamp(-1, 2047),
                         )),
@@ -578,22 +612,7 @@ pub fn run(
                             r#"(() => {{
                               {LINK_STATE_JS}
                               {LINK_SELECTION_JS}
-                              if (!n) return;
-                              if (selected < 0 || !zimliteLinkVisible(links[selected])) {{
-                                for (let i = 0; i < n; i++) {{
-                                  if (zimliteLinkVisible(links[i])) {{
-                                    zimliteSelectLink(i, false); return;
-                                  }}
-                                }}
-                                return;
-                              }}
-                              for (let step = 1; step <= n; step++) {{
-                                const i = (selected + ({direction}) * step + n) % n;
-                                if (links[i].getClientRects().length &&
-                                    getComputedStyle(links[i]).visibility === 'visible') {{
-                                  zimliteSelectLink(i, !zimliteLinkVisible(links[i])); return;
-                                }}
-                              }}
+                              zimliteMoveLink({direction});
                             }})()"#,
                             direction = if command.value < 0 { -1 } else { 1 },
                         )),

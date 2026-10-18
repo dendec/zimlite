@@ -203,6 +203,7 @@ servo-runtime-arm64: servo-submodules servo-toolchain
 dist-arm64-servo: dist-arm64 servo-runtime-arm64
 	mkdir -p dist/zimlite/servo
 	cp -a dist/servo-runtime/. dist/zimlite/servo/
+	rm -f dist/zimlite-linux-arm64.zip && cd dist/zimlite && zip -r ../zimlite-linux-arm64.zip .
 
 dist-portmaster-servo: dist-portmaster servo-runtime-arm64
 	mkdir -p dist/portmaster_build/zimlite/servo

@@ -790,6 +790,9 @@ func (s *searchState) showResults(result *textinput.Results) {
 }
 func (s *searchState) helpKey() string {
 	if s.app.gamepad.Controller() == nil {
+		if s.editing && s.visible {
+			return "search.kbd_help"
+		}
 		return "search.desktop_help"
 	}
 	if s.picker != "" {
@@ -880,7 +883,9 @@ func (s *searchState) process(event sdl.Event) {
 				return
 			}
 			if e.Repeat == 0 {
-				if s.editing {
+				if s.visible {
+					s.activate()
+				} else if s.editing {
 					s.submit()
 				} else {
 					s.openSelected()

@@ -7,6 +7,7 @@ var enTranslations = map[string]string{
 	"search.help":          "Start: results · A: select · X: Shift · B/L1: erase",
 	"search.results_help":  "Start: keyboard · A: open · B: back",
 	"search.desktop_help":  "Enter: find/open · F3: keyboard · Esc: back",
+	"search.kbd_help":      "Screen keyboard: arrows move · Enter presses focused key · Esc returns",
 	"search.typing_help":   "Enter: results · A: open · B/L1: erase",
 	"search.picker_help":   "Chooser: D-pad/stick move · A choose · B/X close · R1 page",
 	"search.previous":      "Previous results",
@@ -52,6 +53,7 @@ var enTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ Help",
 	"help.navigation":      "🧭 Navigation",
+	"help.select_link":     "select links",
 	"help.scroll":          "📜 Scroll Page",
 	"help.table_scroll":    "↔️ Scroll Wide Table",
 	"help.page_scroll":     "📄 Page Up/Down",

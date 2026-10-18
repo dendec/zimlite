@@ -1,9 +1,9 @@
 package renderer
 
 import (
-	"fmt"
 	"log/slog"
 	"sort"
+	"unsafe"
 
 	"github.com/dendec/zimlite/internal/document"
 	"github.com/dendec/zimlite/internal/i18n"
@@ -390,31 +390,40 @@ func (r *Renderer) renderStatusBar() {
 }
 
 func (r *Renderer) computeRightStatus() string {
+	var totalHeight, viewportHeight int32
+	linkCount := 0
 	if r.servo != nil {
-		return fmt.Sprintf("Servo · %dpx · %d/%d", r.scrollY, r.selectedLink+1, r.servo.links)
-	}
-	if r.doc == nil {
-		return ""
+		totalHeight = r.servo.scrollHeight
+		viewportHeight = r.servo.viewportHeight
+		linkCount = r.servo.links
+	} else {
+		if r.doc == nil {
+			return ""
+		}
+		totalHeight = r.layout.totalHeight
+		viewportHeight = r.contentHeight()
+		linkCount = len(r.layout.links)
 	}
 
-	vpH := r.contentHeight()
-	totalH := r.layout.totalHeight
 	scrollPct := 0
-	if totalH > vpH {
-		maxScroll := totalH - vpH
-		scrollPct = int(float64(r.scrollY) / float64(maxScroll) * 100)
+	if viewportHeight > 0 && totalHeight > viewportHeight {
+		maxScroll := totalHeight - viewportHeight
+		scrollY := max(int32(0), r.scrollY)
+		scrollPct = int(float64(scrollY) / float64(maxScroll) * 100)
 		if scrollPct > 100 {
 			scrollPct = 100
 		}
-	} else {
+	} else if viewportHeight > 0 {
 		scrollPct = 100
 	}
 
-	linkCount := len(r.layout.links)
 	if linkCount > 0 {
 		sel := r.selectedLink + 1
 		if sel < 1 {
 			sel = 1
+		}
+		if sel > linkCount {
+			sel = linkCount
 		}
 		return i18n.Tf(r.lang, "status.scroll_link", scrollPct, sel, linkCount)
 	}
@@ -521,6 +530,29 @@ func (r *Renderer) renderTextTexture(line lineEntry) *sdl.Texture {
 	tex := r.textCache.Get(key)
 	if tex != nil {
 		return tex
+	}
+	if !line.isCode && hasRTLText(line.text) {
+		pixels, w, h := r.renderShapedText(line.text, r.fonts[line.fontIdx].size)
+		if w > 0 && h > 0 && len(pixels) >= w*h*4 {
+			shapedTex, err := r.sdlRenderer.CreateTexture(sdl.PIXELFORMAT_ABGR8888, sdl.TEXTUREACCESS_STATIC, int32(w), int32(h))
+			if err == nil {
+				if err = shapedTex.Update(nil, unsafe.Pointer(&pixels[0]), w*4); err == nil {
+					err = shapedTex.SetBlendMode(sdl.BLENDMODE_BLEND)
+				}
+				if err == nil {
+					err = shapedTex.SetColorMod(line.color.R, line.color.G, line.color.B)
+				}
+				if err == nil {
+					err = shapedTex.SetAlphaMod(line.color.A)
+				}
+				if err != nil {
+					shapedTex.Destroy()
+				} else {
+					r.textCache.Set(key, shapedTex)
+					return shapedTex
+				}
+			}
+		}
 	}
 	font := r.fonts[line.fontIdx].font
 	if font == nil {

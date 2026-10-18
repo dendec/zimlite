@@ -84,12 +84,12 @@ func NewInputController(app *App) *InputController {
 		sdl.SCANCODE_BACKSPACE: func() { app.goBack() },
 	}
 	c.docKeys = map[sdl.Scancode]func(){
-		sdl.SCANCODE_UP:       func() { app.scroller.ScrollBy(-scrollStep) },
+		sdl.SCANCODE_UP:       func() { c.moveLinkSelection(-1) },
 		sdl.SCANCODE_W:        func() { app.scroller.ScrollBy(-scrollStep) },
-		sdl.SCANCODE_KP_8:     func() { app.scroller.ScrollBy(-scrollStep) },
-		sdl.SCANCODE_DOWN:     func() { app.scroller.ScrollBy(scrollStep) },
+		sdl.SCANCODE_KP_8:     func() { c.moveLinkSelection(-1) },
+		sdl.SCANCODE_DOWN:     func() { c.moveLinkSelection(1) },
 		sdl.SCANCODE_S:        func() { app.scroller.ScrollBy(scrollStep) },
-		sdl.SCANCODE_KP_2:     func() { app.scroller.ScrollBy(scrollStep) },
+		sdl.SCANCODE_KP_2:     func() { c.moveLinkSelection(1) },
 		sdl.SCANCODE_LEFT:     func() { c.moveLinkSelection(-1) },
 		sdl.SCANCODE_A:        func() { c.moveLinkSelection(-1) },
 		sdl.SCANCODE_KP_4:     func() { c.moveLinkSelection(-1) },

@@ -7,6 +7,7 @@ var ukTranslations = map[string]string{
 	"search.help":          "Start: результати · A: вибрати · X: Shift · B/L1: стерти",
 	"search.results_help":  "Start: клавіатура · A: відкрити · B: назад",
 	"search.desktop_help":  "Enter: знайти/відкрити · F3: клавіатура · Esc: назад",
+	"search.kbd_help":      "Екранна клавіатура: стрілки рухаються · Enter натискає вибрану клавішу · Esc назад",
 	"search.typing_help":   "Enter: результати · A: відкрити · B/L1: стерти",
 	"search.picker_help":   "Вибір: хрестовина/стік — навігація · A — вибрати · B/X — закрити · R1 — сторінка",
 	"search.previous":      "Попередні результати",
@@ -52,6 +53,7 @@ var ukTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ Довідка",
 	"help.navigation":      "🧭 Навігація",
+	"help.select_link":     "вибір посилань",
 	"help.scroll":          "📜 Прокрутка",
 	"help.table_scroll":    "↔️ Прокрутка широкої таблиці",
 	"help.page_scroll":     "📄 Сторінка вгору/вниз",

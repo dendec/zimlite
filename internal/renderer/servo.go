@@ -19,18 +19,19 @@ import (
 )
 
 type servoView struct {
-	session                     *engine.Session
-	texture                     *sdl.Texture
-	width, height               uint32
-	textureWidth, textureHeight int32
-	links                       int
-	selectedURL                 string
-	selectionID                 uint64
-	loading                     string
-	loadStarted                 time.Time
-	renderMode                  string
-	scrollRemainder             float64
-	tableScrollRemainder        float64
+	session                      *engine.Session
+	texture                      *sdl.Texture
+	width, height                uint32
+	textureWidth, textureHeight  int32
+	links                        int
+	scrollHeight, viewportHeight int32
+	selectedURL                  string
+	selectionID                  uint64
+	loading                      string
+	loadStarted                  time.Time
+	renderMode                   string
+	scrollRemainder              float64
+	tableScrollRemainder         float64
 }
 
 func servoHelper() string {
@@ -234,8 +235,10 @@ func (r *Renderer) renderServo() {
 			return
 		}
 		view.links = state.LinkCount
+		view.scrollHeight = state.ScrollHeight
+		view.viewportHeight = state.ViewportHeight
 		r.scrollY = state.ScrollY
-		r.docTitle = state.Title
+		r.docTitle = truncateDocumentTitle(state.Title)
 		// Relative link navigation is resolved by the helper using its live DOM.
 		if state.SelectionID == view.selectionID {
 			r.selectedLink = state.SelectedLink

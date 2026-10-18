@@ -916,6 +916,11 @@ func (f *sdlFont) Measure(text string, isBold, isItalic, isCode bool) (int32, in
 	if font == nil {
 		return 0, 0
 	}
+	if !isCode && hasRTLText(text) {
+		if _, w, h := f.r.renderShapedText(text, f.r.fonts[f.baseIdx].size); w > 0 && h > 0 {
+			return int32(w), int32(h)
+		}
+	}
 	return measureText(text, font, isBold, isItalic, isCode)
 }
 
@@ -977,14 +982,18 @@ func (r *Renderer) GetStatusOverride() string {
 func extractTitle(doc *document.Document) string {
 	for _, b := range doc.Blocks {
 		if h, ok := b.(*document.Heading); ok && h.Level == 1 {
-			runes := []rune(h.Content)
-			if len(runes) > titleTruncateMaxRunes {
-				return string(runes[:titleTruncateKeepRunes]) + "..."
-			}
-			return h.Content
+			return truncateDocumentTitle(h.Content)
 		}
 	}
 	return ""
+}
+
+func truncateDocumentTitle(title string) string {
+	runes := []rune(title)
+	if len(runes) > titleTruncateMaxRunes {
+		return string(runes[:titleTruncateKeepRunes]) + "..."
+	}
+	return title
 }
 
 func (r *Renderer) HasAnimations() bool {

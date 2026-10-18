@@ -7,6 +7,7 @@ var itTranslations = map[string]string{
 	"search.help":          "Start: risultati · A: scegli · X: Shift · B/L1: cancella",
 	"search.results_help":  "Start: tastiera · A: apri · B: indietro",
 	"search.desktop_help":  "Invio: cerca/apri · F3: tastiera · Esc: indietro",
+	"search.kbd_help":      "Tastiera a schermo: le frecce spostano · Invio preme il tasto selezionato · Esc torna indietro",
 	"search.typing_help":   "Invio: risultati · A: apri · B/L1: cancella",
 	"search.picker_help":   "Scelta: croce/stick naviga · A sceglie · B/X chiude · R1 pagina",
 	"search.previous":      "Risultati precedenti",
@@ -52,6 +53,7 @@ var itTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ Aiuto",
 	"help.navigation":      "🧭 Navigazione",
+	"help.select_link":     "seleziona link",
 	"help.scroll":          "📜 Scorri pagina",
 	"help.table_scroll":    "↔️ Scorri tabella larga",
 	"help.page_scroll":     "📄 Pagina su/giù",

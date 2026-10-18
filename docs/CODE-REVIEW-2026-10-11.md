@@ -82,8 +82,10 @@ Memory protection remains sampled rather than a hard cap for the whole
 application. Native libzim decompression and uninterruptible kernel/storage
 waits remain outside the watchdog's control. Source cleanup waits for an active
 native read asynchronously to preserve safety without blocking the SDL thread.
-These changes do not establish a strict 1 GB resource guarantee or prove the
-reported handheld hang resolved without reproducing it on the device.
+This review, written on 2026-10-11, did not establish a strict 1 GB resource
+guarantee or prove the reported handheld hang resolved. Subsequent fixes have
+resolved the handheld hangs, as confirmed by the user on 2026-10-18; the older
+resource-limit caveat still applies.
 
 The global configuration provider and library cache remain architectural debt.
 Their existing interfaces permit incremental isolation. Neither requires

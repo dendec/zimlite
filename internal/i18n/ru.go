@@ -7,6 +7,7 @@ var ruTranslations = map[string]string{
 	"search.help":          "Start: результаты · A: выбрать · X: Shift · B/L1: стереть",
 	"search.results_help":  "Start: клавиатура · A: открыть · B: назад",
 	"search.desktop_help":  "Enter: найти/открыть · F3: клавиатура · Esc: назад",
+	"search.kbd_help":      "Клавиатура: стрелки выбирают клавишу · Enter нажимает её · Esc назад",
 	"search.typing_help":   "Enter: результаты · A: открыть · B/L1: стереть",
 	"search.picker_help":   "Выбор: крестовина/стик — навигация · A — выбрать · B/X — закрыть · R1 — страница",
 	"search.previous":      "Предыдущие результаты",
@@ -52,6 +53,7 @@ var ruTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ Помощь",
 	"help.navigation":      "🧭 Навигация",
+	"help.select_link":     "выбор ссылок",
 	"help.scroll":          "📜 Прокрутка",
 	"help.table_scroll":    "↔️ Прокрутка широкой таблицы",
 	"help.page_scroll":     "📄 Страница вверх/вниз",

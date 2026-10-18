@@ -7,6 +7,7 @@ var trTranslations = map[string]string{
 	"search.help":          "Start: sonuçlar · A: seç · X: Shift · B/L1: sil",
 	"search.results_help":  "Start: klavye · A: aç · B: geri",
 	"search.desktop_help":  "Enter: ara/aç · F3: klavye · Esc: geri",
+	"search.kbd_help":      "Ekran klavyesi: ok tuşları hareket eder · Enter seçili tuşa basar · Esc geri",
 	"search.typing_help":   "Enter: sonuçlar · A: aç · B/L1: sil",
 	"search.picker_help":   "Seçim: yön tuşu/çubuk gezinir · A seçer · B/X kapatır · R1 sayfa",
 	"search.previous":      "Önceki sonuçlar",
@@ -52,6 +53,7 @@ var trTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ Yardım",
 	"help.navigation":      "🧭 Gezinme",
+	"help.select_link":     "bağlantıları seç",
 	"help.scroll":          "📜 Sayfayı kaydır",
 	"help.table_scroll":    "↔️ Geniş tabloyu kaydır",
 	"help.page_scroll":     "📄 Sayfa yukarı/aşağı",

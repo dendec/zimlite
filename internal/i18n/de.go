@@ -7,6 +7,7 @@ var deTranslations = map[string]string{
 	"search.help":          "Start: Ergebnisse · A: wählen · X: Shift · B/L1: löschen",
 	"search.results_help":  "Start: Tastatur · A: öffnen · B: zurück",
 	"search.desktop_help":  "Enter: suchen/öffnen · F3: Tastatur · Esc: zurück",
+	"search.kbd_help":      "Bildschirmtastatur: Pfeile bewegen · Enter drückt die ausgewählte Taste · Esc zurück",
 	"search.typing_help":   "Enter: Ergebnisse · A: öffnen · B/L1: löschen",
 	"search.picker_help":   "Auswahl: Steuerkreuz/Stick navigiert · A wählt · B/X schließen · R1 Seite",
 	"search.previous":      "Vorherige Ergebnisse",
@@ -52,6 +53,7 @@ var deTranslations = map[string]string{
 	// Help
 	"help.title":           "❓ Hilfe",
 	"help.navigation":      "🧭 Navigation",
+	"help.select_link":     "Links auswählen",
 	"help.scroll":          "📜 Seite scrollen",
 	"help.table_scroll":    "↔️ Breite Tabelle scrollen",
 	"help.page_scroll":     "📄 Seite hoch/runter",

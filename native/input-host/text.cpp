@@ -1,4 +1,4 @@
-// Small relocatable shaping backend for the SDL keyboard only.
+// Small relocatable shaping backend shared by the SDL UI and keyboard.
 #include <ft2build.h>
 #include FT_FREETYPE_H
 #include <hb.h>
@@ -22,8 +22,8 @@ static FT_Face face(const std::string& file,int size){
 }
 struct Run{int start,end;FriBidiLevel level;hb_script_t script;};
 struct Glyph{FT_Face face;unsigned id;int x,y;};
-extern "C" unsigned char* kb_render(const char* root,const char* input,int size,int maxWidth,int* width,int* height){
- if(!input||!root||size<8||size>32||maxWidth<1||maxWidth>4096)return nullptr;
+extern "C" unsigned char* kb_render(const char* fontPath,const char* input,int size,int maxWidth,int* width,int* height){
+ if(!input||!fontPath||size<8||size>48||maxWidth<1||maxWidth>4096)return nullptr;
  std::vector<FriBidiChar> chars; // Decode through HarfBuzz's UTF-8 decoder.
  hb_buffer_t* decode=hb_buffer_create();hb_buffer_add_utf8(decode,input,-1,0,-1);
  unsigned count=0;auto* info=hb_buffer_get_glyph_infos(decode,&count);if(count>2048){hb_buffer_destroy(decode);return nullptr;}
@@ -44,7 +44,7 @@ extern "C" unsigned char* kb_render(const char* root,const char* input,int size,
  for(int level=highest;level>=lowestOdd;--level)for(size_t i=0;i<runs.size();){if(runs[i].level<level){++i;continue;}size_t end=i;while(end<runs.size()&&runs[end].level>=level)++end;std::reverse(runs.begin()+i,runs.begin()+end);i=end;}
  std::vector<Glyph> glyphs;int pen=0,minY=0,maxY=size,minX=0,maxX=0;
  for(auto run:runs){
-  FT_Face f=face(std::string(root)+"/unifont.otf",size);if(!f)continue;
+  FT_Face f=face(fontPath,size);if(!f)continue;
   hb_font_t* hbfont=hb_ft_font_create_referenced(f);hb_buffer_t* buffer=hb_buffer_create();
   hb_buffer_add_utf32(buffer,chars.data(),chars.size(),run.start,run.end-run.start);
   hb_buffer_set_direction(buffer,run.level%2?HB_DIRECTION_RTL:HB_DIRECTION_LTR);hb_buffer_set_script(buffer,run.script);hb_buffer_set_language(buffer,hb_language_from_string("und",-1));hb_shape(hbfont,buffer,nullptr,0);
