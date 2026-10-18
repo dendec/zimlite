@@ -45,6 +45,7 @@ main.go
 - **Visitor pattern:** `BlockVisitor` interface + `VisitBlocks()`
 - **Word conversion:** `InlineWordVisitor` flattens inlines to `[]Word` for word-wrap layout
 - **Emoji detection:** `emoji.go` — Unicode range tables, ZWJ sequence parsing, flag pairs, keycaps. `tokenizeText()` splits text into space/word/emoji tokens.
+- `view.go` — renderer-independent `TreeItem` and `ResourceLoader` contracts shared by UI and renderer.
 
 ### `internal/markdown/parser.go`
 - goldmark AST → `document.Document`.
@@ -89,6 +90,13 @@ main.go
   - `GetDimensions(url)` — loads & caches image dimensions.
   - `GetTexture(url)` — returns SDL texture + animated flag.
 
+### `internal/article/` and `internal/servo/`
+- `article` owns bounded file/ZIM resource adapters, the authenticated loopback server, and HTML table containment. It has no SDL dependency.
+- `servo.Session` owns the helper process, resource server, and source, including startup failures. It contains bounded IPC queues and the system memory watchdog, without depending on SDL.
+- `renderer/servo.go` adapts helper frames and semantic view commands to the SDL window. UI selects the renderer and coordinates fallback through `ArticleViewer`.
+- `memory` reads Linux physical RAM and process RSS/swap without SDL. `servo/budget.go` defines the adaptive reserve and helper limits; shutdown aborts HTTP/helper immediately and defers blocked source cleanup. UI retains one bounded HTML body for fallback without rereading the archive.
+- Simple image decoding and GIF caches are bounded in `renderer/image_budget.go`; SVG bitmap dimensions are checked before native allocation. Profiling uses rotated RAM logs and a separate bounded crash-snapshot worker; see `docs/SERVO-PROFILING.md`.
+
 ### `internal/ui/`
 **Application logic.**
 
@@ -97,7 +105,7 @@ main.go
   - `goBack()` — handles tree exit, history back, ZIM tree fallback, menu fallback.
   - `enterTreeMode()` / `exitTreeMode()` — Radix tree for ZIM articles.
   - `HandleSettingsAction()` — parses `virtual:settings?theme=&fontsize=&lang=` URL.
-- `interfaces.go` — DI interfaces: `DocViewer`, `LinkBrowser`, `Scroller`, `DocNavigator`, `ZimReader`.
+- `interfaces.go` — DI interfaces: `DocViewer`, `LinkBrowser`, `Scroller`, optional `ArticleViewer`/`TableScroller`, and `ZimReader` with `trie.TitleIndex`. UI reuses `navigation.Navigator` and does not import the concrete renderer package.
 - `input.go` — `InputController` processes SDL events: keyboard, gamepad (ControllerAxis/Button), mouse (wheel, click), window resize.
   - `processDocKey()` / `processTreeKey()` — mode-specific key dispatch.
   - `executeGamepadAction()` — maps `Action` to function calls.
@@ -139,6 +147,7 @@ main.go
   - `Label()` / `Suffix()` / `FullPath()` — display helpers.
 - `nav.go` — `NavState` tracks cursor. `MoveUp/Down/To`, `ActionRight/Left` (expand/collapse/parent).
   - `VisibleNodes()` → `[]VisLine` with Unicode tree connectors (├── └── │).
+- `indexed.go` — production archive navigation over a random-access `TitleIndex`; bounded ranges preserve access to millions of titles without loading a full article list. The slice-based radix implementation remains available for in-memory data.
 
 ### `internal/svg/`
 **Embedded LunaSVG C++ library (20+ .cpp/.h files).**

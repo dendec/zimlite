@@ -1,0 +1,90 @@
+# Target sysroot and compiler are older than the desktop Rust/Clang toolchain.
+# The final ELF symbol audit, not the distro name, defines the ABI floor.
+FROM debian:bullseye-slim AS sysroot
+RUN sed -i 's@deb.debian.org/debian-security@archive.debian.org/debian-security@g' /etc/apt/sources.list && \
+    printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99archive
+RUN dpkg --add-architecture arm64 && apt-get update && apt-get install -y --no-install-recommends \
+    g++-aarch64-linux-gnu libfontconfig1-dev:arm64 zlib1g-dev:arm64 \
+    && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /export/usr /export/lib && \
+    cp -a /usr/include /export/usr/ && \
+    mkdir -p /export/usr/lib /export/usr/bin && \
+    cp -a /usr/lib/aarch64-linux-gnu /usr/lib/gcc-cross /export/usr/lib/ && \
+    cp -a /usr/aarch64-linux-gnu /export/usr/ && \
+    cp -a /lib/aarch64-linux-gnu /export/lib/ && \
+    cp -L /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /export/lib/ && \
+    cp -a /usr/bin/aarch64-linux-gnu-* /export/usr/bin/
+
+FROM zimlite-servo-toolchain AS builder
+RUN apt-get update && apt-get install -y --no-install-recommends libisl23 libmpc3 libmpfr6 binutils-aarch64-linux-gnu && \
+    mkdir -p /opt/servo-binutils && cp -a /usr/bin/aarch64-linux-gnu-* /opt/servo-binutils/ && \
+    rm -rf /var/lib/apt/lists/*
+COPY --from=sysroot /export/ /opt/servo-sysroot/
+# The cross compiler's internal executables and C++ headers use its configured prefix.
+COPY --from=sysroot /usr/lib/gcc-cross/ /usr/lib/gcc-cross/
+COPY --from=sysroot /usr/aarch64-linux-gnu/ /usr/aarch64-linux-gnu/
+COPY --from=sysroot /usr/bin/aarch64-linux-gnu-* /usr/bin/
+COPY --from=sysroot /usr/lib/x86_64-linux-gnu/libopcodes-2.35.2-arm64.so /usr/lib/x86_64-linux-gnu/
+COPY --from=sysroot /usr/lib/x86_64-linux-gnu/libbfd-2.35.2-arm64.so /usr/lib/x86_64-linux-gnu/
+RUN cp -a /opt/servo-binutils/* /usr/bin/ && \
+    ln -sf /usr/bin/aarch64-linux-gnu-as /usr/aarch64-linux-gnu/bin/as && \
+    ln -sf /usr/bin/aarch64-linux-gnu-ld /usr/aarch64-linux-gnu/bin/ld
+RUN rustup target add aarch64-unknown-linux-gnu && \
+    printf '#!/bin/sh\nexec /usr/bin/aarch64-linux-gnu-g++ --sysroot=/opt/servo-sysroot "$@"\n' > /usr/local/bin/servo-aarch64-link && chmod +x /usr/local/bin/servo-aarch64-link
+ENV PATH=/usr/lib/llvm-16/bin:$PATH \
+    CARGO_TARGET_DIR=/build/target \
+    CARGO_BUILD_TARGET=aarch64-unknown-linux-gnu \
+    CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=servo-aarch64-link \
+    CC_aarch64_unknown_linux_gnu="aarch64-linux-gnu-gcc --sysroot=/opt/servo-sysroot" \
+    CXX_aarch64_unknown_linux_gnu="aarch64-linux-gnu-g++ --sysroot=/opt/servo-sysroot" \
+    AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar \
+    PKG_CONFIG_ALLOW_CROSS=1 \
+    PKG_CONFIG_SYSROOT_DIR=/opt/servo-sysroot \
+    PKG_CONFIG_LIBDIR=/opt/servo-sysroot/usr/lib/aarch64-linux-gnu/pkgconfig:/opt/servo-sysroot/usr/share/pkgconfig
+WORKDIR /build
+COPY lib/servo lib/servo
+COPY patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch patches/servo-llvmpipe-shaders.patch patches/
+RUN git apply --directory=lib/servo patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch patches/servo-llvmpipe-shaders.patch
+COPY native/servo-host native/servo-host
+WORKDIR /build/native/servo-host
+COPY scripts/relocate-servo-sysroot.py /build/scripts/relocate-servo-sysroot.py
+RUN python3 /build/scripts/relocate-servo-sysroot.py /opt/servo-sysroot
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,id=zimlite-servo-abi30,target=/build/target \
+    cargo build --locked --release && mkdir -p /dist && \
+    cp /build/target/aarch64-unknown-linux-gnu/release/zimlite-servo-host /dist/ && \
+    aarch64-linux-gnu-readelf --version-info /dist/zimlite-servo-host > /dist/versions.txt
+FROM sysroot AS runtime-fonts
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core fonts-freefont-otf unifont && rm -rf /var/lib/apt/lists/*
+
+FROM sysroot AS runtime-software
+RUN apt-get update && apt-get install -y --no-install-recommends libegl1:arm64 libegl-mesa0:arm64 libgles2:arm64 libgl1-mesa-dri:arm64 && rm -rf /var/lib/apt/lists/*
+
+FROM builder AS runtime
+COPY --from=runtime-fonts /usr/share/fonts/ /opt/servo-sysroot/usr/share/fonts/
+COPY --from=runtime-software /usr/lib/aarch64-linux-gnu/ /opt/servo-software/usr/lib/aarch64-linux-gnu/
+COPY --from=runtime-software /lib/aarch64-linux-gnu/ /opt/servo-software/lib/aarch64-linux-gnu/
+COPY --from=runtime-software /usr/share/doc/ /opt/servo-sysroot/usr/share/doc/
+COPY --from=runtime-fonts /usr/share/doc/ /opt/servo-sysroot/usr/share/doc/
+COPY scripts/collect-servo-runtime.py scripts/collect-servo-licenses.py scripts/servo-runtime.sh scripts/servo-runtime-fonts.conf scripts/servo-profile.sh /build/scripts/
+COPY LICENSE /build/LICENSE
+COPY patches/servo-unifont-fallback.patch patches/servo-viewport-scale.patch patches/servo-llvmpipe-shaders.patch /build/patches/
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    python3 /build/scripts/collect-servo-runtime.py --helper /dist/zimlite-servo-host --sysroot /opt/servo-sysroot --output /opt/servo/aarch64-runtime && \
+    python3 /build/scripts/collect-servo-runtime.py --software --helper /dist/zimlite-servo-host --sysroot /opt/servo-software --output /opt/servo/aarch64-runtime && \
+    cargo fetch --locked && python3 /build/scripts/collect-servo-licenses.py /opt/servo/aarch64-runtime/licenses/crates && \
+    cp /build/scripts/servo-runtime.sh /opt/servo/aarch64-runtime/run.sh && \
+    cp /build/scripts/servo-profile.sh /opt/servo/aarch64-runtime/profile.sh && \
+    cp /build/scripts/servo-runtime-fonts.conf /opt/servo/aarch64-runtime/fonts.conf && \
+    cp /build/LICENSE /opt/servo/aarch64-runtime/licenses/zimlite.LICENSE && \
+    cp /build/lib/servo/LICENSE /opt/servo/aarch64-runtime/licenses/servo.LICENSE && \
+    cp /build/lib/servo/LICENSE_WHATWG_SPECS /opt/servo/aarch64-runtime/licenses/servo.LICENSE_WHATWG_SPECS && \
+    cp /build/patches/servo-unifont-fallback.patch /build/patches/servo-viewport-scale.patch /build/patches/servo-llvmpipe-shaders.patch /opt/servo/aarch64-runtime/licenses/ && \
+    cp Cargo.toml Cargo.lock /opt/servo/aarch64-runtime/licenses/ && \
+    mkdir -p /opt/servo/aarch64-runtime/licenses/helper-source && \
+    cp -a src .cargo Cargo.toml Cargo.lock /opt/servo/aarch64-runtime/licenses/helper-source/ && \
+    printf 'Servo 43f6f9d2486c53342c92157af4fa0b0936303964\nhttps://github.com/servo/servo\n' > /opt/servo/aarch64-runtime/licenses/servo-source.txt
+FROM scratch AS artifact
+COPY --from=runtime /opt/servo/aarch64-runtime/ /servo/

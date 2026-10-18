@@ -1,6 +1,9 @@
 # ARM64 cross-build for TrimUI Smart Pro (glibc 2.33, libstdc++ 6.0.28).
 # Builds libzim from source with GCC 10 for ABI compatibility.
-FROM debian:bullseye-slim
+FROM debian:bullseye-slim AS libzim
+
+RUN sed -i 's@deb.debian.org/debian-security@archive.debian.org/debian-security@g' /etc/apt/sources.list && \
+    printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99archive
 
 RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certificates \
     && wget -q https://go.dev/dl/go1.25.4.linux-amd64.tar.gz -O /tmp/go.tar.gz \
@@ -12,7 +15,7 @@ RUN dpkg --add-architecture arm64 && apt-get update && apt-get install -y --no-i
         g++-aarch64-linux-gnu binutils-aarch64-linux-gnu wget \
         libsdl2-dev:arm64 libsdl2-ttf-dev:arm64 \
         liblzma-dev:arm64 libzstd-dev:arm64 zlib1g-dev:arm64 \
-        libicu-dev:arm64 \
+        libicu-dev:arm64 libxapian-dev:arm64 uuid-dev:arm64 \
         ninja-build pkg-config python3-pip \
         xz-utils \
     && pip3 install meson \
@@ -23,14 +26,28 @@ WORKDIR /build
 # Meson cross-file for aarch64.
 RUN printf "[binaries]\nc='aarch64-linux-gnu-gcc'\ncpp='aarch64-linux-gnu-g++'\nar='aarch64-linux-gnu-ar'\nstrip='aarch64-linux-gnu-strip'\npkgconfig='pkg-config'\n\n[host_machine]\nsystem='linux'\ncpu_family='aarch64'\ncpu='aarch64'\nendian='little'\n" > /cross-arm64.txt
 
+# Debian's Xapian development package contains no static archive.
+# Build the same version from source so the handheld needs no Xapian .so.
+RUN apt-get update && apt-get install -y --no-install-recommends make \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG XAPIAN_VER=1.4.18
+RUN wget -q "https://oligarchy.co.uk/xapian/${XAPIAN_VER}/xapian-core-${XAPIAN_VER}.tar.xz" -O /tmp/xapian.tar.xz \
+    && mkdir -p /tmp/xapian && tar xf /tmp/xapian.tar.xz -C /tmp/xapian --strip-components=1 \
+    && cd /tmp/xapian \
+    && ./configure --host=aarch64-linux-gnu --prefix=/usr/local \
+         --disable-shared --enable-static --disable-documentation \
+    && make -j4 && make install \
+    && rm -rf /tmp/xapian /tmp/xapian.tar.xz
+
 ARG ZIM_VER=9.7.0
 RUN wget -q "https://download.openzim.org/release/libzim/libzim-${ZIM_VER}.tar.xz" -O /tmp/zim.tar.xz \
     && mkdir -p /tmp/zim && tar xf /tmp/zim.tar.xz -C /tmp/zim --strip-components=1 && rm /tmp/zim.tar.xz \
     && cd /tmp/zim \
-    && PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig \
+    && PKG_CONFIG_LIBDIR=/usr/local/lib/pkgconfig:/usr/lib/aarch64-linux-gnu/pkgconfig \
        meson setup _build --cross-file /cross-arm64.txt \
          --prefix /usr/local --default-library=static \
-         -Dwith_xapian=false -Dexamples=false -Dtests=false -Dzstd:zlib=disabled -Dwerror=false \
+         -Dwith_xapian=true -Dexamples=false -Dtests=false -Dzstd:zlib=disabled -Dwerror=false \
     && ninja -C _build \
     && find _build -name "*.a" -exec cp {} /usr/local/lib/ \; \
     && DESTDIR=/build/zim-install ninja -C _build install \
@@ -38,6 +55,16 @@ RUN wget -q "https://download.openzim.org/release/libzim/libzim-${ZIM_VER}.tar.x
 
 ENV ZIM_INC=/build/zim-install/usr/local/include
 ENV ZIM_LIB=/build/zim-install/usr/local/lib
+# Share the static search dependencies between the app and diagnostic tools.
+ENV ZIM_LINK_LIBS="-L/usr/local/lib -Wl,-Bstatic -lzim -lxapian -licui18n -licuuc -licudata -lzstd -llzma -luuid -Wl,-Bdynamic -lz -lpthread -ldl -lrt"
+
+FROM libzim AS fts-probe
+COPY native/fts-probe/main.cpp /tmp/fts-probe.cpp
+RUN aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -Werror -I${ZIM_INC} \
+    /tmp/fts-probe.cpp -L${ZIM_LIB} ${ZIM_LINK_LIBS} -o /fts-probe \
+    && aarch64-linux-gnu-strip /fts-probe
+
+FROM libzim AS app
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -47,11 +74,21 @@ RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
     CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ \
     PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
     CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -I${ZIM_INC}" \
-    CGO_LDFLAGS="-L${ZIM_LIB} -L/usr/lib/aarch64-linux-gnu -Wl,-Bstatic -lzim -lzstd -llzma -Wl,-Bdynamic -lz -lpthread" \
+    CGO_LDFLAGS="-L${ZIM_LIB} -L/usr/lib/aarch64-linux-gnu ${ZIM_LINK_LIBS}" \
     go build -ldflags="-s -w" -o zimlite ./cmd/zimlite \
     && aarch64-linux-gnu-strip zimlite
 
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
+    CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ \
+    PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
+    CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -I${ZIM_INC}" \
+    CGO_LDFLAGS="-L${ZIM_LIB} -L/usr/lib/aarch64-linux-gnu ${ZIM_LINK_LIBS}" \
+    go build -ldflags="-s -w" -o servo-probe ./cmd/servo-probe
+
 RUN mkdir -p /dist/zimlite \
-    && cp zimlite /dist/zimlite/
+    && cp zimlite /dist/zimlite/ \
+    && cp servo-probe /dist/
+
+COPY --from=fts-probe /fts-probe /dist/fts-probe
 
 RUN echo "=== Dist ===" && find /dist -type f -exec ls -lh {} \;

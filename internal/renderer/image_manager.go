@@ -2,6 +2,7 @@ package renderer
 
 import (
 	"bytes"
+	"encoding/xml"
 	"image"
 	"image/draw"
 	"image/gif"
@@ -12,6 +13,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/dendec/zimlite/internal/document"
 	"github.com/dendec/zimlite/internal/svg"
 	"github.com/veandco/go-sdl2/sdl"
 	_ "golang.org/x/image/webp"
@@ -30,15 +32,17 @@ type AnimatedTexture struct {
 }
 
 type ImageManager struct {
-	loader     ResourceLoader
+	loader     document.ResourceLoader
 	cache      *TextureCache[string]
 	animated   map[string]*AnimatedTexture
 	dimensions map[string]struct{ w, h int32 }
 	renderer   *sdl.Renderer
 	startTime  time.Time
+	dark       bool
 }
 
-const maxImageTextureEntries = 256
+// Eight bounded RGBA textures retain at most 32 MiB before native overhead.
+const maxImageTextureEntries = 8
 
 func NewImageManager(renderer *sdl.Renderer) *ImageManager {
 	return &ImageManager{
@@ -50,8 +54,40 @@ func NewImageManager(renderer *sdl.Renderer) *ImageManager {
 	}
 }
 
-func (m *ImageManager) SetLoader(loader ResourceLoader) {
+func (m *ImageManager) SetLoader(loader document.ResourceLoader) {
 	m.loader = loader
+}
+
+func (m *ImageManager) SetDark(dark bool) {
+	if m.dark != dark {
+		m.dark = dark
+		m.ClearCache()
+	}
+}
+
+// MathJax labels its SVG root with the formula title. Ordinary SVG pictures
+// must retain their original colors in both themes.
+func isFormulaSVG(data []byte) bool {
+	decoder := xml.NewDecoder(bytes.NewReader(data))
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return false
+		}
+		root, ok := token.(xml.StartElement)
+		if !ok {
+			continue
+		}
+		if root.Name.Local != "svg" {
+			return false
+		}
+		for _, attr := range root.Attr {
+			if attr.Name.Local == "aria-labelledby" && strings.Contains(attr.Value, "MathJax-SVG-") {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 func isSVG(url string, data []byte) bool {
@@ -99,6 +135,9 @@ func (m *ImageManager) GetDimensions(url string) (int32, int32, bool) {
 		slog.Error("DecodeConfig failed", "url", url, "format", format, "error", err, "len", len(data))
 		return 0, 0, false
 	}
+	if !safeImageSize(config.Width, config.Height) {
+		return 0, 0, false
+	}
 
 	m.dimensions[url] = struct{ w, h int32 }{int32(config.Width), int32(config.Height)}
 	return int32(config.Width), int32(config.Height), true
@@ -126,6 +165,10 @@ func (m *ImageManager) GetTexture(url string) (*sdl.Texture, bool) {
 
 	if isSVG(url, data) {
 		return m.loadSVG(url, data), false
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || !safeImageSize(config.Width, config.Height) {
+		return nil, false
 	}
 
 	if isGIF(url, data) {
@@ -163,6 +206,15 @@ func (m *ImageManager) loadSVG(url string, data []byte) *sdl.Texture {
 	if img == nil {
 		return nil
 	}
+	if m.dark && isFormulaSVG(data) {
+		// LunaSVG's convertToRGBA exports straight alpha for SDL blending.
+		// Invert RGB only; preserve transparency and antialiased edges.
+		for i := 0; i < len(img.Pix); i += 4 {
+			img.Pix[i] = 255 - img.Pix[i]
+			img.Pix[i+1] = 255 - img.Pix[i+1]
+			img.Pix[i+2] = 255 - img.Pix[i+2]
+		}
+	}
 	return m.createTextureFromImage(url, img)
 }
 
@@ -175,6 +227,23 @@ func (m *ImageManager) loadStaticImage(url string, data []byte) *sdl.Texture {
 }
 
 func (m *ImageManager) loadGIF(url string, data []byte) (*sdl.Texture, bool) {
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || !safeImageSize(config.Width, config.Height) {
+		return nil, false
+	}
+	if !safeGIFAnimation(data, int64(config.Width)*int64(config.Height)) {
+		// Keep the article usable without allocating an oversized animation.
+		return m.loadStaticImage(url, data), false
+	}
+	if len(m.animated) >= maxAnimatedImages {
+		for key, old := range m.animated {
+			if old.Texture != nil {
+				old.Texture.Destroy()
+			}
+			delete(m.animated, key)
+			break
+		}
+	}
 	parsedGIF, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil || len(parsedGIF.Image) == 0 {
 		return nil, false
@@ -259,6 +328,7 @@ func (m *ImageManager) createTextureFromImage(url string, img image.Image) *sdl.
 
 func (m *ImageManager) ClearCache() {
 	m.cache.Clear()
+	clear(m.dimensions)
 	for k, anim := range m.animated {
 		if anim.Texture != nil {
 			anim.Texture.Destroy()

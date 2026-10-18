@@ -1,0 +1,35 @@
+--- a/components/paint/painter.rs
++++ b/components/paint/painter.rs
+@@ -229,15 +229,20 @@
+         ));
+
+         let painter_id = PainterId::next();
++        let gl_renderer = webrender_gl.get_string(gleam::gl::RENDERER);
++        // The offline-optimized GLSL is costly for llvmpipe to compile
++        // again through LLVM during its first draw. Original shader sources
++        // reduce these stalls with fast JIT. Keep optimized shaders for normal
++        // LLVM optimization, hardware and Android emulators (issue #31726).
++        let fast_jit = std::env::var("GALLIVM_PERF").is_ok_and(|flags| {
++            flags.split([',', ' ']).any(|flag| flag == "nopt")
++        });
++        let use_optimized_shaders = !(fast_jit && gl_renderer.to_ascii_lowercase().contains("llvmpipe"));
+         let (mut webrender_renderer, webrender_api_sender) = webrender::create_webrender_instance(
+             webrender_gl.clone(),
+             Box::new(RenderNotifier::new(painter_id, paint.paint_proxy.clone())),
+             webrender::WebRenderOptions {
+-                // We force the use of optimized shaders here because rendering is broken
+-                // on Android emulators with unoptimized shaders. This is due to a known
+-                // issue in the emulator's OpenGL emulation layer.
+-                // See: https://github.com/servo/servo/issues/31726
+-                use_optimized_shaders: true,
++                use_optimized_shaders,
+                 resource_override_path: opts::get().shaders_path.clone(),
+                 debug_flags: webrender::DebugFlags::empty(),
+                 precache_flags: if pref!(gfx_precache_shaders) {
+@@ -270,6 +275,5 @@
+         let webrender_api = webrender_api_sender.create_api_by_client(painter_id.into());
+         let webrender_document = webrender_api.add_document(rendering_context.size2d().to_i32());
+
+-        let gl_renderer = webrender_gl.get_string(gleam::gl::RENDERER);
+         let gl_version = webrender_gl.get_string(gleam::gl::VERSION);
+         info!("Running on {gl_renderer} with OpenGL version {gl_version}");

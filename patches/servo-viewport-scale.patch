@@ -1,0 +1,105 @@
+--- a/components/servo/webview.rs
++++ b/components/servo/webview.rs
+@@ -460,6 +460,23 @@
+         self.servo()
+             .paint()
+             .resize_rendering_context(self.id(), new_size);
++    }
++
++    /// Update physical size and HiDPI together, avoiding an intermediate CSS viewport.
++    /// Other WebViews sharing this rendering context are also resized.
++    pub fn resize_with_hidpi_scale_factor(
++        &self,
++        new_size: PhysicalSize<u32>,
++        new_scale: Scale<f32, DeviceIndependentPixel, DevicePixel>,
++    ) {
++        let new_size = PhysicalSize {
++            width: new_size.width.max(MINIMUM_WEBVIEW_SIZE.width as u32),
++            height: new_size.height.max(MINIMUM_WEBVIEW_SIZE.height as u32),
++        };
++        self.inner_mut().hidpi_scale_factor = new_scale;
++        self.servo().paint().resize_rendering_context_with_hidpi(
++            self.id(), new_size, new_scale,
++        );
+     }
+ 
+     /// Get the HiDPI scale factor for this [`WebView`].
+--- a/components/paint/paint.rs
++++ b/components/paint/paint.rs
+@@ -728,6 +728,19 @@
+             .resize_rendering_context(new_size);
+     }
+ 
++    pub fn resize_rendering_context_with_hidpi(
++        &self,
++        webview_id: WebViewId,
++        new_size: PhysicalSize<u32>,
++        new_scale: Scale<f32, DeviceIndependentPixel, DevicePixel>,
++    ) {
++        if self.shutdown_state() != ShutdownState::NotShuttingDown {
++            return;
++        }
++        self.painter_mut(webview_id.into())
++            .resize_rendering_context_with_hidpi(new_size, Some((webview_id, new_scale)));
++    }
++
+     pub fn set_screen_size(&self, webview_id: WebViewId, new_size: Size2D<f32, DevicePixel>) {
+         if self.shutdown_state() != ShutdownState::NotShuttingDown {
+             return;
+--- a/components/paint/painter.rs
++++ b/components/paint/painter.rs
+@@ -1356,7 +1356,15 @@
+     }
+ 
+     pub(crate) fn resize_rendering_context(&mut self, new_size: PhysicalSize<u32>) {
+-        if self.rendering_context.size() == new_size {
++        self.resize_rendering_context_with_hidpi(new_size, None);
++    }
++
++    pub(crate) fn resize_rendering_context_with_hidpi(
++        &mut self,
++        new_size: PhysicalSize<u32>,
++        new_scale: Option<(WebViewId, Scale<f32, DeviceIndependentPixel, DevicePixel>)>,
++    ) {
++        if self.rendering_context.size() == new_size && new_scale.is_none() {
+             return;
+         }
+ 
+@@ -1368,7 +1376,11 @@
+         let new_size = Size2D::new(new_size.width as f32, new_size.height as f32);
+         let new_viewport_rect = Rect::from(new_size).to_box2d();
+         for webview_renderer in self.webview_renderers.values_mut() {
+-            webview_renderer.set_rect(new_viewport_rect);
++            if let Some((id, scale)) = new_scale && id == webview_renderer.id {
++                webview_renderer.set_rect_and_hidpi_scale_factor(new_viewport_rect, scale);
++            } else {
++                webview_renderer.set_rect(new_viewport_rect);
++            }
+             webview_renderer.webview.notify_viewport_updated();
+         }
+ 
+--- a/components/paint/webview_renderer.rs
++++ b/components/paint/webview_renderer.rs
+@@ -1153,6 +1153,22 @@
+         old_rect != self.rect
+     }
+ 
++    /// Publish one window size message containing the final physical size and scale.
++    pub(crate) fn set_rect_and_hidpi_scale_factor(
++        &mut self,
++        new_rect: DeviceRect,
++        new_scale: Scale<f32, DeviceIndependentPixel, DevicePixel>,
++    ) -> bool {
++        let scale_changed = self.hidpi_scale_factor != new_scale;
++        let size_changed = self.rect.size() != new_rect.size();
++        self.hidpi_scale_factor = new_scale;
++        let rect_changed = self.set_rect(new_rect);
++        if scale_changed && !size_changed {
++            self.send_window_size_message();
++        }
++        rect_changed || scale_changed
++    }
++
+     pub fn set_viewport_description(&mut self, viewport_description: ViewportDescription) {
+         self.viewport_description = viewport_description;
+         self.send_window_size_message();

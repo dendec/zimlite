@@ -3,8 +3,15 @@
 | | |
 | :--- | :---: |
 | **{{T "settings.theme"}}** | [◀](virtual:settings?theme={{.ThemePrev}}) **{{.ThemeName}}** [▶](virtual:settings?theme={{.ThemeNext}}) |
-| **{{T "settings.fontsize"}}** | [➖](virtual:settings?fontsize=-2) **{{.FontSize}}** [➕](virtual:settings?fontsize=2) |
+| **{{T "settings.renderer"}}** | [◀](virtual:settings?renderer={{.RendererNext}}) **{{.RendererName}}** [▶](virtual:settings?renderer={{.RendererNext}}) |
+{{if .FullRenderer}}| **{{T "settings.render_mode"}}** | [◀](virtual:settings?render_mode={{.RenderModeNext}}) **{{.RenderModeName}}** [▶](virtual:settings?render_mode={{.RenderModeNext}}) |
+{{end}}| **{{T "settings.fontsize"}}** | [➖](virtual:settings?fontsize=-2) **{{.FontSize}}** [➕](virtual:settings?fontsize=2) |
 | **{{T "settings.language"}}** | [◀](virtual:settings?lang={{.LangPrev}}) **{{.LangName}}** [▶](virtual:settings?lang={{.LangNext}}) |
+
+> ℹ️ {{T "settings.renderer_note"}}
+{{if .FullRenderer}}
+> ⚡ {{T "settings.render_mode_note"}}
+{{end}}
 
 ---
 

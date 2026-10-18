@@ -3,15 +3,18 @@ package ui
 import (
 	"net/url"
 
+	"github.com/dendec/zimlite/internal/article"
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/document"
+	"github.com/dendec/zimlite/internal/navigation"
 )
 
 // LoaderHost is the interface DocumentLoader uses to communicate back to the App.
 // This breaks the bidirectional dependency: loader depends on the interface, not *App.
 type LoaderHost interface {
 	showDocument(doc *document.Document, navKey string)
-	getNavigator() DocNavigator
+	showArticle(article.Source, string, string) error
+	getNavigator() navigation.Navigator
 	getViewer() DocViewer
 	getScroller() Scroller
 	getLinks() LinkBrowser
@@ -24,9 +27,9 @@ type LoaderHost interface {
 // Ensure App implements LoaderHost at compile time.
 var _ LoaderHost = (*App)(nil)
 
-func (app *App) getNavigator() DocNavigator { return app.navigator }
-func (app *App) getViewer() DocViewer       { return app.viewer }
-func (app *App) getScroller() Scroller      { return app.scroller }
-func (app *App) getLinks() LinkBrowser      { return app.links }
-func (app *App) getConfig() config.Provider { return app.config }
-func (app *App) navStateClear()             { app.navState = nil }
+func (app *App) getNavigator() navigation.Navigator { return app.navigator }
+func (app *App) getViewer() DocViewer               { return app.viewer }
+func (app *App) getScroller() Scroller              { return app.scroller }
+func (app *App) getLinks() LinkBrowser              { return app.links }
+func (app *App) getConfig() config.Provider         { return app.config }
+func (app *App) navStateClear()                     { app.navState = nil }

@@ -47,6 +47,10 @@ make build
 # Build a complete distribution (zip with libraries)
 make dist-amd64
 # Output: dist/zimlite-linux-amd64.zip
+
+# Optional package with the Servo renderer helper (Docker)
+make dist-amd64-servo
+# Output: dist/zimlite-linux-amd64.zip
 ```
 
 ### Windows (Cross-build via Docker)

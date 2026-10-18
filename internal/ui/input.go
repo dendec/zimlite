@@ -10,11 +10,13 @@ import (
 )
 
 const (
-	scrollStep      = 40
-	axisSensitivity = 16000
-	holdDelay       = 200 * time.Millisecond
-	maxAxisValue    = 32767
-	analogMaxSpeed  = float64(scrollStep * 5)
+	scrollStep     = 40
+	holdDelay      = 200 * time.Millisecond
+	homeHoldDelay  = 700 * time.Millisecond
+	maxAxisValue   = 32767
+	analogMaxSpeed = float64(scrollStep * 5)
+	maxHoldSpeedup = 16.0
+	maxHoldElapsed = 100 * time.Millisecond
 )
 
 type scrollHold struct {
@@ -24,16 +26,43 @@ type scrollHold struct {
 	direction int32
 }
 
+type analogScrollHold struct {
+	scrollHold
+	remainder float64
+}
+
+// delta integrates pixels over time, including subpixel motion at low deflection.
+// A held stick keeps scrolling without additional SDL axis events.
+func (h *analogScrollHold) delta(value int16, now time.Time) int32 {
+	direction, strength := analogDirection(value)
+	if direction == 0 {
+		*h = analogScrollHold{}
+		return 0
+	}
+	if !h.active || h.direction != direction {
+		*h = analogScrollHold{scrollHold: scrollHold{active: true, started: now, lastStep: now, direction: direction}}
+		return 0
+	}
+	elapsed := max(time.Duration(0), min(now.Sub(h.lastStep), maxHoldElapsed))
+	h.lastStep = now
+	h.remainder += analogMaxSpeed * strength * holdSpeedup(now.Sub(h.started)-holdDelay) * elapsed.Seconds()
+	pixels := int32(h.remainder)
+	h.remainder -= float64(pixels)
+	return direction * pixels
+}
+
 type InputController struct {
-	app           *App
-	globalKeys    map[sdl.Scancode]func()
-	docKeys       map[sdl.Scancode]func()
-	treeKeys      map[sdl.Scancode]func()
-	upHold        scrollHold
-	downHold      scrollHold
-	axisHold      scrollHold
-	axisRemainder float64
-	lastAxisTime  time.Time
+	app                  *App
+	globalKeys           map[sdl.Scancode]func()
+	docKeys              map[sdl.Scancode]func()
+	treeKeys             map[sdl.Scancode]func()
+	treeHold             scrollHold
+	axisHold             analogScrollHold
+	linkHold             scrollHold
+	tableHold            analogScrollHold
+	homePressedAt        time.Time
+	homeButtonPressed    bool
+	homeLongPressHandled bool
 }
 
 func NewInputController(app *App) *InputController {
@@ -43,7 +72,8 @@ func NewInputController(app *App) *InputController {
 		sdl.SCANCODE_H:         func() { app.goHome() },
 		sdl.SCANCODE_M:         func() { _ = app.loader.OpenFile("virtual:menu") },
 		sdl.SCANCODE_F1:        func() { _ = app.loader.OpenFile("virtual:help") },
-		sdl.SCANCODE_F2:        func() { _ = app.loader.OpenFile("virtual:settings") },
+		sdl.SCANCODE_F3:        func() { app.openSearch(true) },
+		sdl.SCANCODE_F2:        func() { app.openSettings() },
 		sdl.SCANCODE_RETURN2:   func() { app.toggleMode() },
 		sdl.SCANCODE_T:         func() { app.toggleMode() },
 		sdl.SCANCODE_EQUALS:    func() { c.zoom(1) },
@@ -54,18 +84,18 @@ func NewInputController(app *App) *InputController {
 		sdl.SCANCODE_BACKSPACE: func() { app.goBack() },
 	}
 	c.docKeys = map[sdl.Scancode]func(){
-		sdl.SCANCODE_UP:       func() { app.scroller.ScrollBy(-scrollStep) },
+		sdl.SCANCODE_UP:       func() { c.moveLinkSelection(-1) },
 		sdl.SCANCODE_W:        func() { app.scroller.ScrollBy(-scrollStep) },
-		sdl.SCANCODE_KP_8:     func() { app.scroller.ScrollBy(-scrollStep) },
-		sdl.SCANCODE_DOWN:     func() { app.scroller.ScrollBy(scrollStep) },
+		sdl.SCANCODE_KP_8:     func() { c.moveLinkSelection(-1) },
+		sdl.SCANCODE_DOWN:     func() { c.moveLinkSelection(1) },
 		sdl.SCANCODE_S:        func() { app.scroller.ScrollBy(scrollStep) },
-		sdl.SCANCODE_KP_2:     func() { app.scroller.ScrollBy(scrollStep) },
-		sdl.SCANCODE_LEFT:     func() { app.links.SelectPrevLink() },
-		sdl.SCANCODE_A:        func() { app.links.SelectPrevLink() },
-		sdl.SCANCODE_KP_4:     func() { app.links.SelectPrevLink() },
-		sdl.SCANCODE_RIGHT:    func() { app.links.SelectNextLink() },
-		sdl.SCANCODE_D:        func() { app.links.SelectNextLink() },
-		sdl.SCANCODE_KP_6:     func() { app.links.SelectNextLink() },
+		sdl.SCANCODE_KP_2:     func() { c.moveLinkSelection(1) },
+		sdl.SCANCODE_LEFT:     func() { c.moveLinkSelection(-1) },
+		sdl.SCANCODE_A:        func() { c.moveLinkSelection(-1) },
+		sdl.SCANCODE_KP_4:     func() { c.moveLinkSelection(-1) },
+		sdl.SCANCODE_RIGHT:    func() { c.moveLinkSelection(1) },
+		sdl.SCANCODE_D:        func() { c.moveLinkSelection(1) },
+		sdl.SCANCODE_KP_6:     func() { c.moveLinkSelection(1) },
 		sdl.SCANCODE_PAGEUP:   func() { app.scroller.ScrollPageUp() },
 		sdl.SCANCODE_PAGEDOWN: func() { app.scroller.ScrollPageDown() },
 		sdl.SCANCODE_SPACE:    func() { app.scroller.ScrollPageDown() },
@@ -99,6 +129,15 @@ func (c *InputController) openSelectedLink() {
 	}
 }
 
+func (c *InputController) moveLinkSelection(direction int32) {
+	c.app.loader.cancelPendingDelete()
+	if direction < 0 {
+		c.app.links.SelectPrevLink()
+		return
+	}
+	c.app.links.SelectNextLink()
+}
+
 func (c *InputController) markLinkVisited(url string) {
 	if strings.HasPrefix(c.app.navigator.Current(), "virtual:") {
 		return
@@ -116,6 +155,29 @@ func (c *InputController) treeActionRight() {
 
 func (c *InputController) ProcessEvent(event sdl.Event) {
 	app := c.app
+	if e, ok := event.(*sdl.ControllerButtonEvent); ok {
+		// TrimUI's printed X/Y labels use the Nintendo layout, while SDL reports
+		// these face buttons in the opposite logical slots. Normalize once here
+		// so every context and the help labels use the buttons printed on-device.
+		normalized := *e
+		switch normalized.Button {
+		case sdl.CONTROLLER_BUTTON_X:
+			normalized.Button = sdl.CONTROLLER_BUTTON_Y
+		case sdl.CONTROLLER_BUTTON_Y:
+			normalized.Button = sdl.CONTROLLER_BUTTON_X
+		}
+		e = &normalized
+		event = e
+		if e.Button == sdl.CONTROLLER_BUTTON_Y {
+			c.handleHomeButton(e)
+			return
+		}
+	}
+	if app.search != nil {
+		app.search.process(event)
+		return
+	}
+
 	switch e := event.(type) {
 	case *sdl.QuitEvent:
 		app.running.Store(false)
@@ -125,6 +187,9 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 			return
 		}
 		sc := e.Keysym.Scancode
+		if e.Repeat != 0 && (sc == sdl.SCANCODE_RETURN || sc == sdl.SCANCODE_KP_ENTER) {
+			return
+		}
 		debugEvent("KEY", int(sc), 0)
 
 		if fn, ok := c.globalKeys[sc]; ok {
@@ -147,14 +212,10 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 			app.renderTree()
 		}
 
-	case *sdl.ControllerAxisEvent, *sdl.ControllerButtonEvent:
+	case *sdl.ControllerAxisEvent, *sdl.ControllerButtonEvent, *sdl.ControllerDeviceEvent:
 		if action, ok := app.gamepad.TranslateEvent(event, app.mode); ok {
 			if action != ActionNone {
-				var val int16
-				if ax, ok := event.(*sdl.ControllerAxisEvent); ok {
-					val = ax.Value
-				}
-				c.executeGamepadAction(action, val)
+				c.executeGamepadAction(action)
 			}
 		}
 
@@ -201,11 +262,49 @@ func (c *InputController) ProcessEvent(event sdl.Event) {
 	}
 }
 
+func (c *InputController) handleHomeButton(event *sdl.ControllerButtonEvent) {
+	if event.State == sdl.PRESSED {
+		if !c.homeButtonPressed {
+			c.homeButtonPressed = true
+			c.homePressedAt = time.Now()
+			c.homeLongPressHandled = false
+		}
+		return
+	}
+	if event.State != sdl.RELEASED || !c.homeButtonPressed {
+		return
+	}
+	if !c.homeLongPressHandled {
+		c.app.goHome()
+	}
+	c.homeButtonPressed = false
+	c.homeLongPressHandled = false
+}
+
 // Update advances held D-pad navigation and analog scrolling once per frame.
 func (c *InputController) Update(now time.Time) {
+	if c.homeButtonPressed {
+		if c.app.gamepad.Controller() == nil {
+			c.homeButtonPressed = false
+			c.homeLongPressHandled = false
+		} else if !c.homeLongPressHandled && now.Sub(c.homePressedAt) >= homeHoldDelay {
+			c.homeLongPressHandled = true
+			c.app.goToMainMenu()
+		}
+	}
+	if c.app.search != nil {
+		c.treeHold = scrollHold{}
+		c.linkHold = scrollHold{}
+		c.axisHold = analogScrollHold{}
+		c.tableHold = analogScrollHold{}
+		c.app.search.update(now)
+		return
+	}
 	controller := c.app.gamepad.Controller()
 	upHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_UP) != 0
 	downHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_DOWN) != 0
+	leftHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_LEFT) != 0
+	rightHeld := controller != nil && controller.Button(sdl.CONTROLLER_BUTTON_DPAD_RIGHT) != 0
 	axisDirection, axisStrength := analogDirection(c.app.gamepad.LeftY())
 
 	if c.app.mode == modeTree {
@@ -219,48 +318,59 @@ func (c *InputController) Update(now time.Time) {
 			direction, strength = axisDirection, axisStrength
 		}
 		c.updateTreeHold(direction, strength, now)
-		c.lastAxisTime = time.Time{}
-		c.axisRemainder = 0
+		c.axisHold = analogScrollHold{}
+		c.linkHold.active = false
+		c.tableHold = analogScrollHold{}
 		return
 	}
+	c.treeHold.active = false
 
-	c.updateDocumentHold(&c.upHold, upHeld, -1, 1, now)
-	c.updateDocumentHold(&c.downHold, downHeld, 1, 1, now)
-	if axisDirection == 0 {
-		c.axisHold.active = false
-		c.lastAxisTime = time.Time{}
-		c.axisRemainder = 0
+	linkDirection := int32(0)
+	switch {
+	case upHeld || leftHeld:
+		linkDirection = -1
+	case downHeld || rightHeld:
+		linkDirection = 1
+	}
+	c.updateLinkHold(linkDirection, now)
+
+	if delta := c.tableHold.delta(c.app.gamepad.LeftX(), now); delta != 0 {
+		if scroller, ok := c.app.viewer.(TableScroller); ok {
+			scroller.ScrollTableHorizontally(delta)
+		}
+	}
+	if delta := c.axisHold.delta(c.app.gamepad.LeftY(), now); delta != 0 {
+		c.app.scroller.ScrollBy(delta)
+	}
+}
+
+func (c *InputController) updateLinkHold(direction int32, now time.Time) {
+	if direction == 0 {
+		c.linkHold.active = false
 		return
 	}
-	if !c.axisHold.active || c.axisHold.direction != axisDirection {
-		c.axisHold = scrollHold{active: true, started: now, lastStep: now, direction: axisDirection}
-		c.lastAxisTime = now
-		c.axisRemainder = 0
+	if !c.linkHold.active || c.linkHold.direction != direction {
+		c.linkHold = scrollHold{active: true, started: now, lastStep: now, direction: direction}
 		return
 	}
-	seconds := now.Sub(c.lastAxisTime).Seconds()
-	c.lastAxisTime = now
-	speed := analogMaxSpeed * axisStrength
-	if now.Sub(c.axisHold.started) >= holdDelay {
-		speed *= math.Pow(2, math.Floor(now.Sub(c.axisHold.started).Seconds()))
-	}
-	c.axisRemainder += speed * seconds
-	delta := int32(c.axisRemainder)
-	if delta == 0 {
+	if now.Sub(c.linkHold.started) < holdDelay {
 		return
 	}
-	c.axisRemainder -= float64(delta)
-	c.app.scroller.ScrollBy(axisDirection * delta)
+	interval := 200 * time.Millisecond
+	if now.Sub(c.linkHold.started) > time.Second {
+		interval = 120 * time.Millisecond
+	}
+	if now.Sub(c.linkHold.lastStep) < interval {
+		return
+	}
+	c.moveLinkSelection(direction)
+	c.linkHold.lastStep = now
 }
 
 func (c *InputController) updateTreeHold(direction int32, strength float64, now time.Time) {
-	h := &c.upHold
-	if direction > 0 {
-		h = &c.downHold
-	}
+	h := &c.treeHold
 	if direction == 0 {
-		c.upHold.active = false
-		c.downHold.active = false
+		h.active = false
 		return
 	}
 	if !h.active || h.direction != direction {
@@ -270,12 +380,17 @@ func (c *InputController) updateTreeHold(direction int32, strength float64, now 
 	if now.Sub(h.started) < holdDelay {
 		return
 	}
-	rate := 5 * math.Pow(2, math.Floor(now.Sub(h.started).Seconds())) * strength
+	rate := min(40, 5*holdSpeedup(now.Sub(h.started))*strength)
+	if rate <= 0 {
+		return
+	}
 	interval := time.Duration(float64(time.Second) / rate)
 	if now.Sub(h.lastStep) < interval {
 		return
 	}
-	steps := int(now.Sub(h.lastStep) / interval)
+	steps := int(min(now.Sub(h.lastStep), maxHoldElapsed) / interval)
+	// Low deflection can have an interval longer than the catch-up budget.
+	steps = max(1, steps)
 	for i := 0; i < steps; i++ {
 		if direction < 0 {
 			c.app.navState.MoveUp()
@@ -287,28 +402,10 @@ func (c *InputController) updateTreeHold(direction int32, strength float64, now 
 	h.lastStep = now
 }
 
-func (c *InputController) updateDocumentHold(h *scrollHold, held bool, direction int32, strength float64, now time.Time) {
-	if !held {
-		h.active = false
-		return
-	}
-	if !h.active {
-		*h = scrollHold{active: true, started: now, lastStep: now, direction: direction}
-		return
-	}
-	if now.Sub(h.started) < holdDelay {
-		return
-	}
-	rate := 5 * math.Pow(2, math.Floor(now.Sub(h.started).Seconds())) * strength
-	interval := time.Duration(float64(time.Second) / rate)
-	if now.Sub(h.lastStep) < interval {
-		return
-	}
-	steps := int(now.Sub(h.lastStep) / interval)
-	for i := 0; i < steps; i++ {
-		c.app.scroller.ScrollBy(direction * scrollStep)
-	}
-	h.lastStep = now
+// Clamp before exponentiation so even a long hold cannot overflow the scroll
+// delta or produce a zero repeat interval. Limit catch-up separately after stalls.
+func holdSpeedup(held time.Duration) float64 {
+	return math.Pow(2, min(math.Log2(maxHoldSpeedup), max(0, held.Seconds())))
 }
 
 func analogDirection(value int16) (int32, float64) {
@@ -330,7 +427,7 @@ func (c *InputController) processJoyB() {
 	c.app.goBack()
 }
 
-func (c *InputController) executeGamepadAction(action Action, val int16) {
+func (c *InputController) executeGamepadAction(action Action) {
 	app := c.app
 	switch action {
 	case ActionOpenEnter:
@@ -351,22 +448,14 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 			app.navState.MoveUp()
 			app.renderTree()
 		} else {
-			if val != 0 {
-				app.scroller.ScrollBy(-scrollStep * int32(-val/axisSensitivity))
-			} else {
-				app.scroller.ScrollBy(-scrollStep)
-			}
+			app.scroller.ScrollBy(-scrollStep)
 		}
 	case ActionScrollDown:
 		if app.mode == modeTree {
 			app.navState.MoveDown()
 			app.renderTree()
 		} else {
-			if val != 0 {
-				app.scroller.ScrollBy(scrollStep * int32(val/axisSensitivity))
-			} else {
-				app.scroller.ScrollBy(scrollStep)
-			}
+			app.scroller.ScrollBy(scrollStep)
 		}
 	case ActionPageUp:
 		app.scroller.ScrollPageUp()
@@ -374,20 +463,22 @@ func (c *InputController) executeGamepadAction(action Action, val int16) {
 		app.scroller.ScrollPageDown()
 	case ActionToggleTree:
 		app.toggleMode()
-	case ActionGoHome:
-		app.goHome()
 	case ActionZoomIn:
 		c.zoom(1)
 	case ActionZoomOut:
 		c.zoom(-1)
 	case ActionSelectPrevLink:
-		app.links.SelectPrevLink()
+		c.moveLinkSelection(-1)
 	case ActionSelectNextLink:
-		app.links.SelectNextLink()
-	case ActionShowHelp:
-		_ = app.loader.OpenFile("virtual:help")
+		c.moveLinkSelection(1)
+	case ActionShowSearch:
+		if app.loader.zimReader != nil {
+			app.openSearch(false)
+		} else {
+			_ = app.loader.OpenFile("virtual:help")
+		}
 	case ActionShowSettings:
-		_ = app.loader.OpenFile("virtual:settings")
+		app.openSettings()
 	}
 }
 

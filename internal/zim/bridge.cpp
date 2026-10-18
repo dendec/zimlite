@@ -19,6 +19,23 @@ zim_archive_t zim_open(const char* path) {
     }
 }
 
+const char* zim_metadata(zim_archive_t archive, const char* name) {
+    if (!archive || !name) return nullptr;
+    try {
+        auto value = static_cast<zim::Archive*>(archive)->getMetadata(name);
+        if (value.size() > 16384) return nullptr;
+        return strdup(value.c_str());
+    } catch (...) { return nullptr; }
+}
+
+const char* zim_archive_id(zim_archive_t archive) {
+    if (!archive) return nullptr;
+    try {
+        auto value = static_cast<std::string>(static_cast<zim::Archive*>(archive)->getUuid());
+        return strdup(value.c_str());
+    } catch (...) { return nullptr; }
+}
+
 void zim_close(zim_archive_t archive) {
     if (archive) {
         delete static_cast<zim::Archive*>(archive);
@@ -28,6 +45,18 @@ void zim_close(zim_archive_t archive) {
 int zim_get_article_count(zim_archive_t archive) {
     auto* a = static_cast<zim::Archive*>(archive);
     return static_cast<int>(a->getArticleCount());
+}
+
+zim_entry_t zim_get_article_at(zim_archive_t archive, int index) {
+    if (!archive || index < 0) return nullptr;
+    try {
+        auto* a = static_cast<zim::Archive*>(archive);
+        auto range = a->iterByTitle().offset(index, 1);
+        if (range.size() == 0) return nullptr;
+        return new zim::Entry(*range.begin());
+    } catch (...) {
+        return nullptr;
+    }
 }
 
 zim_entry_t zim_get_main_entry(zim_archive_t archive) {
@@ -45,8 +74,7 @@ const char* zim_get_main_page_redirect(zim_archive_t archive) {
         auto* a = static_cast<zim::Archive*>(archive);
         auto entry = a->getMainEntry();
         // Follow redirect chain to get the real target.
-        entry = entry.getRedirectEntry();
-        std::string path = entry.getPath();
+        std::string path = entry.getItem(true).getPath();
         return strdup(path.c_str());
     } catch (...) {
         return nullptr;
@@ -95,6 +123,13 @@ zim_item_t zim_entry_get_item(zim_entry_t entry, int follow) {
     }
 }
 
+const char* zim_item_get_path(zim_item_t item) {
+    if (!item) return nullptr;
+    try {
+        return strdup(static_cast<zim::Item*>(item)->getPath().c_str());
+    } catch (...) { return nullptr; }
+}
+
 const char* zim_item_get_content(zim_item_t item, int* size_out) {
     if (!item) return nullptr;
     auto* i = static_cast<zim::Item*>(item);
@@ -114,6 +149,14 @@ const char* zim_item_get_mimetype(zim_item_t item) {
     auto* i = static_cast<zim::Item*>(item);
     std::string mime = i->getMimetype();
     return strdup(mime.c_str());
+}
+
+unsigned long long zim_item_get_size(zim_item_t item) {
+    try {
+        return static_cast<zim::Item*>(item)->getSize();
+    } catch (...) {
+        return ~0ULL;
+    }
 }
 
 void zim_entry_free(zim_entry_t entry) {

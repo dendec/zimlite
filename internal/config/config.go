@@ -3,21 +3,32 @@ package config
 import (
 	"encoding/json"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 )
 
 // Config represents the application settings.
 type Config struct {
-	Language string `json:"language"`
-	Theme    string `json:"theme"`
-	FontSize int    `json:"font_size"`
+	InputMethods    map[string]string   `json:"input_methods,omitempty"`
+	InputLanguage   map[string]string   `json:"input_language,omitempty"`
+	InputLanguages  map[string][]string `json:"input_languages,omitempty"`
+	Language        string              `json:"language"`
+	Theme           string              `json:"theme"`
+	FontSize        int                 `json:"font_size"`
+	ArticleRenderer string              `json:"article_renderer"`
+	RenderMode      string              `json:"render_mode"`
 }
 
 const (
-	MinFontSize = 10
-	MaxFontSize = 32
+	MinFontSize           = 10
+	MaxFontSize           = 32
+	ArticleRendererNative = "native"
+	ArticleRendererServo  = "servo"
+	RenderModeSpeed       = "speed"
+	RenderModeQuality     = "quality"
 )
 
 // Provider abstracts config access for dependency injection.
@@ -45,24 +56,41 @@ var (
 // Default returns a configuration with sensible defaults.
 func Default() Config {
 	return Config{
-		Language: "en",
-		Theme:    "dark",
-		FontSize: 16,
+		Language:        "en",
+		Theme:           "dark",
+		FontSize:        16,
+		ArticleRenderer: ArticleRendererNative,
+		RenderMode:      defaultRenderMode(),
 	}
+}
+
+// EffectiveRenderMode also handles older configurations without a render mode.
+func (c Config) EffectiveRenderMode() string {
+	if c.RenderMode == RenderModeSpeed || c.RenderMode == RenderModeQuality {
+		return c.RenderMode
+	}
+	return defaultRenderMode()
+}
+
+func defaultRenderMode() string {
+	if os.Getenv("KIWIX_DEFAULT_RENDER_MODE") == RenderModeSpeed {
+		return RenderModeSpeed
+	}
+	return RenderModeQuality
 }
 
 // Get returns the current configuration.
 func Get() Config {
 	mu.RLock()
 	defer mu.RUnlock()
-	return currentConfig
+	return cloneConfig(currentConfig)
 }
 
 // Set updates the current configuration in memory.
 func Set(c Config) {
 	mu.Lock()
 	defer mu.Unlock()
-	currentConfig = c
+	currentConfig = cloneConfig(c)
 }
 
 // Update atomically applies mutate to the current configuration under a single
@@ -72,11 +100,14 @@ func Update(mutate func(c *Config)) Config {
 	mu.Lock()
 	defer mu.Unlock()
 	mutate(&currentConfig)
-	return currentConfig
+	return cloneConfig(currentConfig)
 }
 
 // configFilePath returns the absolute path to the config.json file.
 func configFilePath() string {
+	if dir := os.Getenv("KIWIX_APP_DIR"); dir != "" {
+		return filepath.Join(dir, "config.json")
+	}
 	exe, err := os.Executable()
 	if err != nil {
 		return "config.json"
@@ -106,12 +137,16 @@ func Load() {
 	} else {
 		slog.Info("Config loaded successfully", "path", path)
 	}
+	if currentConfig.ArticleRenderer != ArticleRendererServo {
+		currentConfig.ArticleRenderer = ArticleRendererNative
+	}
+	currentConfig.RenderMode = currentConfig.EffectiveRenderMode()
 }
 
 // Save writes the current configuration to disk.
 func Save() error {
 	mu.RLock()
-	cfg := currentConfig
+	cfg := cloneConfig(currentConfig)
 	mu.RUnlock()
 
 	path := configFilePath()
@@ -135,4 +170,15 @@ func Save() error {
 
 	slog.Info("Config saved successfully", "path", path)
 	return nil
+}
+
+// Clone map-backed preferences at the lock boundary, including nested slices.
+func cloneConfig(c Config) Config {
+	c.InputMethods = maps.Clone(c.InputMethods)
+	c.InputLanguage = maps.Clone(c.InputLanguage)
+	c.InputLanguages = maps.Clone(c.InputLanguages)
+	for k, v := range c.InputLanguages {
+		c.InputLanguages[k] = slices.Clone(v)
+	}
+	return c
 }

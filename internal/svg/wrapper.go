@@ -39,6 +39,9 @@ func renderRaw(data []byte, targetW, targetH C.int) (pixels unsafe.Pointer, w, h
 	if len(data) == 0 {
 		return nil, 0, 0
 	}
+	if len(data) > 2<<20 {
+		return nil, 0, 0
+	}
 	cData := (*C.char)(unsafe.Pointer(&data[0]))
 	cLen := C.int(len(data))
 

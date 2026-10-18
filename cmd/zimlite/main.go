@@ -10,6 +10,7 @@ import (
 
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/navigation"
+	"github.com/dendec/zimlite/internal/profile"
 	"github.com/dendec/zimlite/internal/renderer"
 	"github.com/dendec/zimlite/internal/storage"
 	"github.com/dendec/zimlite/internal/ui"
@@ -22,6 +23,8 @@ func main() {
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 	slog.SetDefault(logger)
+	stopProfile := profile.Start()
+	defer stopProfile()
 
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()

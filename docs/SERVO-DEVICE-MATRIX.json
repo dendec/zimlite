@@ -1,0 +1,907 @@
+{
+  "source": "https://github.com/PortsMaster/PortMaster-Info/blob/main/device_info.json",
+  "retrieved": "2026-10-10",
+  "devices": [
+    {
+      "device": "Anbernic RG ARC-S",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG28XX",
+      "firmware": "Knulli",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG28XX",
+      "firmware": "ROCKNIX",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG28XX",
+      "firmware": "muOS",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG34XX",
+      "firmware": "Knulli",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        720,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG34XX",
+      "firmware": "ROCKNIX",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        720,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG34XX",
+      "firmware": "muOS",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        720,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG351MP",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG351MP",
+      "firmware": "ArkOS",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG351MP",
+      "firmware": "TheRA",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG351P/M",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        480,
+        320
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG351P/M",
+      "firmware": "ArkOS (Wummle)",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        480,
+        320
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG351P/M",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        480,
+        320
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG351V",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG351V",
+      "firmware": "ArkOS",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG351V",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG353 VS/PS",
+      "firmware": "ArkOS",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG353 VS/PS",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG35XX H",
+      "firmware": "Knulli",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG35XX H",
+      "firmware": "ROCKNIX",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG35XX H",
+      "firmware": "muOS",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG35XX PLUS",
+      "firmware": "Knulli",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG35XX PLUS",
+      "firmware": "ROCKNIX",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG35XX PLUS",
+      "firmware": "muOS",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG35XX SP",
+      "firmware": "Knulli",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG35XX SP",
+      "firmware": "ROCKNIX",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG35XX SP",
+      "firmware": "muOS",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG40XX H",
+      "firmware": "Knulli",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG40XX H",
+      "firmware": "ROCKNIX",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG40XX H",
+      "firmware": "muOS",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG40XX V",
+      "firmware": "Knulli",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG40XX V",
+      "firmware": "ROCKNIX",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG40XX V",
+      "firmware": "muOS",
+      "cpu": "h700",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG503",
+      "firmware": "ArkOS",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        960,
+        544
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Anbernic RG503",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        960,
+        544
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "GKD Bubble",
+      "firmware": "EMUELEC",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Gameforce Chi",
+      "firmware": "ArkOS",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Gameforce Chi",
+      "firmware": "EmuELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Hardkernel ODROID GO Advance",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        480,
+        320
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Hardkernel ODROID GO Advance",
+      "firmware": "ArkOS",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        480,
+        320
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Hardkernel ODROID GO Advance",
+      "firmware": "EmuELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        480,
+        320
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Hardkernel ODROID GO Advance",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        480,
+        320
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Hardkernel ODROID GO Super",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        854,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Hardkernel ODROID GO Super",
+      "firmware": "ArkOS",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        854,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Hardkernel ODROID GO Super",
+      "firmware": "EmuELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        854,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Hardkernel ODROID GO Super",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        854,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "Powkiddy RGB10MAX3",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        1280,
+        720
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Powkiddy RGB20S",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Powkiddy RGB30",
+      "firmware": "ArkOS",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        720,
+        720
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Powkiddy RGB30",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        720,
+        720
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Powkiddy RK2023",
+      "firmware": "ArkOS",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "Powkiddy RK2023",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3566",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "R33S Retro Handheld",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "R33S Retro Handheld",
+      "firmware": "ArkOS",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "R33S Retro Handheld",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "R35S Retro Handheld",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "R35S Retro Handheld",
+      "firmware": "ArkOS",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "R35S Retro Handheld",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "R36S Retro Handheld",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "R36S Retro Handheld",
+      "firmware": "ArkOS",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "R36S Retro Handheld",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    },
+    {
+      "device": "TrimUI Brick",
+      "firmware": "KNULLI",
+      "cpu": "a133plus",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        1024,
+        768
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "TrimUI Brick",
+      "firmware": "TrimUI",
+      "cpu": "a133plus",
+      "architecture": "aarch64",
+      "glibc": "2.33",
+      "resolution": [
+        1024,
+        768
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "TrimUI Smart Pro",
+      "firmware": "KNULLI",
+      "cpu": "a133plus",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        1280,
+        720
+      ],
+      "opengl": false,
+      "verification": "HTML/GLES probe passed; full application not tested",
+      "measurement": {
+        "firmware_build": "scarab 2026/05/11",
+        "viewport": [
+          1280,
+          696
+        ],
+        "helper_vmhwm_kib": 81648,
+        "first_frame_ms": 3089,
+        "total_probe_ms": 3852,
+        "zim_probe": {
+          "article": "1998-99_एन_बी_ए_सीज़न",
+          "helper_vmhwm_kib": 94800,
+          "first_frame_ms": 5102,
+          "total_probe_ms": 5996,
+          "visual_verification": false
+        }
+      }
+    },
+    {
+      "device": "TrimUI Smart Pro",
+      "firmware": "TrimUI",
+      "cpu": "a133plus",
+      "architecture": "aarch64",
+      "glibc": "2.33",
+      "resolution": [
+        1280,
+        720
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "XU10 Retro Handheld",
+      "firmware": "AmberELEC",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.38",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "XU10 Retro Handheld",
+      "firmware": "ArkOS",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.30",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": false,
+      "verification": "not tested"
+    },
+    {
+      "device": "XU10 Retro Handheld",
+      "firmware": "ROCKNIX",
+      "cpu": "rk3326",
+      "architecture": "aarch64",
+      "glibc": "2.40",
+      "resolution": [
+        640,
+        480
+      ],
+      "opengl": true,
+      "verification": "not tested"
+    }
+  ]
+}

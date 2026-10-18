@@ -53,8 +53,8 @@ func (r *Renderer) relayout() {
 
 	document.VisitBlocks(r.doc.Blocks, ls)
 
-	if ls.y < r.height-ls.r.getStatusBarHeight() {
-		ls.y = r.height - ls.r.getStatusBarHeight()
+	if ls.y < r.contentHeight() {
+		ls.y = r.contentHeight()
 	}
 	r.layout.totalHeight = ls.y
 	r.clampScroll()
@@ -63,9 +63,10 @@ func (r *Renderer) relayout() {
 
 type layoutState struct {
 	document.BaseBlockVisitor
-	r    *Renderer
-	y    int32
-	maxW int32
+	r       *Renderer
+	y       int32
+	maxW    int32
+	rtlBase bool
 }
 
 func (s *layoutState) VisitAnchor(a *document.Anchor) {
@@ -500,33 +501,43 @@ func (s *layoutState) flushInlineLine(
 	}
 
 	currX := s.r.marginX + indentX
-
-	if alignment != document.AlignLeft && len(lineWords) > 0 {
-		totalW := int32(0)
-		for _, w := range lineWords {
-			totalW += w.PixW
-		}
-		switch alignment {
-		case document.AlignCenter:
-			currX += (availWidth - totalW) / 2
-		case document.AlignRight:
-			currX += availWidth - totalW
-		}
+	totalW := int32(0)
+	for _, w := range lineWords {
+		totalW += w.PixW
+	}
+	prefixW := int32(0)
+	var prefixH int32
+	if isFirstLine && *prefix != "" {
+		prefixW, prefixH = measureText(*prefix, s.r.fonts[fidx].font, false, false, false)
+	}
+	if alignment == document.AlignCenter && len(lineWords) > 0 {
+		currX += (availWidth - totalW - prefixW) / 2
+	} else if s.rtlBase {
+		currX += availWidth - totalW - prefixW
+	} else if alignment == document.AlignRight && len(lineWords) > 0 {
+		currX += availWidth - totalW - prefixW
 	}
 
 	if isFirstLine && *prefix != "" {
-		pFont := s.r.fonts[fidx].font
-		pw, ph := measureText(*prefix, pFont, false, false, false)
+		pw, ph := prefixW, prefixH
+		prefixX := currX
+		if s.rtlBase {
+			prefixX += totalW
+		}
 		s.r.layout.lines = append(s.r.layout.lines, lineEntry{
 			text: *prefix, fontIdx: fidx, color: textColor,
-			x: currX, y: *y, w: pw, h: ph,
+			x: prefixX, y: *y, w: pw, h: ph,
 		})
-		currX += pw
+		if !s.rtlBase {
+			currX += pw
+		}
 		*prefix = ""
 	}
 
+	visualOrder := visualWordOrder(lineWords, s.rtlBase)
 	var maxH int32
-	for _, w := range lineWords {
+	for _, wordIdx := range visualOrder {
+		w := lineWords[wordIdx]
 		if w.PixH > maxH {
 			maxH = w.PixH
 		}
@@ -535,7 +546,8 @@ func (s *layoutState) flushInlineLine(
 		maxH = v.SpaceH
 	}
 
-	for _, w := range lineWords {
+	for _, wordIdx := range visualOrder {
+		w := lineWords[wordIdx]
 		if w.Text == "" && !w.IsImage && !w.IsEmoji {
 			continue
 		}
@@ -591,9 +603,11 @@ func (s *layoutState) flushInlineLine(
 					url: url,
 				})
 				activeLinks[w.LinkID] = idx
-
-				if strings.HasPrefix(url, "#cite_ref-") || strings.HasPrefix(url, "#cite_note-") {
-					norm := strings.ReplaceAll(strings.ToLower(url), "_", "-")
+			}
+			url := v.LinkURLs[w.LinkID]
+			if strings.HasPrefix(url, "#cite_ref-") || strings.HasPrefix(url, "#cite_note-") {
+				norm := strings.ReplaceAll(strings.ToLower(url), "_", "-")
+				if _, exists := s.r.layout.anchorPositions[norm]; !exists {
 					s.r.layout.anchorPositions[norm] = wordY
 				}
 			}
@@ -626,11 +640,21 @@ func (r *Renderer) layoutInlines(inlines []document.Inline, fidx FontKind,
 	v := document.NewInlineWordVisitor(&sdlFont{r: r, baseIdx: fidx}, measureImg)
 	document.VisitInlines(inlines, v)
 
-	ls := &layoutState{r: r}
+	ls := &layoutState{r: r, rtlBase: paragraphIsRTL(v.Words)}
 	y := startY
 	var lineWords []document.Word
 	var lineWidth int32
 	activeLinks := make(map[int]int)
+	for _, word := range v.Words {
+		if word.LinkID != 0 {
+			if _, exists := activeLinks[word.LinkID]; exists {
+				continue
+			}
+			url := v.LinkURLs[word.LinkID]
+			activeLinks[word.LinkID] = len(r.layout.links)
+			r.layout.links = append(r.layout.links, linkEntry{url: url})
+		}
+	}
 
 	flush := func(isFirstLine bool) {
 		if len(lineWords) == 0 && prefix == "" {

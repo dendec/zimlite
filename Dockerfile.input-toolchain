@@ -1,0 +1,17 @@
+# Headless input runtime; SDL draws the keyboard in the application.
+FROM zimlite-fts-probe-arm64 AS build
+ARG DEB_ARCH=arm64
+ARG TRIPLE=aarch64-linux-gnu
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    g++ libxml2-dev:${DEB_ARCH} libanthy-dev:${DEB_ARCH} m17n-db anthy-common \
+    libharfbuzz-dev:${DEB_ARCH} libfreetype6-dev:${DEB_ARCH} libfribidi-dev:${DEB_ARCH} \
+    && rm -rf /var/lib/apt/lists/*
+COPY scripts/prepare-m17n.py /tmp/prepare-m17n.py
+ARG M17N_VER=1.8.6
+RUN wget -q --timeout=30 --tries=3 "https://download.savannah.nongnu.org/releases/m17n/m17n-lib-${M17N_VER}.tar.gz" -O /tmp/m17n.tar.gz \
+    && mkdir /tmp/m17n && tar xf /tmp/m17n.tar.gz -C /tmp/m17n --strip-components=1 \
+    && python3 /tmp/prepare-m17n.py /tmp/m17n \
+    && cd /tmp/m17n && HAVE_PKG_CONFIG_TRUE= HAVE_PKG_CONFIG_FALSE='#' with_gui=no CPPFLAGS=-DHAVE_DLOPEN=1 LIBS=-ldl ANTHY_CFLAGS=-I/usr/include ANTHY_LIBS=-lanthy \
+       PKG_CONFIG_LIBDIR=/usr/lib/${TRIPLE}/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig \
+       ./configure --host=${TRIPLE} --prefix=/opt/input --disable-static \
+    && make -j4 && make install

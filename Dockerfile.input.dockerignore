@@ -1,0 +1,17 @@
+**
+!Dockerfile.input
+!native/
+!native/input-host/
+!native/input-host/**
+!scripts/
+!scripts/package-input-runtime.py
+!scripts/prepare-m17n.py
+!internal/
+!internal/renderer/
+!internal/renderer/assets/
+!internal/renderer/assets/unifont.otf
+!lib/
+!lib/libzim_linux-x86_64-9.7.0/
+!lib/libzim_linux-x86_64-9.7.0/lib/
+!lib/libzim_linux-x86_64-9.7.0/lib/x86_64-linux-gnu/
+!lib/libzim_linux-x86_64-9.7.0/lib/x86_64-linux-gnu/libzim.so.9.7.0

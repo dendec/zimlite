@@ -1,0 +1,1003 @@
+{
+  "aliases": {
+    "aa": "aar",
+    "ab": "abk",
+    "af": "afr",
+    "ak": "aka",
+    "am": "amh",
+    "ar": "ara",
+    "an": "arg",
+    "as": "asm",
+    "av": "ava",
+    "ae": "ave",
+    "ay": "aym",
+    "az": "aze",
+    "ba": "bak",
+    "bm": "bam",
+    "be": "bel",
+    "bn": "ben",
+    "bi": "bis",
+    "bo": "bod",
+    "tib": "bod",
+    "bs": "bos",
+    "br": "bre",
+    "bg": "bul",
+    "ca": "cat",
+    "cs": "ces",
+    "cze": "ces",
+    "ch": "cha",
+    "ce": "che",
+    "cu": "chu",
+    "cv": "chv",
+    "kw": "cor",
+    "co": "cos",
+    "cr": "cre",
+    "cy": "cym",
+    "wel": "cym",
+    "da": "dan",
+    "de": "deu",
+    "ger": "deu",
+    "dv": "div",
+    "dz": "dzo",
+    "el": "ell",
+    "gre": "ell",
+    "en": "eng",
+    "eo": "epo",
+    "et": "est",
+    "eu": "eus",
+    "baq": "eus",
+    "ee": "ewe",
+    "fo": "fao",
+    "fa": "fas",
+    "per": "fas",
+    "fj": "fij",
+    "fi": "fin",
+    "fr": "fra",
+    "fre": "fra",
+    "fy": "fry",
+    "ff": "ful",
+    "gd": "gla",
+    "ga": "gle",
+    "gl": "glg",
+    "gv": "glv",
+    "gn": "grn",
+    "gu": "guj",
+    "ht": "hat",
+    "ha": "hau",
+    "sh": "hbs",
+    "he": "heb",
+    "hz": "her",
+    "hi": "hin",
+    "ho": "hmo",
+    "hr": "hrv",
+    "hu": "hun",
+    "hy": "hye",
+    "arm": "hye",
+    "ig": "ibo",
+    "io": "ido",
+    "ii": "iii",
+    "iu": "iku",
+    "ie": "ile",
+    "ia": "ina",
+    "id": "ind",
+    "ik": "ipk",
+    "is": "isl",
+    "ice": "isl",
+    "it": "ita",
+    "jv": "jav",
+    "ja": "jpn",
+    "kl": "kal",
+    "kn": "kan",
+    "ks": "kas",
+    "ka": "kat",
+    "geo": "kat",
+    "kr": "kau",
+    "kk": "kaz",
+    "km": "khm",
+    "ki": "kik",
+    "rw": "kin",
+    "ky": "kir",
+    "kv": "kom",
+    "kg": "kon",
+    "ko": "kor",
+    "kj": "kua",
+    "ku": "kur",
+    "lo": "lao",
+    "la": "lat",
+    "lv": "lav",
+    "li": "lim",
+    "ln": "lin",
+    "lt": "lit",
+    "lb": "ltz",
+    "lu": "lub",
+    "lg": "lug",
+    "mh": "mah",
+    "ml": "mal",
+    "mr": "mar",
+    "mk": "mkd",
+    "mac": "mkd",
+    "mg": "mlg",
+    "mt": "mlt",
+    "mn": "mon",
+    "mi": "mri",
+    "mao": "mri",
+    "ms": "msa",
+    "may": "msa",
+    "my": "mya",
+    "bur": "mya",
+    "na": "nau",
+    "nv": "nav",
+    "nr": "nbl",
+    "nd": "nde",
+    "ng": "ndo",
+    "ne": "nep",
+    "nl": "nld",
+    "dut": "nld",
+    "nn": "nno",
+    "nb": "nob",
+    "no": "nor",
+    "ny": "nya",
+    "oc": "oci",
+    "oj": "oji",
+    "or": "ori",
+    "om": "orm",
+    "os": "oss",
+    "pa": "pan",
+    "pi": "pli",
+    "pl": "pol",
+    "pt": "por",
+    "ps": "pus",
+    "qu": "que",
+    "rm": "roh",
+    "ro": "ron",
+    "rum": "ron",
+    "rn": "run",
+    "ru": "rus",
+    "sg": "sag",
+    "sa": "san",
+    "si": "sin",
+    "sk": "slk",
+    "slo": "slk",
+    "sl": "slv",
+    "se": "sme",
+    "sm": "smo",
+    "sn": "sna",
+    "sd": "snd",
+    "so": "som",
+    "st": "sot",
+    "es": "spa",
+    "sq": "sqi",
+    "alb": "sqi",
+    "sc": "srd",
+    "sr": "srp",
+    "ss": "ssw",
+    "su": "sun",
+    "sw": "swa",
+    "sv": "swe",
+    "ty": "tah",
+    "ta": "tam",
+    "tt": "tat",
+    "te": "tel",
+    "tg": "tgk",
+    "tl": "tgl",
+    "th": "tha",
+    "ti": "tir",
+    "to": "ton",
+    "tn": "tsn",
+    "ts": "tso",
+    "tk": "tuk",
+    "tr": "tur",
+    "tw": "twi",
+    "ug": "uig",
+    "uk": "ukr",
+    "ur": "urd",
+    "uz": "uzb",
+    "ve": "ven",
+    "vi": "vie",
+    "vo": "vol",
+    "wa": "wln",
+    "wo": "wol",
+    "xh": "xho",
+    "yi": "yid",
+    "yo": "yor",
+    "za": "zha",
+    "zh": "zho",
+    "chi": "zho",
+    "zu": "zul"
+  },
+  "profiles": {
+    "mal": {
+      "name": "Malayalam",
+      "language": "ml",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "itrans",
+        "enhanced-inscript",
+        "mozhi",
+        "pn-c",
+        "poorna-remington",
+        "remington",
+        "swanalekha"
+      ]
+    },
+    "bla": {
+      "name": "Siksika",
+      "language": "bla",
+      "methods": [
+        "phonetic"
+      ]
+    },
+    "sin": {
+      "name": "Sinhala",
+      "language": "si",
+      "methods": [
+        "phonetic-dynamic",
+        "samanala",
+        "sayura",
+        "singlish",
+        "sumihiri",
+        "transliteration",
+        "wijesekara"
+      ]
+    },
+    "san": {
+      "name": "Sanskrit",
+      "language": "sa",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "itrans",
+        "IAST",
+        "IAST-vedic",
+        "brahmi-itrans",
+        "grantha-itrans",
+        "harvard-kyoto",
+        "iso-15919-itrans",
+        "sharada-itrans",
+        "vedic-itrans"
+      ]
+    },
+    "hin": {
+      "name": "हिन्दी",
+      "language": "hi",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "phonetic",
+        "itrans",
+        "brahmi-itrans",
+        "optitransv2",
+        "remington",
+        "typewriter",
+        "vedmata"
+      ]
+    },
+    "kan": {
+      "name": "Kannada",
+      "language": "kn",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "itrans",
+        "kgp",
+        "optitransv2",
+        "typewriter"
+      ]
+    },
+    "hun": {
+      "name": "Hungarian",
+      "language": "hu",
+      "methods": [
+        "rovas-post"
+      ]
+    },
+    "pan": {
+      "name": "Panjabi",
+      "language": "pa",
+      "methods": [
+        "inscript",
+        "phonetic",
+        "itrans",
+        "anmollipi",
+        "inscript2-guru",
+        "jhelum",
+        "remington"
+      ]
+    },
+    "eng": {
+      "name": "English",
+      "language": "en",
+      "methods": [
+        "direct"
+      ]
+    },
+    "dan": {
+      "name": "Danish",
+      "language": "da",
+      "methods": [
+        "post"
+      ]
+    },
+    "mar": {
+      "name": "Marathi",
+      "language": "mr",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "phonetic",
+        "itrans",
+        "gamabhana",
+        "krutidev",
+        "modi-itrans",
+        "remington",
+        "typewriter"
+      ]
+    },
+    "epo": {
+      "name": "Esperanto",
+      "language": "eo",
+      "methods": [
+        "h-fundamente",
+        "h-sistemo",
+        "plena",
+        "q-sistemo",
+        "vi-sistemo",
+        "x-sistemo"
+      ]
+    },
+    "snd": {
+      "name": "Sindhi",
+      "language": "sd",
+      "methods": [
+        "inscript",
+        "inscript2-deva"
+      ]
+    },
+    "zho": {
+      "name": "中文",
+      "language": "zh",
+      "methods": [
+        "py",
+        "bopomofo",
+        "cangjie",
+        "pinyin",
+        "pinyin-vi",
+        "py-b5",
+        "py-gb",
+        "quick",
+        "tonepy",
+        "tonepy-b5",
+        "tonepy-gb",
+        "zhuyin"
+      ]
+    },
+    "mai": {
+      "name": "Maithili",
+      "language": "mai",
+      "methods": [
+        "inscript",
+        "inscript2"
+      ]
+    },
+    "jpn": {
+      "name": "日本語",
+      "language": "ja",
+      "methods": [
+        "anthy",
+        "tcode",
+        "trycode"
+      ]
+    },
+    "kok": {
+      "name": "Konkani (macrolanguage)",
+      "language": "kok",
+      "methods": [
+        "inscript2-deva"
+      ]
+    },
+    "ara": {
+      "name": "العربية",
+      "language": "ar",
+      "methods": [
+        "kbd",
+        "translit"
+      ]
+    },
+    "kor": {
+      "name": "한국어",
+      "language": "ko",
+      "methods": [
+        "han2",
+        "romaja"
+      ]
+    },
+    "tha": {
+      "name": "Thai",
+      "language": "th",
+      "methods": [
+        "kesmanee",
+        "pattachote",
+        "tis820"
+      ]
+    },
+    "amh": {
+      "name": "Amharic",
+      "language": "am",
+      "methods": [
+        "sera"
+      ]
+    },
+    "dra": {
+      "name": "dra",
+      "language": "dra",
+      "methods": [
+        "iso-15919-itrans"
+      ]
+    },
+    "new": {
+      "name": "Newari",
+      "language": "new",
+      "methods": [
+        "newa-traditional",
+        "newa-traditional-extended"
+      ]
+    },
+    "uig": {
+      "name": "Uighur",
+      "language": "ug",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "asm": {
+      "name": "Assamese",
+      "language": "as",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "phonetic",
+        "itrans"
+      ]
+    },
+    "ben": {
+      "name": "Bengali",
+      "language": "bn",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "itrans",
+        "disha",
+        "khipro",
+        "national-jatiya",
+        "probhat",
+        "unijoy"
+      ]
+    },
+    "tam": {
+      "name": "Tamil",
+      "language": "ta",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "phonetic",
+        "itrans",
+        "lk-renganathan",
+        "remington",
+        "tamil99",
+        "typewriter",
+        "vutam"
+      ]
+    },
+    "kas": {
+      "name": "Kashmiri",
+      "language": "ks",
+      "methods": [
+        "kbd",
+        "inscript",
+        "inscript2-deva",
+        "sharada-itrans"
+      ]
+    },
+    "bod": {
+      "name": "Tibetan",
+      "language": "bo",
+      "methods": [
+        "ewts",
+        "tcrc",
+        "wylie"
+      ]
+    },
+    "kat": {
+      "name": "Georgian",
+      "language": "ka",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "iii": {
+      "name": "Sichuan Yi",
+      "language": "ii",
+      "methods": [
+        "phonetic"
+      ]
+    },
+    "tel": {
+      "name": "Telugu",
+      "language": "te",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "itrans",
+        "apple",
+        "pothana",
+        "rts",
+        "sarala"
+      ]
+    },
+    "vie": {
+      "name": "Tiếng Việt",
+      "language": "vi",
+      "methods": [
+        "telex",
+        "han",
+        "nomtelex",
+        "nomvni",
+        "tcvn",
+        "viqr",
+        "vni"
+      ]
+    },
+    "mni": {
+      "name": "Manipuri",
+      "language": "mni",
+      "methods": [
+        "inscript2-beng",
+        "inscript2-mtei"
+      ]
+    },
+    "mya": {
+      "name": "Burmese",
+      "language": "my",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "yid": {
+      "name": "Yiddish",
+      "language": "yi",
+      "methods": [
+        "yivo"
+      ]
+    },
+    "div": {
+      "name": "Dhivehi",
+      "language": "dv",
+      "methods": [
+        "phonetic"
+      ]
+    },
+    "fra": {
+      "name": "Français",
+      "language": "fr",
+      "methods": [
+        "azerty"
+      ]
+    },
+    "rus": {
+      "name": "Русский",
+      "language": "ru",
+      "methods": [
+        "kbd",
+        "phonetic",
+        "translit",
+        "yawerty"
+      ]
+    },
+    "cre": {
+      "name": "Cree",
+      "language": "cr",
+      "methods": [
+        "western"
+      ]
+    },
+    "doi": {
+      "name": "Dogri (macrolanguage)",
+      "language": "doi",
+      "methods": [
+        "inscript2-deva"
+      ]
+    },
+    "ori": {
+      "name": "Oriya (macrolanguage)",
+      "language": "or",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "phonetic",
+        "itrans"
+      ]
+    },
+    "kaz": {
+      "name": "Kazakh",
+      "language": "kk",
+      "methods": [
+        "kbd",
+        "arabic"
+      ]
+    },
+    "nep": {
+      "name": "Nepali (macrolanguage)",
+      "language": "ne",
+      "methods": [
+        "inscript2-deva",
+        "rom",
+        "rom-translit",
+        "trad",
+        "trad-ttf"
+      ]
+    },
+    "iku": {
+      "name": "Inuktitut",
+      "language": "iu",
+      "methods": [
+        "phonetic"
+      ]
+    },
+    "guj": {
+      "name": "Gujarati",
+      "language": "gu",
+      "methods": [
+        "inscript",
+        "inscript2",
+        "phonetic",
+        "itrans"
+      ]
+    },
+    "hrv": {
+      "name": "Croatian",
+      "language": "hr",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "heb": {
+      "name": "Hebrew",
+      "language": "he",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "brx": {
+      "name": "Bodo (India)",
+      "language": "brx",
+      "methods": [
+        "inscript2-deva"
+      ]
+    },
+    "ath": {
+      "name": "ath",
+      "language": "ath",
+      "methods": [
+        "phonetic"
+      ]
+    },
+    "slk": {
+      "name": "Slovak",
+      "language": "sk",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "bel": {
+      "name": "Belarusian",
+      "language": "be",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "urd": {
+      "name": "Urdu",
+      "language": "ur",
+      "methods": [
+        "phonetic"
+      ]
+    },
+    "ces": {
+      "name": "Czech",
+      "language": "cs",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "lao": {
+      "name": "Lao",
+      "language": "lo",
+      "methods": [
+        "kbd",
+        "lrt"
+      ]
+    },
+    "ell": {
+      "name": "Modern Greek (1453-)",
+      "language": "el",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "ukr": {
+      "name": "Українська",
+      "language": "uk",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "grc": {
+      "name": "Ancient Greek (to 1453)",
+      "language": "grc",
+      "methods": [
+        "mizuochi"
+      ]
+    },
+    "hye": {
+      "name": "Armenian",
+      "language": "hy",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "cmc": {
+      "name": "cmc",
+      "language": "cmc",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "nsk": {
+      "name": "Naskapi",
+      "language": "nsk",
+      "methods": [
+        "phonetic"
+      ]
+    },
+    "pus": {
+      "name": "Pushto",
+      "language": "ps",
+      "methods": [
+        "phonetic"
+      ]
+    },
+    "tai": {
+      "name": "tai",
+      "language": "tai",
+      "methods": [
+        "sonla-kbd"
+      ]
+    },
+    "sat": {
+      "name": "Santali",
+      "language": "sat",
+      "methods": [
+        "inscript2-deva",
+        "inscript2-olck"
+      ]
+    },
+    "swe": {
+      "name": "Swedish",
+      "language": "sv",
+      "methods": [
+        "post"
+      ]
+    },
+    "oji": {
+      "name": "Ojibwa",
+      "language": "oj",
+      "methods": [
+        "phonetic"
+      ]
+    },
+    "khm": {
+      "name": "Khmer",
+      "language": "km",
+      "methods": [
+        "yannis"
+      ]
+    },
+    "uzb": {
+      "name": "Uzbek",
+      "language": "uz",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "fas": {
+      "name": "Persian",
+      "language": "fa",
+      "methods": [
+        "isiri"
+      ]
+    },
+    "srp": {
+      "name": "Serbian",
+      "language": "sr",
+      "methods": [
+        "kbd"
+      ]
+    },
+    "deu": {
+      "name": "Deutsch",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "spa": {
+      "name": "Español",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "por": {
+      "name": "Portuguese",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "ita": {
+      "name": "Italian",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "nld": {
+      "name": "Dutch",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "pol": {
+      "name": "Polish",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "tur": {
+      "name": "Turkish",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "fin": {
+      "name": "Finnish",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "nor": {
+      "name": "Norwegian",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "nob": {
+      "name": "Norwegian Bokmål",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "nno": {
+      "name": "Norwegian Nynorsk",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "isl": {
+      "name": "Icelandic",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "ron": {
+      "name": "Romanian",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "slv": {
+      "name": "Slovenian",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "est": {
+      "name": "Estonian",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "lav": {
+      "name": "Latvian",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "lit": {
+      "name": "Lithuanian",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "ind": {
+      "name": "Indonesian",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "msa": {
+      "name": "Malay (macrolanguage)",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "swa": {
+      "name": "Swahili (macrolanguage)",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "tgl": {
+      "name": "Tagalog",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "cat": {
+      "name": "Catalan",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "eus": {
+      "name": "Basque",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "glg": {
+      "name": "Galician",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    },
+    "afr": {
+      "name": "Afrikaans",
+      "language": "t",
+      "methods": [
+        "latn-post"
+      ]
+    }
+  }
+}

@@ -8,9 +8,12 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/dendec/zimlite/internal/config"
 	"github.com/dendec/zimlite/internal/document"
+	engine "github.com/dendec/zimlite/internal/servo"
+	"github.com/dendec/zimlite/internal/textinput"
 	"github.com/veandco/go-sdl2/sdl"
 	"github.com/veandco/go-sdl2/ttf"
 )
@@ -162,18 +165,6 @@ func (c *TextureCache[K]) DestroyAll() {
 	c.evictList.Init()
 }
 
-type ResourceLoader func(url string) ([]byte, error)
-
-// TreeItem describes one item in the tree view for structured rendering.
-type TreeItem struct {
-	Text       string
-	Path       string
-	IsLeaf     bool
-	IsCursor   bool
-	LabelStart int // rune offset where label begins in Text
-	LabelEnd   int // rune offset where label ends in Text (exclusive)
-}
-
 type imageEntry struct {
 	x, y, w, h int32
 	url        string
@@ -186,14 +177,18 @@ type fontSlot struct {
 
 // Renderer owns the SDL window and renders documents.
 type Renderer struct {
-	window      *sdl.Window
-	sdlRenderer *sdl.Renderer
-	controller  *sdl.GameController
-	fonts       [fontCount]fontSlot
+	keyboard         *textinput.View
+	keyboardTextures map[string]keyboardTexture
+	window           *sdl.Window
+	sdlRenderer      *sdl.Renderer
+	controller       *sdl.GameController
+	fonts            [fontCount]fontSlot
 
-	layout PageLayout
+	layout     PageLayout
+	servo      *servoView
+	servoError error
 
-	treeItems []TreeItem // cached for theme toggle
+	treeItems []document.TreeItem // cached for theme toggle
 
 	doc *document.Document
 
@@ -221,6 +216,7 @@ type Renderer struct {
 	fontPath            string
 	docTitle            string
 	statusOverride      string
+	statusMu            sync.RWMutex
 	hasActiveAnimations bool
 	hoveredLink         int
 	hoveredTreeLine     int // index of hovered tree line (-1 = none)
@@ -354,7 +350,7 @@ func (r *Renderer) ClearCache() {
 	}
 }
 
-func (r *Renderer) SetResourceLoader(loader ResourceLoader) {
+func (r *Renderer) SetResourceLoader(loader document.ResourceLoader) {
 	if r.imgManager != nil {
 		r.imgManager.SetLoader(loader)
 	}
@@ -366,6 +362,8 @@ func (r *Renderer) GameController() *sdl.GameController {
 }
 
 func (r *Renderer) Destroy() {
+	r.SetKeyboard(nil)
+	r.StopArticle()
 	r.ClearCache()
 	if r.controller != nil {
 		r.controller.Close()
@@ -393,6 +391,7 @@ func (r *Renderer) Destroy() {
 }
 
 func (r *Renderer) SetDocument(doc *document.Document) {
+	r.StopArticle()
 	r.doc = doc
 	r.scrollY = 0
 	r.selectedLink = -1
@@ -454,6 +453,11 @@ func (r *Renderer) applyThemeByIndex() {
 	case 2:
 		r.theme = SepiaTheme()
 	}
+	r.imgManager.SetDark(!r.IsLight())
+	if r.servo != nil {
+		r.sendServoTheme()
+		return
+	}
 	r.relayout()
 	r.relayoutTextLines()
 }
@@ -465,13 +469,18 @@ func (r *Renderer) IsLight() bool {
 
 func (r *Renderer) Relayout() {
 	r.width, r.height = r.window.GetSize()
+	if r.servo != nil {
+		r.resizeServo()
+		return
+	}
 	r.relayout()
 }
 
 // --- Text line mode (for tree view, etc.) ---
 
 // SetTextLines configures the renderer for simple text-line display mode.
-func (r *Renderer) SetTextLines(title string, items []TreeItem) {
+func (r *Renderer) SetTextLines(title string, items []document.TreeItem) {
+	r.StopArticle()
 	r.treeItems = items
 	r.layout = PageLayout{}
 	r.doc = nil
@@ -508,8 +517,8 @@ func (r *Renderer) SetTextLines(title string, items []TreeItem) {
 		})
 		y += th
 	}
-	if y < r.height-r.getStatusBarHeight() {
-		y = r.height - r.getStatusBarHeight()
+	if y < r.contentHeight() {
+		y = r.contentHeight()
 	}
 	r.layout.totalHeight = y
 	r.clampScroll()
@@ -531,18 +540,26 @@ func (r *Renderer) ScrollToLine(lineIdx int) {
 	screenY := line.y - r.scrollY
 	if screenY < r.marginY {
 		r.scrollY = line.y - r.marginY
-	} else if screenY+line.h > r.height-r.marginY-r.getStatusBarHeight() {
-		r.scrollY = line.y + line.h - r.height + r.marginY + r.getStatusBarHeight()
+	} else if screenY+line.h > r.contentHeight()-r.marginY {
+		r.scrollY = line.y + line.h - r.contentHeight() + r.marginY
 	}
 	r.clampScroll()
 }
 
 // --- Link API ---
 
-func (r *Renderer) LinkCount() int  { return len(r.layout.links) }
+func (r *Renderer) LinkCount() int {
+	if r.servo != nil {
+		return r.servo.links
+	}
+	return len(r.layout.links)
+}
 func (r *Renderer) SelectNextLink() { r.moveLink(+1) }
 func (r *Renderer) SelectPrevLink() { r.moveLink(-1) }
 func (r *Renderer) SelectedLinkURL() string {
+	if r.servo != nil {
+		return r.servo.selectedURL
+	}
 	if r.selectedLink < 0 || r.selectedLink >= len(r.layout.links) {
 		return ""
 	}
@@ -554,12 +571,22 @@ func (r *Renderer) SelectedLinkIndex() int {
 }
 
 func (r *Renderer) SetSelectedLinkIndex(idx int) {
+	if r.servo != nil {
+		r.selectedLink = idx
+		r.servo.selectedURL = ""
+		r.servo.selectionID++
+		r.servoSend(engine.Command{Op: "select", Value: int32(idx), SelectionID: r.servo.selectionID})
+		return
+	}
 	r.selectedLink = idx
 	r.clampSelection()
 }
 
 // MarkLinkVisited records a URL (exact match) as visited and triggers relayout for immediate color update.
 func (r *Renderer) MarkLinkVisited(url string) {
+	if r.servo != nil {
+		return
+	}
 	if url == "" {
 		return
 	}
@@ -616,18 +643,34 @@ func backwardLinkIdx(links []linkEntry, top, bottom int32) int {
 }
 
 func (r *Renderer) moveLink(delta int) {
+	if r.servo != nil {
+		// Resolve selection against the live DOM after preceding scroll input.
+		// Cached SDL state can lag behind both compositor and table scrolling.
+		r.servo.selectedURL = ""
+		r.servo.selectionID++
+		r.servoSend(engine.Command{Op: "move_link", Value: int32(delta), SelectionID: r.servo.selectionID})
+		return
+	}
 	if len(r.layout.links) == 0 {
 		return
 	}
 
 	visibleTop := r.scrollY + r.marginY
-	visibleBottom := r.scrollY + r.height - r.marginY - r.getStatusBarHeight()
+	visibleBottom := r.scrollY + r.contentHeight() - r.marginY
 
 	// check if current selection is in the viewport
 	selVisible := r.selectedLink >= 0 && r.selectedLink < len(r.layout.links) &&
 		linkHasVisibleRect(r.layout.links[r.selectedLink], visibleTop, visibleBottom)
 
-	if !selVisible && r.selectedLink >= 0 {
+	if !selVisible {
+		// Re-enter link navigation at the first visible link for every direction.
+		// Keep the viewport still, including links with partially visible lines.
+		for i, link := range r.layout.links {
+			if linkHasVisibleRect(link, visibleTop, visibleBottom) {
+				r.selectedLink = i
+				return
+			}
+		}
 		if delta > 0 {
 			r.selectedLink = forwardLinkIdx(r.layout.links, visibleTop, visibleBottom)
 		} else {
@@ -653,7 +696,7 @@ func (r *Renderer) moveLink(delta int) {
 			if first.Y < visibleTop {
 				r.scrollY = first.Y - r.marginY
 			} else if last.Y+last.H > visibleBottom {
-				r.scrollY = last.Y + last.H - r.height + r.marginY + r.getStatusBarHeight()
+				r.scrollY = last.Y + last.H - r.contentHeight() + r.marginY
 			}
 			r.clampScroll()
 		}
@@ -676,27 +719,49 @@ func (r *Renderer) clampSelection() {
 // --- Scroll API ---
 
 func (r *Renderer) ScrollBy(delta int32) {
+	if r.servo != nil {
+		if pixels := r.servoDelta(delta, false); pixels != 0 {
+			r.servoSend(engine.Command{Op: "scroll", Value: pixels})
+		}
+		return
+	}
 	r.scrollY += delta
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollPageUp() {
-	r.scrollY -= (r.height - r.getStatusBarHeight()) * 3 / 4
+	if r.servo != nil {
+		r.ScrollBy(-r.contentHeight() * 3 / 4)
+		return
+	}
+	r.scrollY -= r.contentHeight() * 3 / 4
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollPageDown() {
-	r.scrollY += (r.height - r.getStatusBarHeight()) * 3 / 4
+	if r.servo != nil {
+		r.ScrollBy(r.contentHeight() * 3 / 4)
+		return
+	}
+	r.scrollY += r.contentHeight() * 3 / 4
 	r.clampScroll()
 }
 
-func (r *Renderer) ScrollToTop() { r.scrollY = 0 }
+func (r *Renderer) ScrollToTop() { r.ScrollToY(0) }
 func (r *Renderer) ScrollToBottom() {
-	r.scrollY = r.layout.totalHeight - (r.height - r.getStatusBarHeight())
+	if r.servo != nil {
+		r.SetScrollY(2147483647)
+		return
+	}
+	r.scrollY = r.layout.totalHeight - r.contentHeight()
 	r.clampScroll()
 }
 
 func (r *Renderer) ScrollToY(y int32) {
+	if r.servo != nil {
+		r.SetScrollY(y)
+		return
+	}
 	r.scrollY = y - r.marginY
 	r.clampScroll()
 }
@@ -706,6 +771,11 @@ func (r *Renderer) CurrentScrollY() int32 {
 }
 
 func (r *Renderer) SetScrollY(scrollY int32) {
+	if r.servo != nil {
+		r.scrollY = scrollY
+		r.servoSend(engine.Command{Op: "scroll_to", Value: scrollY})
+		return
+	}
 	r.scrollY = scrollY
 	r.clampScroll()
 }
@@ -769,7 +839,7 @@ func (r *Renderer) FindAnchorY(anchor string) (int32, bool) {
 }
 
 func (r *Renderer) clampScroll() {
-	maxScroll := r.layout.totalHeight - (r.height - r.getStatusBarHeight())
+	maxScroll := r.layout.totalHeight - r.contentHeight()
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -782,6 +852,14 @@ func (r *Renderer) clampScroll() {
 }
 
 func (r *Renderer) HandleClick(mx, my int32) string {
+	if r.servo != nil {
+		h := r.height - r.getStatusBarHeight()
+		if mx >= 0 && my >= 0 && mx < r.width && my < h {
+			zoom := float64(r.baseFontSize) / 16
+			r.servoSend(engine.Command{Op: "click", X: int32(float64(mx) * float64(r.servo.width) / float64(r.width) / zoom), Y: int32(float64(my) * float64(r.servo.height) / float64(h) / zoom)})
+		}
+		return ""
+	}
 	docY := my + r.scrollY
 	startIdx := sort.Search(len(r.layout.links), func(i int) bool {
 		rects := r.layout.links[i].rects
@@ -838,6 +916,11 @@ func (f *sdlFont) Measure(text string, isBold, isItalic, isCode bool) (int32, in
 	if font == nil {
 		return 0, 0
 	}
+	if !isCode && hasRTLText(text) {
+		if _, w, h := f.r.renderShapedText(text, f.r.fonts[f.baseIdx].size); w > 0 && h > 0 {
+			return int32(w), int32(h)
+		}
+	}
 	return measureText(text, font, isBold, isItalic, isCode)
 }
 
@@ -873,31 +956,44 @@ func (r *Renderer) Zoom(delta int) error {
 	r.textCache.DestroyAll()
 
 	// Recalculate document layout with new font sizes
+	if r.servo != nil {
+		r.resizeServo()
+		r.servoSend(engine.Command{Op: "zoom", Scale: float32(r.baseFontSize) / 16})
+		return nil
+	}
 	r.relayout()
 	return nil
 }
 
 // SetStatusOverride sets a custom status bar message to override help legends.
 func (r *Renderer) SetStatusOverride(status string) {
+	r.statusMu.Lock()
+	defer r.statusMu.Unlock()
 	r.statusOverride = status
 }
 
 // GetStatusOverride returns the current custom status bar message.
 func (r *Renderer) GetStatusOverride() string {
+	r.statusMu.RLock()
+	defer r.statusMu.RUnlock()
 	return r.statusOverride
 }
 
 func extractTitle(doc *document.Document) string {
 	for _, b := range doc.Blocks {
 		if h, ok := b.(*document.Heading); ok && h.Level == 1 {
-			runes := []rune(h.Content)
-			if len(runes) > titleTruncateMaxRunes {
-				return string(runes[:titleTruncateKeepRunes]) + "..."
-			}
-			return h.Content
+			return truncateDocumentTitle(h.Content)
 		}
 	}
 	return ""
+}
+
+func truncateDocumentTitle(title string) string {
+	runes := []rune(title)
+	if len(runes) > titleTruncateMaxRunes {
+		return string(runes[:titleTruncateKeepRunes]) + "..."
+	}
+	return title
 }
 
 func (r *Renderer) HasAnimations() bool {
@@ -905,6 +1001,9 @@ func (r *Renderer) HasAnimations() bool {
 }
 
 func (r *Renderer) HandleMouseMove(mx, my int32) {
+	if r.servo != nil {
+		return
+	}
 	docY := my + r.scrollY
 	// On first mouse event, mark pointer present and deselect.
 	if !r.hasPointer {

@@ -27,6 +27,8 @@ type RadixNode struct {
 	expanded bool
 	articles []document.ArticleEntry // lazy: only populated on Expand for non-root
 	built    bool
+	index    *indexedRange
+	loadErr  error
 }
 
 func extractNextLogicalChar(runes []rune, offset int) string {
@@ -91,6 +93,10 @@ func NewTree(articles []document.ArticleEntry) *RadixNode {
 // Expand builds children for this node from its article slice.
 func (n *RadixNode) Expand() {
 	if n.leaf != nil || n.expanded {
+		return
+	}
+	if n.index != nil {
+		n.expandIndexed()
 		return
 	}
 	n.expanded = true
@@ -206,6 +212,9 @@ func (n *RadixNode) IsLeaf() bool { return n.leaf != nil }
 // i.e. it is a branch rather than a terminal article. A node may be both
 // an article and a branch; in that case it is still expandable.
 func (n *RadixNode) Expandable() bool {
+	if n.index != nil {
+		return n.index.end > n.index.start && n.leaf == nil
+	}
 	if len(n.children) > 0 {
 		return true
 	}
@@ -227,6 +236,9 @@ func (n *RadixNode) Label() string {
 func (n *RadixNode) Suffix() string {
 	if n.leaf != nil {
 		return ""
+	}
+	if n.index != nil {
+		return strconv.Itoa(n.index.end - n.index.start)
 	}
 	count := len(n.articles)
 	if count > 0 {
