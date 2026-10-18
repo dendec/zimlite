@@ -23,6 +23,7 @@ LDFLAGS      := -X 'github.com/dendec/zimlite/internal/storage.Version=$(VERSION
 .PHONY: build test vet lint clean run info fmt
 .PHONY: deps build-linux-arm64 build-linux-amd64 build-windows-amd64
 .PHONY: dist-all dist-arm64 dist-windows dist-amd64 dist-portmaster deploy deploy-portmaster
+.PHONY: servo-helper-amd64 dist-amd64-servo
 
 fmt:
 	gofmt -s -w cmd internal
@@ -146,6 +147,19 @@ dist-amd64: build input-runtime-amd64
 	cp -a licenses dist/linux-amd64/licenses
 	rm -f dist/zimlite-linux-amd64.zip && cd dist/linux-amd64 && zip -r ../zimlite-linux-amd64.zip .
 	@echo "=== Generated dist/zimlite-linux-amd64.zip ==="
+
+# Optional Linux AMD64 package with the Servo article renderer helper.
+servo-helper-amd64: servo-submodules
+	docker build --target desktop-helper -t zimlite-servo-helper-amd64 -f Dockerfile.servo .
+	@mkdir -p dist/servo-amd64
+	@set -e; helper_container=$$(docker create zimlite-servo-helper-amd64 /zimlite-servo-host); \
+		trap 'docker rm "$$helper_container" >/dev/null' EXIT; \
+		docker cp "$$helper_container:/zimlite-servo-host" dist/servo-amd64/zimlite-servo-host
+
+dist-amd64-servo: dist-amd64 servo-helper-amd64
+	cp dist/servo-amd64/zimlite-servo-host dist/linux-amd64/zimlite-servo-host
+	rm -f dist/zimlite-linux-amd64.zip && cd dist/linux-amd64 && zip -r ../zimlite-linux-amd64.zip .
+	@echo "=== Generated dist/zimlite-linux-amd64.zip with Servo helper ==="
 
 deploy: dist-arm64
 	adb push dist/zimlite/zimlite $(DEVICE_DIR)/
