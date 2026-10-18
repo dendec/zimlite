@@ -66,6 +66,8 @@ RUN aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -Werror -I${ZIM_INC} \
 
 FROM libzim AS app
 
+ARG VERSION=0.1
+
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -75,7 +77,7 @@ RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
     PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
     CGO_CXXFLAGS="-std=c++17 -Iinternal/zim -I${ZIM_INC}" \
     CGO_LDFLAGS="-L${ZIM_LIB} -L/usr/lib/aarch64-linux-gnu ${ZIM_LINK_LIBS}" \
-    go build -ldflags="-s -w" -o zimlite ./cmd/zimlite \
+    go build -ldflags="-s -w -X github.com/dendec/zimlite/internal/storage.Version=${VERSION}" -o zimlite ./cmd/zimlite \
     && aarch64-linux-gnu-strip zimlite
 
 RUN CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \

@@ -113,7 +113,7 @@ PORT_SCRIPT  := Zimlite.sh
 PM_AUTOINSTALL := /userdata/system/.local/share/PortMaster/autoinstall
 
 dist-arm64: input-runtime-arm64
-	docker build -t $(DOCKER_IMAGE) -f $(DOCKER_FILE) .
+	docker build --build-arg VERSION=$(VERSION) -t $(DOCKER_IMAGE) -f $(DOCKER_FILE) .
 	@mkdir -p dist
 	@docker rm -f zimlite-extract >/dev/null 2>&1 || true
 	docker create --name zimlite-extract $(DOCKER_IMAGE) >/dev/null 2>&1
@@ -123,18 +123,22 @@ dist-arm64: input-runtime-arm64
 	docker rm zimlite-extract >/dev/null 2>&1
 	cp -a dist/input-arm64 dist/zimlite/input
 	cp -a licenses dist/zimlite/licenses
+	cp LICENSE dist/zimlite/licenses/zimlite.LICENSE
 	@echo "=== dist/zimlite/ ==="
 	@ls -lh dist/zimlite/
 	rm -f dist/zimlite-linux-arm64.zip && cd dist/zimlite && zip -r ../zimlite-linux-arm64.zip .
 	@echo "=== Generated dist/zimlite-linux-arm64.zip ==="
 
 dist-windows:
-	docker build -t zimlite-windows -f Dockerfile.windows .
+	docker build --build-arg VERSION=$(VERSION) -t zimlite-windows -f Dockerfile.windows .
+	@rm -rf dist/windows
 	@mkdir -p dist/windows
 	@docker rm -f zimlite-win-extract >/dev/null 2>&1 || true
 	docker create --name zimlite-win-extract zimlite-windows >/dev/null 2>&1
 	docker cp zimlite-win-extract:/dist/zimlite/. dist/windows/
 	docker rm zimlite-win-extract >/dev/null 2>&1
+	cp -a licenses dist/windows/licenses
+	cp LICENSE dist/windows/licenses/zimlite.LICENSE
 	rm -f dist/zimlite-windows-amd64.zip && cd dist/windows && zip -r ../zimlite-windows-amd64.zip .
 	@echo "=== dist/windows/ ==="
 	@ls -lh dist/windows/
@@ -145,6 +149,7 @@ dist-amd64: build input-runtime-amd64
 	cp zimlite dist/linux-amd64/
 	cp -a dist/input-amd64 dist/linux-amd64/input
 	cp -a licenses dist/linux-amd64/licenses
+	cp LICENSE dist/linux-amd64/licenses/zimlite.LICENSE
 	rm -f dist/zimlite-linux-amd64.zip && cd dist/linux-amd64 && zip -r ../zimlite-linux-amd64.zip .
 	@echo "=== Generated dist/zimlite-linux-amd64.zip ==="
 
